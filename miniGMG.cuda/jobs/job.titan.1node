@@ -1,0 +1,23 @@
+#!/bin/sh
+#PBS -A CSC103
+#PBS -q debug
+#PBS -N miniGMG
+#PBS -o results.titan.1node
+#PBS -j oe
+#PBS -l walltime=0:10:00
+#PBS -l nodes=1
+#PBS -V
+
+set -x
+cd $PBS_O_WORKDIR
+#cd /lustre/widow1/scratch/samw/
+
+aprun -n 1  -N 1 ./run      6  4 4 4  1 1 1
+
+#export OMP_PROC_BIND=TRUE
+#export OMP_NUM_THREADS=8
+#aprun -n 2  -d  8  -N  2  -S 1  -ss  -cc numa_node ./run.titan.fusion      6  4 4 2  1 1 2
+#aprun -n 2  -d  8  -N  2  -S 1  -ss  -cc numa_node ./run.titan.avx         6  4 4 2  1 1 2
+#export OMP_NUM_THREADS=4
+#aprun -n 2  -d  4  -N  2  -S 1  -j 1 -ss  -cc numa_node ./run.titan.fusion      6  4 4 2  1 1 2
+#aprun -n 2  -d  4  -N  2  -S 1  -j 1 -ss  -cc numa_node ./run.titan.avx         6  4 4 2  1 1 2

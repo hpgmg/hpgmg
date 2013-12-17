@@ -1,0 +1,140 @@
+nvcc -c -arch=sm_20 libcutil.a miniGMG.cu kernels.cu -I`pwd` -g
+nvcc -c -arch=sm_20 libcutil.a mg.cu kernels.cu -I`pwd` -g --maxrregcount=32
+nvcc -c -arch=sm_20 libcutil.a box.cu kernels.cu -I`pwd` -g
+nvcc -o run miniGMG.o mg.o box.o -g
+
+
+nvcc -c -arch=sm_20 libcutil.a miniGMG.cu kernels.cu -I`pwd` -g
+nvcc -c -arch=sm_20 libcutil.a mg.cu kernels.cu -I`pwd` -g --maxrregcount=32 -D__PRINT_NORM
+nvcc -c -arch=sm_20 libcutil.a box.cu kernels.cu -I`pwd` -g
+nvcc -o run miniGMG.o mg.o box.o -g
+ 
+nvcc -o run  -arch=sm_20 miniGMG.cu mg.cu box.cu kernels.cu -I`pwd` -g --maxrregcount=32 -D__PRINT_NORM
+nvcc -o run  -arch=sm_20 miniGMG.cu mg.cu box.cu kernels.cu -I`pwd` -g --maxrregcount=32 -D__PRINT_NORM __PRINT_COMMUNICATION_BREAKDOWN
+nvcc -o run  -arch=sm_20 -Xptxas -dlcm=cg miniGMG.cu mg.cu box.cu kernels.cu -I`pwd` -g --maxrregcount=32 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PRINT_NORM
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+nvcc -o run  -arch=sm_20 -Xptxas -dlcm=cg miniGMG.cu mg.cu box.cu kernels.cu -I`pwd` -g --maxrregcount=32 -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+versions of the code compiled for
+- memory quanta
+- whether  phi/beta* pass thru shared memory
+- whether the pointers to variable coefficients are placed in shared
+- whether the SRAM is configured with 16KB or shared or 48KB of shared
+- ALSO, need to explore thread block size... (32x4 is best on Fermi)
+
+//===========================================================================================================================================================================================================================
+module load cuda
+module swap pgi gcc/4.6.1
+module swap openmpi openmpi-gcc
+
+
+
+module load cuda
+module swap pgi gcc/4.6.1
+module swap openmpi openmpi-gnu
+module swap openmpi openmpi-gcc
+module load openmpi-gnu
+
+
+qsub -I -V -q dirac_int -l nodes=1:ppn=8:fermi
+module load cuda
+./run 6 4 4 4
+./run 7 2 2 2
+./run 5 8 8 8
+
+
+--maxrregcount=32
+
+#debug version that prints the max norm of the residual
+nvcc  -arch=sm_20 -c      kernels.cu -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__MPI
+mpicc -O3 -m64    -c         miniGMG.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64    -c           box.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64    -c            mg.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64 -o run miniGMG.o mg.o box.o kernels.o -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__MPI -I/usr/common/usg/cuda/5.5/include -fPIC -L/usr/common/usg/cuda/5.5/lib64 -lcudart -lstdc++
+
+
+
+nvcc  -arch=sm_20 -c      kernels.cu -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__USE_BICGSTAB -D__MPI
+mpicc -O3 -m64    -c         miniGMG.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__USE_BICGSTAB -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64    -c           box.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__USE_BICGSTAB -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64    -c            mg.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__USE_BICGSTAB -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64 -o run miniGMG.o mg.o box.o kernels.o -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__USE_BICGSTAB -D__MPI -I/usr/common/usg/cuda/5.5/include -fPIC -L/usr/common/usg/cuda/5.5/lib64 -lcudart -lstdc++
+
+
+nvcc  -arch=sm_20 -c      kernels.cu -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__USE_BICGSTAB -D__MPI
+mpicc -O3 -m64    -c         miniGMG.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__USE_BICGSTAB -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64    -c           box.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__USE_BICGSTAB -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64    -c            mg.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__USE_BICGSTAB -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64 -o run miniGMG.o mg.o box.o kernels.o -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__USE_BICGSTAB -D__MPI -I/usr/common/usg/cuda/5.5/include -fPIC -L/usr/common/usg/cuda/5.5/lib64 -lcudart -lstdc++
+
+
+
+
+nvcc  -arch=sm_20 -c      kernels.cu -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__MPI
+mpicc -O3 -m64    -c         miniGMG.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64    -c           box.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64    -c            mg.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__MPI -I/usr/common/usg/cuda/5.5/include
+mpicc -O3 -m64 -o run miniGMG.o mg.o box.o kernels.o -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__MPI -I/usr/common/usg/cuda/5.5/include -fPIC -L/usr/common/usg/cuda/5.5/lib64  -lcudart -lstdc++
+
+
+
+#single-node runs...
+nvcc  -arch=sm_20 -c      kernels.cu -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 
+gcc -O3 -m64      -c         miniGMG.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -I/usr/common/usg/cuda/5.5/include
+gcc -O3 -m64      -c           box.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -I/usr/common/usg/cuda/5.5/include
+gcc -O3 -m64      -c            mg.c -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -I/usr/common/usg/cuda/5.5/include
+gcc -O3 -m64 -o run miniGMG.o mg.o box.o kernels.o -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -I/usr/common/usg/cuda/5.5/include -fPIC -L/usr/common/usg/cuda/5.5/lib64  -lcudart -lstdc++
+
+
+#=========================================================
+# Titan
+#=========================================================
+module swap PrgEnv-pgi PrgEnv-gnu
+module load cudatoolkit
+
+module swap cray-mpich2/5.5.5 cray-mpich2/5.6.3
+export LD_LIBRARY_PATH=${CRAY_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}
+
+/lustre/widow1/scratch/samw/
+--maxrregcount=32
+
+#debug version that prints the max norm of the residual
+nvcc -arch=sm_35          -c      kernels.cu -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__USE_BICGSTAB -D__MPI -D__TEST_MG_CONVERGENCE
+cc -O3 -m64               -c         miniGMG.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__USE_BICGSTAB -D__MPI -D__TEST_MG_CONVERGENCE -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+cc -O3 -m64               -c           box.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__USE_BICGSTAB -D__MPI -D__TEST_MG_CONVERGENCE -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+cc -O3 -m64               -c            mg.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__USE_BICGSTAB -D__MPI -D__TEST_MG_CONVERGENCE -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+cc -O3 -m64 -o run miniGMG.o mg.o box.o kernels.o -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__USE_BICGSTAB -D__MPI -D__TEST_MG_CONVERGENCE -I/opt/nvidia/cudatoolkit/5.0.35.102/include -fPIC -L/opt/nvidia/cudatoolkit/5.0.35.102/lib64 -lcudart -lstdc++
+
+
+nvcc -arch=sm_35          -c      kernels.cu -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__MPI
+cc -O3 -m64               -c         miniGMG.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__MPI -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+cc -O3 -m64               -c           box.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__MPI -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+cc -O3 -m64               -c            mg.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__MPI -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+cc -O3 -m64 -o run miniGMG.o mg.o box.o kernels.o -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__PRINT_NORM -D__MPI -I/opt/nvidia/cudatoolkit/5.0.35.102/include -fPIC -L/opt/nvidia/cudatoolkit/5.0.35.102/lib64 -lcudart -lstdc++
+
+
+
+nvcc -arch=sm_35           -c      kernels.cu -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__MPI
+cc -O3 -m64                -c         miniGMG.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__MPI -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+cc -O3 -m64                -c           box.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__MPI -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+cc -O3 -m64                -c            mg.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__MPI -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+cc -O3 -m64  -o run miniGMG.o mg.o box.o kernels.o -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -D__MPI -I/opt/nvidia/cudatoolkit/5.0.35.102/include -fPIC -L/opt/nvidia/cudatoolkit/5.0.35.102/lib64  -lcudart -lstdc++
+
+
+#single-node runs...
+nvcc -arch=sm_35          -c      kernels.cu -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 
+gcc -O3 -m64              -c         miniGMG.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+gcc -O3 -m64              -c           box.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+gcc -O3 -m64              -c            mg.c -I`pwd`                   -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -I/opt/nvidia/cudatoolkit/5.0.35.102/include
+gcc -O3 -m64-o run miniGMG.o mg.o box.o kernels.o -I`pwd` -DTBDIMX=32 -DTBDIMY=4 -D__LOCALITY_VIA_SHARED -D__POINTERS_IN_SHARED -D__PREFER_SHARED  -DVL=448 -I/opt/nvidia/cudatoolkit/5.0.35.102/include -fPIC -L/opt/nvidia/cudatoolkit/5.0.35.102/lib64  -lcudart -lstdc++
+
+
+qsub -I -A CSC103 -q debug -V -l nodes=8,walltime=30:00
+
+module unload pgi 
+module unload openmpi 
+module unload cuda 
+module load gcc-sl6 
+module load openmpi-gcc-sl6 
+module load cuda 
