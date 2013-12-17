@@ -1,0 +1,17 @@
+#!/bin/sh
+#PBS -N miniGMG
+#PBS -o results.peregrine.02
+#PBS -j oe
+#PBS -l walltime=0:30:00
+#PBS -l nodes=4:ppn=2
+#PBS -l feature=24core
+
+
+set -x
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=12
+#export KMP_AFFINITY=compact
+mpirun -np 8 -bysocket -bind-to-socket ./run.miniGMG     7  1 1 1  2 2 2
+mpirun -np 8 -bysocket -bind-to-socket ./run.miniGMG     7  2 2 2  2 2 2
+mpirun -np 8 -bysocket -bind-to-socket ./run.miniGMG     6  4 4 4  2 2 2

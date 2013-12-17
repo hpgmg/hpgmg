@@ -1,0 +1,26 @@
+#!/bin/sh
+#PBS -q debug
+#PBS -N CommunicationAvoidingMultiGrid
+#PBS -o results.carver.01
+#PBS -j oe
+#PBS -l walltime=0:30:00
+#PBS -l nodes=1:ppn=2
+#PBS -l pvmem=10GB
+
+
+set -x
+cd $PBS_O_WORKDIR
+module swap pgi intel
+
+export OMP_NUM_THREADS=4
+mpirun -np 1 -bysocket -bind-to-socket ./run.carver.reference   7  2 2 2  1 1 1
+mpirun -np 1 -bysocket -bind-to-socket ./run.carver.fusion  7  2 2 2  1 1 1
+mpirun -np 1 -bysocket -bind-to-socket ./run.carver.sse     7  2 2 2  1 1 1
+
+mpirun -np 1 -bysocket -bind-to-socket ./run.carver.reference   6  4 4 4  1 1 1
+mpirun -np 1 -bysocket -bind-to-socket ./run.carver.fusion  6  4 4 4  1 1 1
+mpirun -np 1 -bysocket -bind-to-socket ./run.carver.sse     6  4 4 4  1 1 1
+
+mpirun -np 1 -bysocket -bind-to-socket ./run.carver.reference   5  8 8 8  1 1 1
+mpirun -np 1 -bysocket -bind-to-socket ./run.carver.fusion  5  8 8 8  1 1 1
+mpirun -np 1 -bysocket -bind-to-socket ./run.carver.sse     5  8 8 8  1 1 1

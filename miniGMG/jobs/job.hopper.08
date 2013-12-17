@@ -1,0 +1,28 @@
+#!/bin/sh
+#PBS -N miniGMG
+#PBS -o results.hopper.miniGMG
+#PBS -q regular
+#PBS -j oe
+#PBS -l walltime=1:00:00
+#PBS -l mppwidth=3072
+
+set -x
+cd $PBS_O_WORKDIR
+module swap PrgEnv-pgi PrgEnv-intel
+
+export OMP_NUM_THREADS=6
+
+aprun -n   8  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 7  1 1 1  2 2 2
+aprun -n  27  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 7  1 1 1  3 3 3
+aprun -n  64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 7  1 1 1  4 4 4
+aprun -n 125  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 7  1 1 1  5 5 5
+aprun -n 216  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 7  1 1 1  6 6 6
+aprun -n 343  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 7  1 1 1  7 7 7
+aprun -n 512  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 7  1 1 1  8 8 8
+
+aprun -n   4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 6  2 1 1  1  2  2
+aprun -n  32  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 6  2 1 1  2  4  4
+aprun -n 108  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 6  2 1 1  3  6  6
+aprun -n 256  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 6  2 1 1  4  8  8
+aprun -n 500  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper 6  2 1 1  5 10 10
+

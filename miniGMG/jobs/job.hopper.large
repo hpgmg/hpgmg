@@ -1,0 +1,45 @@
+#!/bin/sh
+#PBS -N miniGMG
+#PBS -o results.hopper.miniGMG.large
+#PBS -q regular
+#PBS -j oe
+#PBS -l walltime=0:29:00
+#PBS -l mppwidth=63888
+
+set -x
+cd $PBS_O_WORKDIR
+module swap PrgEnv-pgi PrgEnv-intel
+
+export OMP_NUM_THREADS=6
+#export OMP_WAIT_POLICY=active
+
+aprun -n     1  -d  6               -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1   1  1  1
+aprun -n     8  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1   2  2  2
+aprun -n    64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1   4  4  4
+aprun -n   216  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1   6  6  6
+aprun -n   512  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1   8  8  8
+aprun -n  1000  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1  10 10 10
+aprun -n  1728  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1  12 12 12
+aprun -n  2744  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1  14 14 14
+aprun -n  4096  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1  16 16 16
+aprun -n  5832  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1  18 18 18
+aprun -n  8000  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1  20 20 20
+aprun -n 10648  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1  22 22 22
+#aprun -n 13824  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  7  1 1 1  24 24 24
+
+aprun -n     4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1   1  2  2
+aprun -n    32  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1   2  4  4
+aprun -n   108  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1   3  6  6
+aprun -n   256  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1   4  8  8
+aprun -n   500  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1   5 10 10
+aprun -n   864  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1   6 12 12
+aprun -n  1372  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1   7 14 14
+aprun -n  2048  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1   8 16 16
+aprun -n  2916  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1   9 18 18
+aprun -n  4000  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1  10 20 20
+aprun -n  5324  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1  11 22 22
+aprun -n  6912  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1  12 24 24
+aprun -n  8788  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1  13 26 26
+#aprun -n 10976  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1  14 28 28
+#aprun -n 13500  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper  6  2 1 1  15 30 30
+

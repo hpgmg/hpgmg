@@ -1,0 +1,41 @@
+#!/bin/sh
+#PBS -N CommunicationAvoidingMultiGrid
+#PBS -o results.edison.test
+#PBS -q debug
+#PBS -j oe
+#PBS -l walltime=0:29:00
+#PBS -l mppwidth=24
+
+set -x
+cd $PBS_O_WORKDIR
+
+#export OMP_PROC_BIND=TRUE
+export OMP_NUM_THREADS=12
+export KMP_AFFINITY=scatter
+#aprun -n   1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  1 1 1  1 1 1
+#aprun -n   8  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  1 1 1  2 2 2
+#aprun -n  27  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  1 1 1  3 3 3
+#aprun -n  64  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  1 1 1  4 4 4
+#aprun -n 125  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  1 1 1  5 5 5
+#aprun -n 216  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  1 1 1  6 6 6
+#aprun -n 343  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  1 1 1  7 7 7
+#aprun -n 512  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  1 1 1  8 8 8
+
+#aprun -n   1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  1 1 1  1 1 1
+#aprun -n   8  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  1 1 1  2 2 2
+#aprun -n  27  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  1 1 1  3 3 3
+#aprun -n  64  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  1 1 1  4 4 4
+#aprun -n 125  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  1 1 1  5 5 5
+#aprun -n 216  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  1 1 1  6 6 6
+#aprun -n 343  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  1 1 1  7 7 7
+#aprun -n 512  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  1 1 1  8 8 8
+
+aprun -n   1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  1 1 1  1 1 1
+aprun -n   1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  2 2 2  1 1 1
+aprun -n   1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  3 3 3  1 1 1
+aprun -n   1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  4 4 4  1 1 1 
+
+aprun -n   1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  1 1 1  1 1 1
+aprun -n   1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  2 2 2  1 1 1
+aprun -n   1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  3 3 3  1 1 1
+aprun -n   1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  4 4 4  1 1 1

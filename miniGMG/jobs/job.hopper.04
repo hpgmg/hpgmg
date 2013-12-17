@@ -1,0 +1,36 @@
+#!/bin/sh
+#PBS -N CommunicationAvoidingMultiGrid
+#PBS -o results.hopper.04
+#PBS -q regular
+#PBS -j oe
+#PBS -l walltime=1:00:00
+#PBS -l mppwidth=384
+
+set -x
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=6
+aprun -n 64 -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.ompif    6  4 4 4  4 4 4
+aprun -n 64 -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.sse      6  4 4 4  4 4 4
+
+#aprun -n 64 -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.ompif    6  3 3 3  4 4 4
+#aprun -n 64 -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.ompif    6  2 2 2  4 4 4
+#aprun -n 64 -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.ompif    6  1 1 1  4 4 4
+#export MPICH_MAX_THREAD_SAFETY=multiple
+#aprun -n 64 -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.multiple 6  4 4 4  4 4 4
+#aprun -n 64 -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.multiple 6  3 3 3  4 4 4
+#aprun -n 64 -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.multiple 6  2 2 2  4 4 4
+#aprun -n 64 -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.multiple 6  1 1 1  4 4 4
+
+#export OMP_WAIT_POLICY=active
+#aprun -n 64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.reference   7  2 2 2  4 4 4
+#aprun -n 64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.fusion  7  2 2 2  4 4 4
+#aprun -n 64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.sse     7  2 2 2  4 4 4
+#
+#aprun -n 64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.reference   6  4 4 4  4 4 4
+#aprun -n 64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.fusion  6  4 4 4  4 4 4
+#aprun -n 64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.sse     6  4 4 4  4 4 4
+#
+#aprun -n 64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.reference   5  8 8 8  4 4 4
+#aprun -n 64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.fusion  5  8 8 8  4 4 4
+#aprun -n 64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.sse     5  8 8 8  4 4 4

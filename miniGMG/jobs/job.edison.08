@@ -1,0 +1,15 @@
+#!/bin/sh
+#PBS -N CommunicationAvoidingMultiGrid
+#PBS -o results.edison.08
+#PBS -q regular
+#PBS -j oe
+#PBS -l walltime=0:59:00
+#PBS -l mppwidth=6144
+
+set -x
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=12
+aprun -n 512 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison       7  1 1 1  8 8 8
+aprun -n 512 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison       7  2 2 2  8 8 8
+aprun -n 512 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison       6  2 2 2  8 8 8

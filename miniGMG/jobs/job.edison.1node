@@ -1,0 +1,75 @@
+#!/bin/sh
+#PBS -N CommunicationAvoidingMultiGrid
+#PBS -o results.edison.1node
+#PBS -q debug
+#PBS -j oe
+#PBS -l walltime=0:10:00
+#PBS -l mppwidth=24
+
+set -x
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=12
+aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.test   7  1 1 1  1 1 1
+aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test   7  2 2 1  1 1 2
+aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test   7  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test   6  2 2 1  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test   8  2 2 1  1 1 2
+
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.ompif    6  4 4 2  1 1 2
+
+
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab2      7  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab2      6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab2      5  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab2      7  2 2 1  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab2      6  2 2 1  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab2      5  2 2 1  1 1 2
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.bicgstab2      7  1 1 1  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.bicgstab2      6  1 1 1  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.bicgstab2      5  1 1 1  1 1 1
+
+#export OMP_NUM_THREADS=12
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fusion      6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.avx         6  4 4 2  1 1 2
+#
+#export OMP_NUM_THREADS=12
+#export KMP_AFFINITY=scatter
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fusion      6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.avx         6  4 4 2  1 1 2
+#
+#export OMP_NUM_THREADS=12
+#export KMP_AFFINITY=compact
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fusion      6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.avx         6  4 4 2  1 1 2
+
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.naive       6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.reference   6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.ompif       6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.omptask     6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fusion      6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.sse         6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.avx         6  4 4 2  1 1 2
+
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fusion      6  2 2 1  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fusion      6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fusion      6  6 6 3  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fusion      6  8 8 4  1 1 2
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.fusion      6  1 1 1  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.fusion      6  2 2 2  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.fusion      6  3 3 3  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.fusion      6  4 4 4  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.fusion      6  5 5 5  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.fusion      6  6 6 6  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.fusion      6  7 7 7  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.fusion      6  8 8 8  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.fusion      5  8 8 8  1 1 1
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fusion      5  8 8 4  1 1 2
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.bicgstab    6  1 1 1  1 1 1
+#aprun -n 1  -d 12               -ss  -cc numa_node ./run.edison.cabicgstab  6  1 1 1  1 1 1
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  2 2 1  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  2 2 1  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  4 4 2  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.bicgstab    6  8 8 4  1 1 2
+#aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.cabicgstab  6  8 8 4  1 1 2

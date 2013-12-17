@@ -1,0 +1,47 @@
+#!/bin/sh
+#PBS -N miniGMG_Scaling_Test
+#PBS -o results.edison.extreme.hard
+#PBS -q regular
+#PBS -j oe
+#PBS -l walltime=0:59:00
+#PBS -l mppwidth=111144
+
+set -x
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=12
+aprun -n 4096  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  8  1 1 1  16 16 16
+aprun -n 4913  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  8  1 1 1  17 17 17
+aprun -n 5832  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  8  1 1 1  18 18 18
+aprun -n 6859  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  8  1 1 1  19 19 19
+aprun -n 8000  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  8  1 1 1  20 20 20
+aprun -n 9261  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  8  1 1 1  21 21 21
+
+aprun -n 4096  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  1 1 1  16 16 16
+aprun -n 4913  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  1 1 1  17 17 17
+aprun -n 5832  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  1 1 1  18 18 18
+aprun -n 6859  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  1 1 1  19 19 19
+aprun -n 8000  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  1 1 1  20 20 20
+aprun -n 9261  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  1 1 1  21 21 21
+
+aprun -n 4096  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  2 2 2  16 16 16
+aprun -n 4913  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  2 2 2  17 17 17
+aprun -n 5832  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  2 2 2  18 18 18
+aprun -n 6859  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  2 2 2  19 19 19
+aprun -n 8000  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  2 2 2  20 20 20
+aprun -n 9261  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  7  2 2 2  21 21 21
+
+aprun -n 4096  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  2 2 2  16 16 16
+aprun -n 4913  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  2 2 2  17 17 17
+aprun -n 5832  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  2 2 2  18 18 18
+aprun -n 6859  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  2 2 2  19 19 19
+aprun -n 8000  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  2 2 2  20 20 20
+aprun -n 9261  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  2 2 2  21 21 21
+
+aprun -n 4096  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  4 4 4  16 16 16
+aprun -n 4913  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  4 4 4  17 17 17
+aprun -n 5832  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  4 4 4  18 18 18
+aprun -n 6859  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  4 4 4  19 19 19
+aprun -n 8000  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  4 4 4  20 20 20
+aprun -n 9261  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.miniGMG.edison  6  4 4 4  21 21 21
+

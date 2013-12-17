@@ -1,0 +1,18 @@
+#!/bin/bash
+#PBS -q normal
+#PBS -l nodes=1:ppn=16:native
+#PBS -l walltime=0:10:00
+#PBS -N CommunicationAvoidingMultiGrid
+#PBS -o results.gordon.sequential
+#PBS -j oe
+#PBS -V
+
+export OMP_NUM_THREADS=8
+export OMP_WAIT_POLICY=active
+export KMP_AFFINITY=verbose,compact
+set -x
+echo $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+./run.gordon  7
+./run.gordon  6
+./run.gordon  5

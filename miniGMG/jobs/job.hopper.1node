@@ -1,0 +1,53 @@
+#!/bin/sh
+#PBS -N CommunicationAvoidingMultiGrid
+#PBS -o results.hopper.1node
+#PBS -q debug
+#PBS -j oe
+#PBS -l walltime=0:30:00
+#PBS -l mppwidth=24
+
+set -x
+cd $PBS_O_WORKDIR
+export OMP_NUM_THREADS=6
+aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.miniGMG.hopper         7  2 1 1  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.sse            6  4 2 2  1 2 2
+#export MPICH_MAX_THREAD_SAFETY=multiple
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.multiple       6  4 2 2  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.wavefront      6  4 2 2  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.sse            6  4 2 2  1 2 2
+
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.reference   7  2 1 1  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.fusion  7  2 1 1  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.sse     7  2 1 1  1 2 2
+
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.naive       6  4 2 2  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.reference   6  4 2 2  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.fusion      6  4 2 2  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.ompif       6  4 2 2  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.omptask     6  4 2 2  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.sse         6  4 2 2  1 2 2
+
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.ompif       5  8 8 2  1 1 4
+#aprun -n 1  -d  6               -ss  -cc numa_node ./run.hopper.ompif       5  8 8 8  1 1 1
+#aprun -n 1  -d  6               -ss  -cc numa_node ./run.hopper.ompif       5  6 6 6  1 1 1
+#aprun -n 1  -d  6               -ss  -cc numa_node ./run.hopper.ompif       6  4 4 4  1 1 1
+#aprun -n 1  -d  6               -ss  -cc numa_node ./run.hopper.ompif       6  3 3 3  1 1 1
+#aprun -n 1  -d  6               -ss  -cc numa_node ./run.hopper.ompif       6  2 2 2  1 1 1
+#aprun -n 1  -d  6               -ss  -cc numa_node ./run.hopper.ompif       6  1 1 1  1 1 1
+
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.reference   5  8 4 4  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.fusion  5  8 4 4  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.sse     5  8 4 4  1 2 2
+
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.bicgstab    5  8 8 2  1 1 4
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.cabicgstab  5  8 8 2  1 1 4
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.cg          5  8 8 2  1 1 4
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.cacg        5  8 8 2  1 1 4
+
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.cg          5  2 1 1  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.bicgstab    5  2 1 1  1 2 2
+#aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.cabicgstab  5  2 1 1  1 2 2
+
+#aprun -n 1  -d  6               -ss  -cc numa_node ./run.hopper.cg          5  1 1 1  1 1 1
+#aprun -n 1  -d  6               -ss  -cc numa_node ./run.hopper.bicgstab    5  1 1 1  1 1 1
+#aprun -n 1  -d  6               -ss  -cc numa_node ./run.hopper.cabicgstab  5  1 1 1  1 1 1

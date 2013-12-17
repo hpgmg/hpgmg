@@ -1,0 +1,19 @@
+#!/bin/sh
+#PBS -N miniGMG
+#PBS -o results.edison.flat
+#PBS -q regular
+#PBS -j oe
+#PBS -l walltime=0:59:00
+#PBS -l mppwidth=324
+
+set -x
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=12
+aprun -n   27 -d 12  -N  2  -S  1  -ss  -cc numa_node ./run.edison.test       6  1 1 1   3  3  3
+export OMP_NUM_THREADS=1
+aprun -n  216 -d  1  -N 24  -S 12  -ss  -cc numa_node ./run.edison.test       5  1 1 1   6  6  6
+
+#aprun -n  144 -d 12  -N  2  -S  1  -ss  -cc numa_node ./run.edison.test       6  3 2 2   4  6  6
+#aprun -n 1728 -d  1  -N 24  -S 12  -ss  -cc numa_node ./run.edison.test       6  1 1 1  12 12 12
+

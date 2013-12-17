@@ -1,0 +1,16 @@
+#!/bin/sh
+#PBS -N miniGMG_HighOrder
+#PBS -o results.hopper.13pt
+#PBS -q debug
+#PBS -j oe
+#PBS -l walltime=0:30:00
+#PBS -l mppwidth=24
+
+set -x
+cd $PBS_O_WORKDIR
+export OMP_NUM_THREADS=6
+aprun -n 1  -d  6  -N  1  -S 1  -ss  -cc numa_node ./run.hopper.13            5  1 1 1  1 1 1
+aprun -n 1  -d  6  -N  1  -S 1  -ss  -cc numa_node ./run.hopper.13            6  1 1 1  1 1 1
+aprun -n 1  -d  6  -N  1  -S 1  -ss  -cc numa_node ./run.hopper.13            7  1 1 1  1 1 1
+aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.13            7  2 1 1  1 2 2
+aprun -n 4  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.13            7  4 2 2  1 2 2

@@ -1,0 +1,31 @@
+#!/bin/bash
+#PBS -q normal
+#PBS -l nodes=4:ppn=2:native
+#PBS -l walltime=0:20:00
+#PBS -N CommunicationAvoidingMultiGrid
+#PBS -o results.gordon
+#PBS -j oe
+#PBS -V
+
+#module purge
+#module load gnu openmpi
+
+#MV2_ENABLE_AFFINITY=0 <<<<<<<<<<<<<<<<
+
+export OMP_NUM_THREADS=8
+export OMP_WAIT_POLICY=active
+set -x
+echo $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+#mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_BINDING_LEVEL=socket OMP_NUM_THREADS=8   ./run.gordon  7  2 2 2  2 2 2
+#mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_BINDING_LEVEL=socket OMP_NUM_THREADS=8   ./run.gordon  6  4 4 4  2 2 2
+#mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_BINDING_LEVEL=socket OMP_NUM_THREADS=8   ./run.gordon  5  8 8 8  2 2 2
+#mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_BINDING_POLICY=scatter OMP_NUM_THREADS=8   ./run.gordon  7  2 2 2  2 2 2
+#mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_BINDING_POLICY=scatter OMP_NUM_THREADS=8   ./run.gordon  6  4 4 4  2 2 2
+#mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_BINDING_POLICY=scatter OMP_NUM_THREADS=8   ./run.gordon  5  8 8 8  2 2 2
+#mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_BINDING_LEVEL=socket MV2_CPU_BINDING_POLICY=scatter OMP_NUM_THREADS=8   ./run.gordon  7  2 2 2  2 2 2
+#mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_BINDING_LEVEL=socket MV2_CPU_BINDING_POLICY=scatter OMP_NUM_THREADS=8   ./run.gordon  6  4 4 4  2 2 2
+#mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_BINDING_LEVEL=socket MV2_CPU_BINDING_POLICY=scatter OMP_NUM_THREADS=8   ./run.gordon  5  8 8 8  2 2 2
+mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8  ./run.gordon  7  2 2 2  2 2 2
+mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8  ./run.gordon  6  4 4 4  2 2 2
+mpirun_rsh -np 8 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8  ./run.gordon  5  8 8 8  2 2 2

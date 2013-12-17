@@ -1,0 +1,23 @@
+#!/bin/sh
+#PBS -N miniGMG_HighOrder
+#PBS -o results.edison.27pt
+#PBS -q debug
+#PBS -j oe
+#PBS -l walltime=0:10:00
+#PBS -l mppwidth=24
+
+set -x
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=12
+aprun -n 1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.27pt  5  1 1 1  1 1 1
+aprun -n 1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.27pt  6  1 1 1  1 1 1
+aprun -n 1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.27pt  7  1 1 1  1 1 1
+aprun -n 1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.27pt  8  1 1 1  1 1 1
+aprun -n 1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.27pt  9  1 1 1  1 1 1
+
+aprun -n 1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.27pt  5  1 1 1  1 1 1
+aprun -n 1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.27pt  6  1 1 1  1 1 1
+aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.27pt  6  2 2 1  1 1 2
+aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.27pt  6  4 4 2  1 1 2
+aprun -n 2  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.27pt  6  8 8 4  1 1 2

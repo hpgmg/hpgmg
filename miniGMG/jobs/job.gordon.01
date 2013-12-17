@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -q normal
+#PBS -N CommunicationAvoidingMultiGrid
+#PBS -o results.gordon.01
+#PBS -j oe
+#PBS -l walltime=0:30:00
+#PBS -l nodes=1:ppn=2:native
+#PBS -V
+
+export OMP_NUM_THREADS=8
+export OMP_WAIT_POLICY=active
+set -x
+echo $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+#MV2_ENABLE_AFFINITY=0 <<<<<<<<<<<<<<<<
+
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.reference   7  2 2 2  1 1 1
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.fusion  7  2 2 2  1 1 1
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.sse     7  2 2 2  1 1 1
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.avx     7  2 2 2  1 1 1
+
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.reference   6  4 4 4  1 1 1
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.fusion  6  4 4 4  1 1 1
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.sse     6  4 4 4  1 1 1
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.avx     6  4 4 4  1 1 1
+
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.reference   5  8 8 8  1 1 1
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.fusion  5  8 8 8  1 1 1
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.sse     5  8 8 8  1 1 1
+mpirun_rsh -np 1 -hostfile $PBS_NODEFILE MV2_CPU_MAPPING=0-7:8-15 OMP_NUM_THREADS=8 ./run.gordon.avx     5  8 8 8  1 1 1

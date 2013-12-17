@@ -1,0 +1,22 @@
+#!/bin/sh
+#PBS -N CommunicationAvoidingMultiGrid
+#PBS -o results.edison.02
+#PBS -q debug
+#PBS -j oe
+#PBS -l walltime=0:10:00
+#PBS -l mppwidth=96
+
+set -x
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=12
+aprun -n 1 -d 12                                  ./run.edison.test       7  1 1 1  1 1 1
+aprun -n 8 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test       7  1 1 1  2 2 2
+aprun -n 8 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test       7  2 2 2  2 2 2
+aprun -n 8 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test       7  4 4 4  2 2 2
+
+#aprun -n 1 -d 12                                  ./run.edison.test       6  1 1 1  1 1 1
+#aprun -n 8 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test       6  1 1 1  2 2 2
+#aprun -n 8 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test       6  2 2 2  2 2 2
+#aprun -n 8 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test       6  4 4 4  2 2 2
+#aprun -n 8 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.test       6  8 8 8  2 2 2
