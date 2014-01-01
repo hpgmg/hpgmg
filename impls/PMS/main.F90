@@ -74,7 +74,7 @@ program PMS
        reorder,comm3d,ierr)
   call MPI_comm_rank(comm3d,rank,ierr) ! new rank if reorder==true -- OK!!!
 
-  if(mype==0) then
+  if(mype==-1) then
      write(6,*) 'main: mype=',mype,', comm3D rank = ',rank
   endif
 
@@ -91,7 +91,7 @@ program PMS
   call MPI_Finalize(ierr)
 end program PMS
 !-----------------------------------------------------------------
-!  go - sets up grids and calls the main 'driver'
+!  go - sets up grids and calls the main driver
 !-----------------------------------------------------------------
 subroutine go(NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
   use GridModule
@@ -100,25 +100,12 @@ subroutine go(NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
   integer :: NProcAxis(3),iProcAxis(3)
   !
   type(proc_patch)::grids(0:max_grids-1)
-!!$  ixlo=1-nghost
-!!$  iylo=1-nghost
-!!$  izlo=1-nghost
-!!$  ixhi=nxlocal+nghost
-!!$  iyhi=nylocal+nghost
-!!$  izhi=nzlocal+nghost 
-!!$#ifdef TWO_D
-!!$  izlo=1; izhi=nzlocal ! ???
-!!$#endif
-  !     Allocate mesh
-!!$  allocate(xc(ixlo:ixhi))
-!!$  allocate(yc(iylo:iyhi))
-!!$  allocate(zc(izlo:izhi))
 
   call SetupDomain() ! sets size of domain
-  
+
   call new_grids(grids,NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
 
-  ! do it again
+  ! do it 
   call driver(grids)
 
   call destroy_grids_private(grids,max_grids)
@@ -138,29 +125,29 @@ subroutine driver(grids)
   !
   type(proc_patch)::grids(0:max_grids-1)
   !
-  integer:: isolve,maxiter,i,coarsest_grid,nVcycles
+  integer:: isolve,maxiter,ii,coarsest_grid,nViters
   !integer:: output_flag, binary_flag
-  integer,parameter:: dummy_size=1
+  integer,parameter:: dummy_size=1 ! cache flush array size
   double precision:: dummy(dummy_size),res0,rateu,rategrad
-  type(error_data)::errors(0:max_grids-1+nfvcycles)
+  type(error_data)::errors(0:max_grids-1+nvcycles)
   external Apply_const_Lap
   external GSRB_const_Lap
   double precision,parameter:: log2r = 1.d0/log(2.d0);
-print *,1111
+
   !output_flag=0 ! parameters
   !binary_flag=1
   maxiter = 1   ! parameter (10-1000)
 
   do isolve=1,maxiter
      ! flush cache
-     do i=1,dummy_size
-        dummy(i) = 1.235d3
+     do ii=1,dummy_size
+        dummy(ii) = 1.235d3
      end do
 
      select case (problemType)
      case(0)
   
-        call solve(grids,Apply_const_Lap,Apply_const_Lap,GSRB_const_Lap,res0,errors,nVcycles)
+        call solve(grids,Apply_const_Lap,Apply_const_Lap,GSRB_const_Lap,res0,errors,nViters)
 
      case(1)
 
@@ -168,36 +155,43 @@ print *,1111
 
      end select
 
+     ! output run data and convergance data
      if(mype==0) then
-        write(6,*) isolve,') error=',errors(0)%uerror,', rel resid=',&
-             errors(0)%resid/res0,', grad(u) error=',errors(0)%graduerr
-        write(ihis,*) isolve,errors(0)%uerror,errors(0)%graduerr,errors(0)%resid/res0
-        coarsest_grid = -1
-        do i=max_grids-1,1,-1
-           ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
-           if( .not. is_top(grids(i)) ) then
-              rateu = errors(i)%uerror/errors(i+1)%uerror
-              rategrad = errors(i)%graduerr/errors(i+1)%graduerr
-              write(6,'(I5,A8,I2,A20,E14.6,A10,E14.6)') isolve,': level ',i, ': converg order u=', &
+        coarsest_grid = 0
+        if (nfcycles .ne. 0 .and. .not. is_top(grids(0)) ) then
+           do ii=1,max_grids-1
+              ! go from coarse to fine.  Need to pass through top empty 'coarse' grids              
+              rateu = errors(ii-1)%uerror/errors(ii)%uerror
+              rategrad = errors(ii-1)%graduerr/errors(ii)%graduerr
+              write(6,'(I5,A8,I2,A20,E14.6,A10,E14.6)') isolve,': level ',ii, ': converg order u=', &
                    log(rateu)*log2r,', grad(u)=',log(rategrad)*log2r
-              if (i == 1) then ! print fine grid 
-                 write(iconv,*) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(i)%uerror,&
-                      errors(i)%graduerr,errors(i)%resid
+              write(iconv,900) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(ii)%uerror,&
+                   errors(ii)%graduerr,errors(ii)%resid
+                            
+              if( is_top(grids(ii)) ) then 
+                 coarsest_grid = ii
+                 exit ! grids and errors are in reverse order - this is just a counter
               end if
-              if (coarsest_grid == -1) coarsest_grid = i+1
-              print *,'driver: do level i=',i
-           end if
+           end do
+        end if
+        
+        do ii=coarsest_grid,coarsest_grid+nViters-1 ! i is zero bases for 'errors'
+           !write(6,'(A13,I2,A20,E14.6,A8,E14.6)') 'driver: level', ii, ': error=',errors(ii)%uerror,&
+            !    ': resid=',errors(ii)%resid
+           write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,errors(ii)%graduerr,errors(ii)%resid
         end do
-        print *, 'driver: coarsest grid = ',coarsest_grid
-        do i=coarsest_grid,coarsest_grid+nVcycles
-           print *,'driver: do V-cycles i=',i
-           write(6,'(A13,I2,A20,E14.6,A8,E14.6)') 'driver: level', i, ': error=',errors(i)%uerror,&
-                ': resid=',errors(i)%resid
-           write(iconv,*) isolve,0.d0,0.d0,errors(i)%uerror,errors(i)%graduerr,errors(i)%resid
-        end do
+        
+        ! general output
+        ii = nfcycles*(coarsest_grid+1) + nViters - 1
+        write(6,888) 'solve ',isolve,' done |r|/|f|=',errors(ii)%resid/res0
+        write(irun,700) isolve,errors(ii)%uerror,errors(ii)%graduerr,errors(ii)%resid/res0
+
      endif
   enddo
-
+700 format (I7,6x,E14.6,E14.6,3x,E14.6)
+900 format (I7,5x,E14.6,E14.6,3x,E14.6,E14.6,E14.6,E14.6)
+901 format (A,I5,5x,E14.6,E14.6,3x,E14.6,E14.6,E14.6,E14.6)
+888 format (A,I5,A,E14.6)
 !!$  if(output_flag.eq.2) then
 !!$     if(binary_flag.nq.0) then
 !!$        if(mype==0) then
@@ -216,6 +210,7 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
      nx, ny, nz, nxlocal, nylocal, nzlocal)
   use domain, only:problemType
   use mpistuff
+  use GridModule, only:nvcycles,nfcycles,rtol,ncycles,nfmgvcycles
 #ifndef HAVE_COMM_ARGS
   use f2kcli        ! command line args class
 #endif
@@ -228,7 +223,8 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
   CHARACTER(LEN=10)  :: CMD,CMD2
   INTEGER            :: NARG,IARG,fact
   integer*8 :: ti
-  double precision t2,t1,iarray(12)
+  integer, parameter :: nargs=14
+  double precision t2,t1,iarray(nargs)
   !       default input args: ?local, n?, ?procs
   xprocs=-1
   yprocs=-1
@@ -240,10 +236,18 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
   nylocal=-1
   nzlocal=-1
   !       Problem type 
-  !       1: 
-  problemType = 1
+  !       0: (x^4-x^2)^D - Diri BCs
+  !       1: bubble      - periodic domain
+  problemType = 0
+  ! solver parameters
+  nvcycles = 0 ! pure FMG
+  nfcycles = 1 ! pure FMG
+  rtol = 1.d-12  
+  ncycles = 1  ! v-cycles or w-cycles
+  nfmgvcycles = 1 ! no interface for this
+  ! read in args
   if( mype==0 ) then
-     NARG = COMMAND_ARGUMENT_COUNT() !
+     NARG = COMMAND_ARGUMENT_COUNT()
      DO IARG = 1,NARG,2
         CALL GET_COMMAND_ARGUMENT(IARG,CMD)
         CALL GET_COMMAND_ARGUMENT(IARG+1,CMD2)
@@ -251,15 +255,21 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
         if( CMD == '-ny' ) READ (CMD2, '(I10)') ny
         if( CMD == '-nz' ) READ (CMD2, '(I10)') nz
         
-        if( CMD == '-nxlocal' ) READ (CMD2, '(I10)') nxlocal
-        if( CMD == '-nylocal' ) READ (CMD2, '(I10)') nylocal
-        if( CMD == '-nzlocal' ) READ (CMD2, '(I10)') nzlocal
+        if( CMD == '-nxloc' ) READ (CMD2, '(I10)') nxlocal
+        if( CMD == '-nyloc' ) READ (CMD2, '(I10)') nylocal
+        if( CMD == '-nzloc' ) READ (CMD2, '(I10)') nzlocal
         
-        if( CMD == '-xprocs' ) READ (CMD2, '(I10)') xprocs
-        if( CMD == '-yprocs' ) READ (CMD2, '(I10)') yprocs
-        if( CMD == '-zprocs' ) READ (CMD2, '(I10)') zprocs
+        if( CMD == '-nxpes' ) READ (CMD2, '(I10)') xprocs
+        if( CMD == '-nypes' ) READ (CMD2, '(I10)') yprocs
+        if( CMD == '-nzpes' ) READ (CMD2, '(I10)') zprocs
         
         if( CMD == '-problem' ) READ (CMD2, '(I10)') problemType
+
+        if( CMD == '-nvcycles' ) READ (CMD2, '(I10)') nvcycles
+        if( CMD == '-nfcycles' ) READ (CMD2, '(I10)') nfcycles
+        if( CMD == '-rtol' )    READ (CMD2, '(E14.6)') rtol
+        if( CMD == '-ncycle' )  READ (CMD2, '(I10)') ncycles
+
      END DO
 #ifdef TWO_D
      nz = 1; nzlocal = 1; zprocs = 1;
@@ -278,10 +288,15 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
      
      iarray(10) = problemType
   
-     call MPI_Bcast(iarray,10,MPI_DOUBLE_PRECISION, 0, &
+     iarray(11) = nvcycles
+     iarray(12) = nfcycles
+     iarray(13) = rtol
+     iarray(14) = ncycles
+
+     call MPI_Bcast(iarray,nargs,MPI_DOUBLE_PRECISION, 0, &
           mpi_comm_world, ierr)
   else
-     call MPI_Bcast(iarray,10,MPI_DOUBLE_PRECISION, 0, &
+     call MPI_Bcast(iarray,nargs,MPI_DOUBLE_PRECISION, 0, &
           mpi_comm_world, ierr)
      nx = int(iarray(1))
      ny = int(iarray(2))
@@ -296,13 +311,21 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
      zprocs = int(iarray(9))
      
      problemType = int(iarray(10))
+
+     nvcycles =    int(iarray(11))
+     nfcycles =    int(iarray(12))
+     rtol     =        iarray(13) 
+     ncycles  =    int(iarray(14))
   endif
+  if (nfcycles .ne. 0) nfcycles = 1 ! only valid 0,1
+  if (nvcycles .lt. 0) nvcycles = 0 ! only valid 0,1
+  if (nfcycles+nvcycles .le. 0) print *, 'no solver iterations!!!'
   ! get ijk procs
   t1=nprocs
 #ifdef TWO_D
   zprocs = 1
   nz = 1
-  nzlocal = ????
+  nzlocal = 1
   if (xprocs == -1) then
      if( abs(dsqrt(t1) - floor(dsqrt(t1))) > 0.d0 ) then
         if(abs(dsqrt(t1/2.d0)-floor(dsqrt(t1/2.d0)))>0.d0)then
@@ -370,7 +393,7 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
      stop
   endif
   ! x
-  if (nxlocal.eq.-1 .and. nx.eq.-1) nxlocal = 32        ! default
+  if (nxlocal.eq.-1 .and. nx.eq.-1) nxlocal = 8        ! default
   if (nxlocal.eq.-1 .and. nx.ne.-1) nxlocal = nx/xprocs 
   if (nxlocal.ne.-1 .and. nx.eq.-1) nx = nxlocal*xprocs 
   if (nx .ne. nxlocal*xprocs) stop 'nx .ne. nxlocal*xprocs'
@@ -385,10 +408,10 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
   if (nzlocal.ne.-1 .and. nz.eq.-1) nz = nzlocal*zprocs 
   if (nz .ne. nzlocal*zprocs) stop 'nz .ne. nzlocal*zprocs'
   ! print topology
-  if(mype==0) then
-     write(6,*) '[',mype,'] nx=',nx,',ny=',ny,',nz=',nz
-     write(6,*)'[',mype,'] npx=',xprocs,',npy=',yprocs,',npz=',zprocs
-     write(6,*)'[',mype,'] nxl=',nxlocal,',nyl=',nylocal,',nzl=',nzlocal
+  if(mype==-1) then
+     write(6,*) '[',mype,'] nx =',nx,     ',ny= ',ny     ,',nz= ',nz
+     write(6,*) '[',mype,'] npx=',xprocs, ',npy=',yprocs, ',npz=',zprocs
+     write(6,*) '[',mype,'] nxl=',nxlocal,',nyl=',nylocal,',nzl=',nzlocal
   endif
 end subroutine get_params
 !-----------------------------------------------------------------------
@@ -416,6 +439,7 @@ subroutine formExactU(exact,g)
 #ifndef TWO_D
               coord(3) = zl+(kg+kk-1)*g%dzg-0.5*g%dzg
 #endif
+              !write (6,'(A18,E14.6,E14.6,E14.6)') "formExactU: coord=",coord
               x2 = coord*coord
               a = x2*(x2-1.);              
 #ifdef TWO_D
@@ -430,15 +454,16 @@ subroutine formExactU(exact,g)
      exact = 0.d0  
      print *,'**************** formExact not done for proble type 1: todo'
   end select
+  call SetBCs(exact,g)
 end subroutine formExactU
 !-----------------------------------------------------------------------
-subroutine formGradError(ux,exact,g,gerr,order)
+subroutine formGradError(exactu,ux,g,gerr,order)
   use GridModule
   use domain
   implicit none
   type(proc_patch),intent(in):: g
-  double precision,intent(in)::exact(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar) 
-  double precision,intent(in)::ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar) 
+  double precision,intent(in)::exactu(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar) 
+  double precision,intent(in)::ux    (g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar) 
   double precision,intent(out)::gerr
   integer,intent(in):: order
   !
@@ -454,12 +479,12 @@ subroutine formGradError(ux,exact,g,gerr,order)
            do ii=1,g%imax
               grad1(1) = 0.5d0*(ux(ii+1,jj,kk,1)-ux(ii-1,jj,kk,1))/g%dxg
               grad1(2) = 0.5d0*(ux(ii,jj+1,kk,1)-ux(ii,jj-1,kk,1))/g%dyg
-              grad2(1) = 0.5d0*(exact(ii+1,jj,kk,1)-exact(ii-1,jj,kk,1))/g%dxg
-              grad2(2) = 0.5d0*(exact(ii,jj+1,kk,1)-exact(ii,jj-1,kk,1))/g%dyg
+              grad2(1) = 0.5d0*(exactu(ii+1,jj,kk,1)-exactu(ii-1,jj,kk,1))/g%dxg
+              grad2(2) = 0.5d0*(exactu(ii,jj+1,kk,1)-exactu(ii,jj-1,kk,1))/g%dyg
               
 #ifndef TWO_D
               grad1(3) = 0.5d0*(ux(ii,jj,kk+1,1)-ux(ii,jj,kk-1,1))/g%dzg
-              grad2(3) = 0.5d0*(exact(ii,jj,kk+1,1)-exact(ii,jj,kk-1,1))/g%dzg
+              grad2(3) = 0.5d0*(exactu(ii,jj,kk+1,1)-exactu(ii,jj,kk-1,1))/g%dzg
               gradError(ii,jj,kk,1) = sqrt((grad1(1)-grad2(1))**2 + (grad1(2)-grad2(2))**2 &
                    + (grad1(3)-grad2(3))**2)
 #else
@@ -518,15 +543,13 @@ subroutine FormRHS(rhs,g)
            do ii=1,g%imax
               coord(1) = xl+(ig+ii-1)*g%dxg-0.5*g%dxg
               coord(2) = yl+(jg+jj-1)*g%dyg-0.5*g%dyg
-#ifdef TWO_D
-              coord(3) = zl+(kg+kk-1)*g%dzg-0.5*g%dzg
+#ifndef TWO_D
+              coord(3) = zl+(kg+kk-1)*g%dzg-0.5*g%dzg          
 #endif
-              print *, "coord=",coord
+              !write (6,'(A15,E14.6,E14.6,E14.6)') "FormRHS: coord=",coord
               x2 = coord*coord
-              print *, "x2=",x2
               a = x2*(x2-1.);              
               b = 12.*x2-2.;
-              print *, "b=",b
 #ifdef TWO_D
               rhs(ii,jj,kk,1) = b(1)*a(2) + a(1)*b(2)
 #else
@@ -552,6 +575,7 @@ subroutine FormRHS(rhs,g)
      stop 'FormRHS not impl -- todo'
 
   end select
+  rhs(g%ilo,g%jlo,g%klo,1) = 1.d0
   return
 end subroutine FormRHS
 !-----------------------------------------------------------------
@@ -589,14 +613,18 @@ end subroutine SetupDomain
 subroutine InitIO()
   use iounits
   use mpistuff, only:mype
+  use error_data_module, only:error_norm
   implicit none
   if(mype==0) then
-     open(ihis,file='Run.history', form='formatted')
+     open(irun,file='Run.history', form='formatted')
+      write(irun,  '(A,I1,A)') 'solve # error_',error_norm,': u           grad(u)          |f-Au|_2/|f|_2'
+     write(irun,*) '-----------------------------------------------------------'
      open(iconv,file='Convergence.history', form='formatted')
+      write(iconv, '(A,I1,A)')'solve # order (',error_norm, ' norm): u   grad(u)          error: u      grad(u)       |f-Au|_2'
+     write(iconv,*)'-------------------------------------------------------------------------------'
   endif
   return
 end subroutine InitIO
-!     
 !-----------------------------------------------------------------------
 subroutine FinalizeIO()
   use iounits
@@ -604,7 +632,7 @@ subroutine FinalizeIO()
   implicit none
   ! Close all open files
   if(mype==0) then
-     close(ihis)
+     close(irun)
      close(iconv)
   endif
   return

@@ -30,12 +30,11 @@ subroutine XExchange(ux,g)
   
   type(proc_patch),intent(in) :: g
   double precision:: ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar)
-  
   double precision:: xbuffer_send(ng,g%jmax,g%kmax,nvar)
   double precision:: xbuffer_recv(ng,g%jmax,g%kmax,nvar)
 	
   integer:: XBUFFSIZE
-  integer:: ii,jj,mm,kk,l,idest
+  integer:: ii,jj,mm,kk,idest
   integer:: msg_id_send_x_low
   integer:: msg_id_send_x_hi
   integer:: msg_id_recv_x_low
@@ -57,12 +56,10 @@ subroutine XExchange(ux,g)
 #ifndef XPERIODIC
   if (g%iprocx .lt. g%XPROCS) then
 #endif
-     do l=1,nvar,1
-        do kk=1,g%kmax
-           do jj = 1,g%jmax
-              do mm = 1, ng
-                 xbuffer_send(mm,jj,kk,l) = ux(g%imax+1-mm,jj,kk,l)
-              enddo
+     do kk=1,g%kmax
+        do jj = 1,g%jmax
+           do mm = 1, ng
+              xbuffer_send(mm,jj,kk,:) = ux(g%imax+1-mm,jj,kk,:)
            enddo
         enddo
      enddo
@@ -80,19 +77,17 @@ subroutine XExchange(ux,g)
 #endif
      call MPI_Wait(msg_id_recv_x_low, status, ierr)
      Call ErrorHandler(ierr,ERROR_WAIT)
-     
-     do l=1,nvar,1
-        do kk=1,g%kmax
-           do jj = 1,g%jmax
-              do mm = 1, ng
-                 ux(1-mm,jj,kk,l) = xbuffer_recv(mm,jj,kk,l)
-              enddo
+     do kk=1,g%kmax
+        do jj = 1,g%jmax
+           do mm = 1, ng
+              ux(1-mm,jj,kk,:) = xbuffer_recv(mm,jj,kk,:)
            enddo
         enddo
      enddo
 #ifndef XPERIODIC
   endif
-#endif  
+#endif 
+ 
 #ifndef XPERIODIC
   if (g%iprocx .lt. g%XPROCS) then
 #endif
@@ -115,12 +110,10 @@ subroutine XExchange(ux,g)
 #ifndef XPERIODIC
   if (g%iprocx .gt. 1) then
 #endif
-     do l=1,nvar,1
-        do kk=1,g%kmax
-           do jj = 1,g%jmax
-              do mm = 1, ng
-                 xbuffer_send(mm,jj,kk,l) = ux(mm,jj,kk,l)
-              enddo
+     do kk=1,g%kmax
+        do jj = 1,g%jmax
+           do mm = 1, ng
+              xbuffer_send(mm,jj,kk,:) = ux(mm,jj,kk,:)
            enddo
         enddo
      enddo
@@ -137,12 +130,10 @@ subroutine XExchange(ux,g)
 #endif
      call MPI_Wait(msg_id_recv_x_hi, status, ierr)
      Call ErrorHandler(ierr,ERROR_WAIT)
-     do l=1,nvar,1
-        do kk=1,g%kmax
-           do jj = 1,g%jmax
-              do mm = 1, ng
-                 ux(g%imax+mm,jj,kk,l) = xbuffer_recv(mm,jj,kk,l)
-              enddo
+     do kk=1,g%kmax
+        do jj = 1,g%jmax
+           do mm = 1, ng
+              ux(g%imax+mm,jj,kk,:) = xbuffer_recv(mm,jj,kk,:)
            enddo
         enddo
      enddo
@@ -158,26 +149,6 @@ subroutine XExchange(ux,g)
 #ifndef XPERIODIC
   endif
 #endif
-!!$  !     if one proc in x - must do periodic BC here
-!!$#ifdef XPERIODIC
-!!$  ii=0
-!!$  do kk=1,g%kmax,1
-!!$     do jj=1,g%jmax,1
-!!$        do mm=0,ng-1,1
-!!$           ux(ii-mm,jj,kk,:) = ux(g%imax-mm,jj,kk,:)
-!!$        enddo
-!!$     enddo
-!!$  enddo
-!!$  !       xr Boundary
-!!$  ii=g%imax+1
-!!$  do kk=1,g%kmax,1
-!!$     do jj=1,g%jmax,1
-!!$        do mm=0,ng-1,1
-!!$           ux(ii+mm,jj,kk,:) = ux(1+mm,jj,kk,:)
-!!$        enddo
-!!$     enddo
-!!$  enddo
-!!$#endif
   return
 end subroutine XExchange
 
@@ -187,15 +158,13 @@ subroutine YExchange(ux,g)
   use tags
   use GridModule
   implicit none
+
   type(proc_patch),intent(in) :: g
-  double precision:: ux(g%ilo:g%ihi,g%jlo:g%jhi,&
-       g%klo:g%khi,nvar)
-  
+  double precision:: ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar)
   double precision:: ybuffer_send(g%ilo:g%ihi,ng,g%kmax,nvar)
   double precision:: ybuffer_recv(g%ilo:g%ihi,ng,g%kmax,nvar)
   integer:: YBUFFSIZE
-  integer:: ii,jj,mm,kk,l,idest
-  
+  integer:: ii,jj,mm,kk,idest
   integer:: msg_id_send_y_low
   integer:: msg_id_send_y_hi
   integer:: msg_id_recv_y_low
@@ -227,17 +196,16 @@ subroutine YExchange(ux,g)
      if(g%top<0)stop 'g%top<0'
      call MPI_Isend(ybuffer_send, YBUFFSIZE, MPI_DOUBLE_PRECISION,&
           g%top, MSG_XCH_YLOW_TAG, g%comm3D, msg_id_send_y_low, ierr)
-     
      Call ErrorHandler(ierr,ERROR_SEND)
 #ifndef YPERIODIC
   endif
 #endif
+
 #ifndef YPERIODIC
   if(g%iprocy .gt. 1) then
 #endif  
      call MPI_Wait(msg_id_recv_y_low, status, ierr)
-     Call ErrorHandler(ierr,ERROR_WAIT)
-     
+     Call ErrorHandler(ierr,ERROR_WAIT)     
      do kk=1,g%kmax
         do ii = g%ilo,g%ihi
            do mm = 1, ng
@@ -291,13 +259,10 @@ subroutine YExchange(ux,g)
 #endif
      call MPI_Wait(msg_id_recv_y_hi, status, ierr)
      Call ErrorHandler(ierr,ERROR_WAIT)
-     
-     do l=1,nvar,1
-        do kk=1,g%kmax
-           do mm = 1, ng
-              do ii = g%ilo,g%ihi
-                 ux(ii,g%jmax+mm,kk,l) = ybuffer_recv(ii,mm,kk,l)
-              enddo
+     do kk=1,g%kmax
+        do mm = 1, ng
+           do ii = g%ilo,g%ihi
+              ux(ii,g%jmax+mm,kk,:) = ybuffer_recv(ii,mm,kk,:)
            enddo
         enddo
      enddo
@@ -312,27 +277,6 @@ subroutine YExchange(ux,g)
 #ifndef YPERIODIC
   endif
 #endif  	
-!!$#else ! do yperiodic BCs if yprocs=1
-!!$#ifdef YPERIODIC
-!!$  jj=0
-!!$  do kk=1,g%kmax,1
-!!$     do ii=g%ilo,g%ihi,1
-!!$        do mm=0,ng-1,1
-!!$           ux(ii,jj-mm,kk,:) = ux(ii,g%jmax-mm,kk,:)
-!!$        enddo
-!!$     enddo
-!!$  enddo
-!!$  c       yr Boundary
-!!$  jj=g%jmax+1
-!!$  do kk=1,g%kmax,1
-!!$     do ii=g%ilo,g%ihi,1
-!!$        do mm=0,ng-1,1
-!!$           ux(ii,jj+mm,kk,:) = ux(ii,1+mm,kk,:)
-!!$        enddo
-!!$     enddo
-!!$  enddo
-!!$#endif
-!!$#endif  
   return
 end subroutine YExchange
 
@@ -348,7 +292,7 @@ subroutine ZExchange(ux,g)
   double precision:: zbuffer_send(g%ilo:g%ihi,g%jlo:g%jhi,ng,nvar)
   double precision:: zbuffer_recv(g%ilo:g%ihi,g%jlo:g%jhi,ng,nvar)
   integer:: ZBUFFSIZE
-  integer:: ii,jj,mm,kk,l,idest
+  integer:: ii,jj,mm,kk,idest
   integer:: msg_id_send_z_low
   integer:: msg_id_send_z_hi
   integer:: msg_id_recv_z_low
@@ -366,16 +310,14 @@ subroutine ZExchange(ux,g)
 #ifndef ZPERIODIC
   endif
 #endif  
-  
+
 #ifndef ZPERIODIC
   if ( g%iprocz < g%ZPROCS ) then
 #endif  
-     do l = 1,nvar
-        do mm = 1,ng
-           do jj = g%jlo, g%jhi
-              do ii = g%ilo,g%ihi
-                 zbuffer_send(ii,jj,mm,l) = ux(ii,jj,g%kmax+1-mm,l)
-              enddo
+     do mm = 1,ng
+        do jj = g%jlo, g%jhi
+           do ii = g%ilo,g%ihi
+              zbuffer_send(ii,jj,mm,:) = ux(ii,jj,g%kmax+1-mm,:)
            enddo
         enddo
      enddo
@@ -392,21 +334,17 @@ subroutine ZExchange(ux,g)
 #endif  
      call MPI_Wait(msg_id_recv_z_hi, status, ierr)
      call ErrorHandler(ierr,ERROR_WAIT)
-     
-     do l = 1,nvar
-        do mm = 1,ng
-           do jj = g%jlo, g%jhi
-              do ii = g%ilo,g%ihi
-                 ux(ii,jj,1-mm,l) = zbuffer_recv(ii,jj,mm,l)
-              enddo
+     do mm = 1,ng
+        do jj = g%jlo, g%jhi
+           do ii = g%ilo,g%ihi
+              ux(ii,jj,1-mm,:) = zbuffer_recv(ii,jj,mm,:)
            enddo
         enddo
      enddo
 #ifndef ZPERIODIC
-  else
-     stop 'Z not periodic'
   endif
 #endif  
+
 #ifndef ZPERIODIC
   if ( g%iprocz < g%ZPROCS ) then
 #endif  
@@ -425,15 +363,14 @@ subroutine ZExchange(ux,g)
 #ifndef ZPERIODIC
   endif
 #endif  
+
 #ifndef ZPERIODIC
   if ( g%iprocz > 1 ) then
 #endif  
-     do l = 1,nvar
-        do mm = 1,ng
-           do jj = g%jlo, g%jhi
-              do ii = g%ilo,g%ihi
-                 zbuffer_send(ii,jj,mm,l) = ux(ii,jj,mm,l)
-              enddo
+     do mm = 1,ng
+        do jj = g%jlo, g%jhi
+           do ii = g%ilo,g%ihi
+              zbuffer_send(ii,jj,mm,:) = ux(ii,jj,mm,:)
            enddo
         enddo
      enddo
@@ -443,24 +380,24 @@ subroutine ZExchange(ux,g)
      call ErrorHandler(ierr,ERROR_SEND)
 #ifndef ZPERIODIC
   endif
-#endif  
+#endif 
+ 
 #ifndef ZPERIODIC
   if ( g%iprocz < g%ZPROCS ) then
 #endif  
      call MPI_Wait(msg_id_recv_z_low, status, ierr)
      call ErrorHandler(ierr,ERROR_WAIT)
-     do l = 1,nvar
-        do mm = 1,ng
-           do jj = g%jlo, g%jhi
-              do ii = g%ilo,g%ihi
-                 ux(ii,jj,g%kmax+mm,l) = zbuffer_recv(ii,jj,mm,l)
-              enddo
+     do mm = 1,ng
+        do jj = g%jlo, g%jhi
+           do ii = g%ilo,g%ihi
+              ux(ii,jj,g%kmax+mm,:) = zbuffer_recv(ii,jj,mm,:)
            enddo
         enddo
      enddo
 #ifndef ZPERIODIC
   endif
 #endif  
+
 #ifndef ZPERIODIC
   if ( g%iprocz > 1 ) then
 #endif  
@@ -469,26 +406,6 @@ subroutine ZExchange(ux,g)
 #ifndef ZPERIODIC
   endif
 #endif  
-!!$#else ! do zperiodic BCs if zprocs=1
-!!$#ifdef ZPERIODIC
-!!$  kk=0
-!!$  do jj=g%jlo,g%jhi,1
-!!$     do ii=g%ilo,g%ihi,1
-!!$        do mm=0,ng-1,1
-!!$           ux(ii,jj,kk-mm,:) = ux(ii,jj,g%kmax-mm,:)
-!!$        enddo
-!!$     enddo
-!!$  enddo
-!!$  !       yr Boundary
-!!$  kk=g%kmax+1
-!!$  do jj=g%jlo,g%jhi,1
-!!$     do ii=g%ilo,g%ihi,1
-!!$        do mm=0,ng-1,1
-!!$           ux(ii,jj,kk+mm,:) = ux(ii,jj,1+mm,:)
-!!$        enddo
-!!$     enddo
-!!$  enddo
-!!$#endif
   return
 end subroutine ZExchange
 

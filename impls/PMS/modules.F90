@@ -11,7 +11,7 @@ module domain
 end module domain
 !-----------------------------------------------------------------------
 module iounits
-  integer, parameter:: ihis=1
+  integer, parameter:: irun=1
   integer, parameter:: ibinoutput=2
   integer, parameter:: iconv=3
 end module iounits
@@ -40,6 +40,8 @@ module error_data_module
   type error_data
      double precision:: uerror,graduerr,resid
   end type error_data
+  integer :: err_lev ! cache of currant level for error output
+  integer,parameter::error_norm=3 ! 3 == inf
 end module error_data_module
 !-----------------------------------------------------------------------
 ! Grid module
@@ -55,18 +57,21 @@ module proc_patch_data_module
   end type proc_patch
 end module proc_patch_data_module
 !-----------------------------------------------------------------------
+#define MAX_GRIDS 20
 module GridModule
   use proc_patch_data_module
   implicit none
-  integer,parameter:: max_grids=20
+  integer,parameter:: max_grids=MAX_GRIDS
   integer,parameter:: min_psize=4
+  integer,parameter:: ncoarsesolveits=min_psize*min_psize ! min_psize^2
   integer,parameter:: ng=1
   integer,parameter:: nvar=1
-  integer,parameter:: nfmgvcycles=1
-  integer,parameter:: nfvcycles=10  ! num V-cycles after F-cycle
-  integer,parameter:: ncycles=1     ! V==1, W==2
-  logical,parameter:: reorder=.false.  ! use  true!!!
-  double precision,parameter:: rtol=1.e-12
+  integer:: nvcycles ! 0 for pure FMG
+  integer:: nfcycles ! 0 for no FMG
+  integer:: ncycles  ! V==1, W==2
+  integer:: nfmgvcycles ! 1 for normal FMG, more for more power
+  logical,parameter:: reorder=.false.  ! use  true!!! todo
+  double precision:: rtol
 contains
   !-----------------------------------------------------------------
   logical function is_top(g)
@@ -82,36 +87,36 @@ contains
   integer function iglobal(g)
     implicit none
     type(proc_patch):: g
-    iglobal = (g%iprocx-1)*g%imax + 1 ! one based
+    iglobal = (g%iprocx-1)*g%imax + 1 ! one based of first index
   end function iglobal
  !-----------------------------------------------------------------
   integer function jglobal(g)
     implicit none
     type(proc_patch):: g
-    jglobal = (g%iprocy-1)*g%jmax + 1 ! one based
+    jglobal = (g%iprocy-1)*g%jmax + 1 ! one based of first index
   end function jglobal
  !-----------------------------------------------------------------
   integer function kglobal(g)
     implicit none
     type(proc_patch):: g
-    kglobal = (g%iprocz-1)*g%kmax + 1 ! one based
+    kglobal = (g%iprocz-1)*g%kmax + 1 ! one based of first index
   end function kglobal
   !-----------------------------------------------------------------
   subroutine new_grids(g,NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
     implicit none    
     integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
     integer :: NProcAxis(3),iProcAxis(3)
-    type(proc_patch):: g(0:)
+    type(proc_patch),intent(out):: g(0:max_grids-1)
     interface       
        subroutine new_grids_private(g,NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
          use proc_patch_data_module
          implicit none
          integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
          integer :: NProcAxis(3),iProcAxis(3)
-         type(proc_patch):: g(0:)       
+         type(proc_patch),intent(out):: g(0:MAX_GRIDS-1) ! this needs to be set but max_grids is not visable!!  
        end subroutine new_grids_private
     end interface
-    
+
     call new_grids_private(g,NProcAxis,iProcAxis,nx,ny,nz,&
          nxlocal,nylocal,nzlocal,comm3d)
 

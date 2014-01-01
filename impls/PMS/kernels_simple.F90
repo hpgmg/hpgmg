@@ -2,6 +2,26 @@
 !     Ravi Samtaney & Mark Adams
 !     Copyright 2014
 !-----------------------------------------------------------------
+double precision function level_norm1(ux,g)
+  !
+  use proc_patch_data_module
+  use mpistuff
+  implicit none
+  !     
+  type(proc_patch)::g
+  double precision::ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
+  !
+  double precision::t1,t2,vol    
+  
+  vol = g%dxg*g%dyg&
+#ifndef TWO_D
+       *g%dzg
+#endif
+  t1 = sum(abs(ux(1:g%imax,1:g%jmax,1:g%kmax,1)))
+  call MPI_Allreduce(t1,t2,1,MPI_DOUBLE_PRECISION,MPI_SUM,g%comm3D,ierr)
+  level_norm1 = t2*vol
+end function level_norm1
+!-----------------------------------------------------------------
 double precision function level_norm2(ux,g)
   !
   use proc_patch_data_module
@@ -11,11 +31,16 @@ double precision function level_norm2(ux,g)
   type(proc_patch)::g
   double precision::ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   !     
-  double precision::t1,t2
+  double precision::t1,t2,vol  
+
+  vol = g%dxg*g%dyg&
+#ifndef TWO_D
+       *g%dzg
+#endif
 
   t1 = sum(ux(1:g%imax,1:g%jmax,1:g%kmax,1)**2)
   call MPI_Allreduce(t1,t2,1,MPI_DOUBLE_PRECISION,MPI_SUM,g%comm3D,ierr)
-  level_norm2 = sqrt(t2)
+  level_norm2 = sqrt(t2*vol)
 end function level_norm2
 !-----------------------------------------------------------------
 double precision function level_norminf(ux,g)
@@ -38,15 +63,14 @@ double precision function norm(ux,g,type)
   !
   use proc_patch_data_module
   implicit none
-  double precision level_norm2,level_norminf
+  double precision level_norm2,level_norminf,level_norm1
   !     
   type(proc_patch)::g
   double precision::ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   integer :: type
   !     
   if (type==1) then
-     print *, 'norm 1 not implemented'
-     norm = 0.d0
+     norm = level_norm1(ux,g)
   else if (type==2) then
      norm = level_norm2(ux,g)
   else if (type==3) then
@@ -342,7 +366,7 @@ subroutine Restrict(uxC,ux,gf,gc,order)
      enddo
   endif
   
-  if(gc%jmax*gc%yprocs==4.and.mype==0)then
+  if(gc%jmax*gc%yprocs==4.and.mype==-1)then
      do ic=1,gc%imax,1
         write(6,*)'[',mype,'] uc=',uxC(ic,1:gc%jmax,1,1)
      enddo

@@ -2,68 +2,80 @@
 !     Ravi Samtaney & Mark Adams
 !     Copyright 2014
 !-----------------------------------------------------------------
-subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nVcycles)
+subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
   use GridModule
   use mpistuff
   use error_data_module
   implicit none
   !
   type(proc_patch),intent(in)::g(0:max_grids-1)
-  type(error_data),intent(out)::errors(0:max_grids-1+nfvcycles)
+  type(error_data),intent(out)::errors(0:max_grids-1+nvcycles)
   external Apply1, Apply2, Relax1
   double precision,intent(out)::Res0
-  integer,intent(out):: nVcycles
+  integer,intent(out):: nViters
   !     Local Vars
-  integer:: iter,coarsest_grid,i
+  integer:: iter,coarsest_grid,ii
   double precision:: Res,Reslast
   double precision,dimension(&
        g(0)%ilo:g(0)%ihi, g(0)%jlo:g(0)%jhi,&
        g(0)%klo:g(0)%khi, nvar) :: L2u_f,rhs,ux
   double precision norm
-print *,1111111111
   !
   !call Apply2(L2u_f,ux,g(0)) ! ux==0 
   call formRHS(rhs,g(0))
   Res0 = norm(rhs,g(0),2)
-  if(mype==0)write(6,'(A8,E14.6)') '[0] |f|=',Res0
+  if(mype==0)write(6,'(A9,E14.6)') '[ 0] |f|=',Res0
   Reslast = Res0
   ! FMG solve
-  iter = 1
-  call MGF(ux,rhs,g,0,Apply1,Apply2,Relax1,errors)
-  call Apply2(L2u_f,ux,g(0))
-  Res = norm(rhs-L2u_f,g(0),2)
-  if(mype==0)write(6,'(A1,I5,A10,E14.6,A7,F10.6)') &
-       '[',iter,'] |f-Au|_2=',Res,', rate=',Res/Reslast
-  Reslast=Res
-
-  ! get coarsest grid for diagnostics
+  iter = 0
+  err_lev = 0
+  if (nfcycles .ne. 0) then
+     iter = iter + 1
+     call MGF(ux,rhs,g,0,Apply1,Apply2,Relax1,errors)
+     call Apply2(L2u_f,ux,g(0))
+     Res = norm(rhs-L2u_f,g(0),2)
+     if(mype==0)write(6,'(A1,I2,A10,E14.6,A7,F10.6)') &
+          '[',iter,'] |f-Au|_2=',Res,', rate=',Res/Reslast
+     Reslast=Res
+  else
+     ! initailize what is done in FMG
+     ux = 0.d0
+     call formRHS(rhs,g(0)) ! form RHS explicity on fine grid for vycycles
+     Res = Res0
+  end if
+  
+  ! find coarsest grid for diagnostics
   coarsest_grid = -1
-  do i=1,max_grids-1
-     ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
-     if( is_top(g(i)) ) then
-        coarsest_grid = i
+  do ii=0,max_grids-1
+     if( is_top(g(ii)) ) then
+        coarsest_grid = ii
         exit
      end if
   end do
-print *, 'solve: coarsest grid = ',coarsest_grid
+
   ! finish with V-cycle
-  nVcycles = 0
-  do while(Res/Res0 > rtol .and. iter < nfvcycles)
+  nViters = 0
+  do while(Res/Res0 > rtol .and. iter < nvcycles)
      !call Apply1(L1u,ux,g(0))
      !L2u_f = rhs - L2u_f + L1u ! defect correction
      !call MGV(ux,L2u_f,g,0,Apply1,Relax1)
      call MGV(ux,rhs,g,0,Apply1,Relax1)
-     iter=iter+1
+     iter=iter+1 ! 2 for FMG and 1 for V 
      ! residual
      call Apply2(L2u_f,ux,g(0))            
      Res = norm(rhs-L2u_f,g(0),2)
-     if(mype==0)write(6,'(A1,I5,A10,E14.6,A7,F10.6)') &
+     if(mype==0)write(6,'(A1,I2,A10,E14.6,A7,F10.6)') &
           '[',iter,'] |f-Au|_2=',Res,', rate=',Res/Reslast
+     
+     ! form errors & convergance measure
+     errors(err_lev)%resid = Res
+     call formExactU(L2u_f,g(0))
+     errors(err_lev)%uerror = norm(L2u_f-ux,g(0),error_norm)
+     call formGradError(L2u_f,ux,g(0),errors(err_lev)%graduerr,error_norm)
+     err_lev = err_lev + 1
+     
      Reslast=Res
-     ! outpout errors
-     print *, '    *****  solve: make error for errors ',coarsest_grid+iter-1
-     errors(coarsest_grid+iter-1)%resid = Res
-     nVcycles = nVcycles + 1
+     nViters = nViters + 1
   enddo
   return
 end subroutine solve
@@ -82,7 +94,7 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
        g(lev)%ilo:g(lev)%ihi, g(lev)%jlo:g(lev)%jhi,& 
        g(lev)%klo:g(lev)%khi, nvar) :: ux
   external Apply1, Apply2, Relax1
-  type(error_data),intent(out)::errors(0:max_grids-1+nfvcycles)
+  type(error_data),intent(out)::errors(0:max_grids-1+nvcycles)
   ! Local Vars - Coarse. This is new data on the stack
   integer :: ii,jj
   double precision :: norm
@@ -92,30 +104,26 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
   double precision,dimension(g(lev)%ilo:g(lev)%ihi,g(lev)%jlo:g(lev)%jhi,&
        g(lev)%klo:g(lev)%khi, nvar)::tmp
 
+  ux = 0.d0 ! everthing uses initial solution except FMG
   if( is_top(g(lev)) ) then
      ! the real start of FMG - coarse grid solve
-     if (.not. is_top(g(lev-1))) then
-        ! defect correction
-        !call Apply2(Res2,ux,g(lev)) 
-        !call Apply1(Res,ux,g(lev)) 
-        !Res = rhs - Res2 + Res
-        call MGV(ux,rhs,g,lev,Apply1,Relax1)
-        !call Relax1(ux,rhs,g(lev),16)  ! coar grid solves should be parameter
-        print *, 'MGF: coarse solve, level ',lev
-     else
-        stop 'MGF: not coarsest grid'
-     end if
+     if (lev.gt.0 .and. is_top(g(lev-1))) stop 'MGF: not coarsest grid'
+     ! defect correction
+     !call Apply2(Res2,ux,g(lev)) 
+     !call Apply1(Res,ux,g(lev)) 
+     !Res = rhs - Res2 + Res
+     call MGV(ux,rhs,g,lev,Apply1,Relax1)
+     !call Relax1(ux,rhs,g(lev),16)  ! coar grid solves should be parameter
   else
      ! go "down" the V, allating data (on stack), forming RHS, zero out u
      call formRHS(FC,g(lev+1)) ! form RHS explicity on fine grid
-     uxC = 0.d0                
+     !uxC = 0.d0                
      call MGF(uxC,FC,g,lev+1,Apply1,Apply2,Relax1,errors) 
      ! prolongate and correct
-     ux = 0.d0
      call Prolong_2(ux,uxC,g(lev),g(lev+1))
      ! start of multiple v-cycle
      jj = nfmgvcycles !; if(lev==0) jj=10
-     if(mype==0)print *,'FMG V-cycles = ',jj
+     !if(mype==0)print *,'FMG V-cycles = ',jj
      do ii=1,jj
         ! defect correction
         ! call Apply2(Res2,ux,g(lev)) 
@@ -125,15 +133,16 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
         call MGV(ux,rhs,g,lev,Apply1,Relax1)
      enddo
   endif
-  ! form errors & convergance study, recursive so goes from coarse to fine (good)
-  print *, '   *****   MGF: make error for errors ',lev
+
+  ! form errors & convergance measure, recursive so goes from coarse to fine (good)
   call formExactU(tmp,g(lev))
-  errors(lev)%uerror = norm(tmp-ux,g(lev),3)
-  call formGradError(ux,tmp,g(lev),errors(lev)%graduerr,3)
-  errors(lev)%graduerr = norm(tmp,g(lev),3)
+  errors(err_lev)%uerror = norm(tmp-ux,g(lev),error_norm)
+  call formGradError(tmp,ux,g(lev),errors(err_lev)%graduerr,error_norm)
   call Apply2(tmp,ux,g(lev))
-  errors(lev)%resid = norm(tmp-rhs,g(lev),2)
+  errors(err_lev)%resid = norm(tmp-rhs,g(lev),2)
   
+  err_lev = err_lev + 1
+
   return
 end subroutine MGF
 !-----------------------------------------------------------------------
@@ -237,7 +246,7 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
   implicit none
   integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
   integer :: NProcAxis(3),iProcAxis(3)
-  type(proc_patch):: gg(0:max_grids-1)
+  type(proc_patch),intent(out):: gg(0:max_grids-1)
   integer :: n,ndims,ii,jj,kk,proc_id,rank
   logical :: periods(3)
   ndims = 3
@@ -267,12 +276,12 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
   call MPI_Cart_Shift(comm3D,0,1,gg(0)%left,gg(0)%right,ierr)
   call MPI_Cart_Shift(comm3D,1,1,gg(0)%bottom,gg(0)%top,ierr)
   call MPI_cart_Shift(comm3D,2,1,gg(0)%behind,gg(0)%forward,ierr)
-  if(mype==0) write(6,*)'[',mype,'] l,r,t,b=',gg(0)%left,gg(0)%right,gg(0)%top,&
+  if(mype==-1) write(6,*)'[',mype,'] l,r,t,b=',gg(0)%left,gg(0)%right,gg(0)%top,&
        gg(0)%bottom,gg(0)%behind,gg(0)%forward
   !       iprocx ...	
-  gg(0)%iprocx = iProcAxis(1) + 1 ! one based
-  gg(0)%iprocy = iProcAxis(2) + 1 ! one based
-  gg(0)%iprocz = iProcAxis(3) + 1 ! one based
+  gg(0)%iprocx = iProcAxis(1)
+  gg(0)%iprocy = iProcAxis(2)
+  gg(0)%iprocz = iProcAxis(3)
   !	write (0,*) '[',mype,'] g iprocx=',iprocx,iprocy,iprocz
   gg(0)%xprocs = NProcAxis(1) 
   gg(0)%yprocs = NProcAxis(2) 
@@ -290,7 +299,7 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
 #ifdef ZPERIODIC
   periods(3) = .true.
 #endif  
-  !
+  ! start at 1 as 0 was just done
   do n=1,max_grids-1
      gg(n)%dxg = gg(n-1)%dxg*2.d0
      gg(n)%dyg = gg(n-1)%dyg*2.d0
@@ -423,5 +432,19 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
      gg(n)%klo=-ng+1
      gg(n)%khi=gg(n)%kmax+ng
 #endif
+!!$  ixlo=1-nghost
+!!$  iylo=1-nghost
+!!$  izlo=1-nghost
+!!$  ixhi=nxlocal+nghost
+!!$  iyhi=nylocal+nghost
+!!$  izhi=nzlocal+nghost 
+!!$#ifdef TWO_D
+!!$  izlo=1; izhi=nzlocal ! ???
+!!$#endif
+  !     Allocate mesh
+!!$  allocate(xc(ixlo:ixhi))
+!!$  allocate(yc(iylo:iyhi))
+!!$  allocate(zc(izlo:izhi))
+
   enddo
 end subroutine new_grids_private

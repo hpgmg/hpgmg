@@ -14,7 +14,7 @@ include ${PETSC_DIR}/conf/rules
 
 #.SUFFIXES: .o .F
 
-FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS}
+FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -O0
 pms: ${OBJ} 
 	-${FLINKER} -o pms.ex ${OBJ}
 #	-/opt/local/bin/gfortran -o pms.ex ${OBJ}
@@ -36,3 +36,6 @@ debug:
 
 val:
 	-@valgrind --dsymutil=yes --leak-check=no --gen-suppressions=yes --num-callers=20 ./pms.ex -problem 0 -nx 8 -ny 8 -nz 8
+
+runedison:
+	-@aprun -n 64 ./pms.ex -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1
