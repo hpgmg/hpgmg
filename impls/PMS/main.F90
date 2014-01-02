@@ -408,7 +408,7 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
   if (nzlocal.ne.-1 .and. nz.eq.-1) nz = nzlocal*zprocs 
   if (nz .ne. nzlocal*zprocs) stop 'nz .ne. nzlocal*zprocs'
   ! print topology
-  if(mype==0) then
+  if(mype==-1) then
      write(6,*) '[',mype,'] nx =',nx,     ',ny= ',ny     ,',nz= ',nz
      write(6,*) '[',mype,'] npx=',xprocs, ',npy=',yprocs, ',npz=',zprocs
      write(6,*) '[',mype,'] nxl=',nxlocal,',nyl=',nylocal,',nzl=',nzlocal

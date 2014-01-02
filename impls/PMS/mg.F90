@@ -310,7 +310,9 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
      gg(n)%dzg = gg(n-1)%dzg*2.d0
 #endif
      ! take care of reductions
+print *,n,') check last grid N,np=',gg(n-1)%imax,gg(n-1)%iprocx,gg(n-1)%jmax,gg(n-1)%iprocy,gg(n-1)%kmax,gg(n-1)%iprocz,', mype=',mype
      if( is_top( gg(n-1) ) ) then
+print *,'      ',n,')   *********** [',mype,'] stop grids. mype=  ',mype
         ! all done - clear rest of grids
         do ii=n,max_grids-1
            gg(ii)%xprocs = 0 
@@ -333,11 +335,14 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
           .and. gg(n-1)%kmax>min_psize &
 #endif
         ) then
+
         !     normal reduction, no split yet	      
         gg(n)%imax=gg(n-1)%imax/2
         gg(n)%jmax=gg(n-1)%jmax/2
 #ifndef TWO_D
         gg(n)%kmax=gg(n-1)%kmax/2
+#else
+        gg(n)%kmax=gg(n-1)%kmax ! 1
 #endif
         gg(n)%comm3d = comm3d
         gg(n)%comm = MPI_COMM_WORLD
@@ -354,7 +359,7 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
         gg(n)%bottom = gg(n-1)%bottom
         gg(n)%forward = gg(n-1)%forward
         gg(n)%behind = gg(n-1)%behind
-     
+print *,'        ',n,') normal reduction, mype=',mype
         gg(n)%loc_comm = mpi_comm_null
      else  ! gg(n-1)%imax == min_psize ...
         !     reduce number of procs on grid by 2
@@ -365,7 +370,7 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
 #ifdef TWO_D
         gg(n)%zprocs = gg(n-1)%zprocs
         gg(n)%iprocz = gg(n-1)%iprocz
-#else 
+#else
         gg(n)%zprocs = gg(n-1)%zprocs/2
         gg(n)%iprocz = (gg(n-1)%iprocz-1)/2 + 1
 #endif
@@ -386,9 +391,12 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
 #else 
         ii = kk + 2*jj + 4*ii ! local zero based ID
 #endif
+print *,'            ',n,') reduced grid call MPI_COMM_SPLIT, mype=',mype
         call MPI_COMM_SPLIT(gg(n-1)%comm,ii,proc_id,gg(n)%comm,ierr)
         call MPI_COMM_SPLIT(gg(n-1)%comm,proc_id,ii,gg(n)%loc_comm,ierr)
-
+!if (mype==0) print *,' MPI_COMM_SPLIT done, mype=',mype
+        call mpi_barrier(mpi_comm_world,ierr)
+!print *,'reducing procs, mype=',mype
         NProcAxis(1) = gg(n)%xprocs
         NProcAxis(2) = gg(n)%yprocs
         NProcAxis(3) = gg(n)%zprocs
@@ -452,6 +460,15 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
 !!$  allocate(xc(ixlo:ixhi))
 !!$  allocate(yc(iylo:iyhi))
 !!$  allocate(zc(izlo:izhi))
-
+     ! print topology
+     if(mype==0) then
+        write(6,*) '[',mype,'] level ',n, ', nxl=',gg(n)%imax, ', nxl=',gg(n)%imax
+        if (mype==-1) then
+           write(6,*) '[',mype,'] ipx=',gg(n)%iprocx, ',ipy=',gg(n)%iprocy,',ipz= ',gg(n)%iprocz
+           write(6,*) '[',mype,'] npx=',gg(n)%xprocs, ',npy=',gg(n)%yprocs,',npz=',gg(n)%zprocs
+           write(6,*) '[',mype,'] nxl=',gg(n)%imax,   ',nyl=',gg(n)%jmax,  ',nzl=',gg(n)%kmax
+        endif
+     end if
+     call mpi_barrier(mpi_comm_world,ierr)
   enddo
 end subroutine new_grids_private
