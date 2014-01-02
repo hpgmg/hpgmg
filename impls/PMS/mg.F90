@@ -319,6 +319,13 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
            gg(ii)%imax = 0 
            gg(ii)%jmax = 0 
            gg(ii)%kmax = 0 
+           ! malloc of next grid in MGV, etc. put some dummy
+           gg(ii)%ilo=0
+           gg(ii)%ihi=1
+           gg(ii)%jlo=0
+           gg(ii)%jhi=1
+           gg(ii)%klo=0
+           gg(ii)%khi=1
         end do
         exit
      else if (gg(n-1)%imax>min_psize .and. gg(n-1)%jmax>min_psize &
@@ -427,7 +434,7 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
      gg(n)%jhi=gg(n)%jmax+ng
 #ifdef TWO_D
      gg(n)%klo=1
-     gg(n)%khi=gg(n)%kmax
+     gg(n)%khi=1
 #else 
      gg(n)%klo=-ng+1
      gg(n)%khi=gg(n)%kmax+ng

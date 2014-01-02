@@ -77,9 +77,11 @@ contains
   logical function is_top(g)
     implicit none
     type(proc_patch):: g
-    is_top = (g%imax.le.min_psize .or. g%jmax.le.min_psize &
+    is_top = ( &
+         (g%imax.le.min_psize .and. g%iprocx.eq.1) .or. &
+         (g%jmax.le.min_psize .and. g%iprocy.eq.1) &
 #ifndef TWO_D
-         .or. g%kmax.le.min_psize &
+         .or. (g%kmax.le.min_psize .and. g%iprocz.eq.1) &
 #endif
          )
   end function is_top
