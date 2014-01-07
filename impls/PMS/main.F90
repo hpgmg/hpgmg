@@ -116,9 +116,8 @@ end subroutine go
 !  driver  
 !-----------------------------------------------------------------
 subroutine driver(grids)
-  !
   use iounits
-  use mpistuff, only:mype
+  use mpistuff !, only:mype,solve_event,ierr
   use domain
   use GridModule
   use error_data_module
@@ -134,27 +133,33 @@ subroutine driver(grids)
   external Apply_const_Lap
   external GSRB_const_Lap
   double precision,parameter:: log2r = 1.d0/log(2.d0);
+#ifdef HAVE_PETSC
 
+  call PetscInitialize(PETSC_NULL_CHARACTER,ierr)
+  call PetscLogEventRegister('HPGMG solve', 0, solve_event, ierr)
+#endif
   !output_flag=0 ! parameter
   !binary_flag=1
-  maxiter = 100 ! parameter
-
+  maxiter = 10 ! parameter
+  call mpi_barrier(mpi_comm_world,ierr)
   do isolve=1,maxiter
      ! flush cache
      do ii=1,dummy_size
         dummy(ii) = 1.235d3
      end do
 
+#ifdef HAVE_PETSC
+     call PetscLogEventBegin(solve_event,ierr)
+#endif
      select case (problemType)
      case(0)
-  
         call solve(grids,Apply_const_Lap,Apply_const_Lap,GSRB_const_Lap,res0,errors,nViters)
-
      case(1)
-
         if(mype==0) write(6,*) 'problemType 1 not implemented -- todo'
-
      end select
+#ifdef HAVE_PETSC
+     call PetscLogEventEnd(solve_event,ierr)
+#endif
 
      ! output run data and convergance data
      if(mype==0) then
@@ -205,7 +210,10 @@ subroutine driver(grids)
 !!$        Call WriteSiloBinaryFileParallel(ux,timeStep)
 !!$     endif
 !!$  endif
-  
+#ifdef HAVE_PETSC
+  call PetscFinalize(ierr)
+#endif
+
   return
 end subroutine driver
 !-----------------------------------------------------------------

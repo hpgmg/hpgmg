@@ -105,8 +105,11 @@ subroutine Restrict(uxC,ux,gc,gf,order)
   integer:: ic,jc,kc,cimax2,ckmax2,cjmax2,pp,lnp
   integer:: msg_id_recv(0:7),bufsz,msg_id_send(0:7)
   integer:: ii,jj,kk,ist,jst,kst
-
-  !call MPI_Cart_Coords(gg(n)%comm3D,ii,ndims,NProcAxis,ierr)
+  
+#ifdef HAVE_PETSC
+  flops = 2*gf%imax*gf%jmax*gf%kmax
+  call PetscLogFlops(flops,ierr)
+#endif
   
 #ifdef TWO_D
   a11 = 9.d0/64.d0
@@ -401,7 +404,12 @@ subroutine Prolong_2(ux,uxC,gf,gc)
   !     Local vars
   integer:: ic,jc,jj,kc,ii,kk,ist,iend,jst,jend,kst,kend,lpe
   double precision :: vv(nvar),a11,a22,a33,a44
-  
+#ifndef TWO_D
+#ifdef HAVE_PETSC
+  flops = 106*gc%imax*gc%jmax*gc%kmax
+  call PetscLogFlops(flops,ierr)
+#endif
+#endif
   ! the whole coarse pathc
   ist = 1
   iend = gc%imax
@@ -642,7 +650,12 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
 #ifndef TWO_D
   double precision:: dzi2
 #endif
-
+#ifndef TWO_D
+#ifdef HAVE_PETSC
+  flops = 13*g%imax*g%jmax*g%kmax
+  call PetscLogFlops(flops,ierr)
+#endif
+#endif
   dxi2=1.d0/g%dxg**2
   dyi2=1.d0/g%dyg**2
 #ifndef TWO_D
@@ -680,7 +693,7 @@ end subroutine GSRB_const_Lap
 !-----------------------------------------------------------------------
 subroutine Apply_const_Lap(uxo,ux,g)
   use GridModule
-  use mpistuff, only:mype
+  use mpistuff, only:mype,ierr,flops
   use domain, only:verbose
   implicit none
   type(proc_patch):: g
@@ -695,6 +708,12 @@ subroutine Apply_const_Lap(uxo,ux,g)
   double precision norm
 #ifndef TWO_D
   double precision:: dzi2,dzl
+#endif
+#ifndef TWO_D
+#ifdef HAVE_PETSC
+  flops = 13*g%imax*g%jmax*g%kmax
+  call PetscLogFlops(flops,ierr)
+#endif
 #endif
   dxl=g%dxg
   dyl=g%dyg

@@ -14,9 +14,9 @@ include ${PETSC_DIR}/conf/rules
 
 #.SUFFIXES: .o .F
 
-FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -fast -DHAVE_PETSC
+FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC #-fast
 pms: ${OBJ} 
-	-${FLINKER} -o pms.ex ${OBJ}
+	-@${FLINKER} -o pms.ex ${OBJ} ${PETSC_SYS_LIB}
 #	-/opt/local/bin/gfortran -o pms.ex ${OBJ}
 #	${RM} ${OBJ}	
 
@@ -41,4 +41,4 @@ runcray:
 	-@aprun -n 8 ./pms.ex -nxloc 8 -nyloc 64 -nzloc 8 -nvcycles 0 -nfcycles 1
 
 runmpi:
-	-@${MPIEXEC} -n 8 ./pms.ex -nxloc 32 -nyloc 32 -nzloc 32 -nvcycles 10 -nfcycles 1 -verbose 1 -nsmooths 2
+	-@${MPIEXEC} -n 8 ./pms.ex -verbose 1

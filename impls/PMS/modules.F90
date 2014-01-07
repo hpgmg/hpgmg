@@ -39,10 +39,15 @@ module tags
 end module tags
 !-----------------------------------------------------------------------
 module mpistuff
-#ifndef HAVE_PETSC
-  include "mpif.h"
-#else
+#ifdef HAVE_PETSC
+! needs # ???
+#include "finclude/petscdef.h" 
+#include "finclude/petsclogdef.h"  
   use petsc
+  double precision :: flops
+  integer :: solve_event
+#else
+  include "mpif.h"
 #endif
   integer:: status(MPI_STATUS_SIZE),ierr
   integer:: mype ,npe
