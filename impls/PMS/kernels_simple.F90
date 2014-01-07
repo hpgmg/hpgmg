@@ -26,7 +26,6 @@ double precision function level_norm2(ux,g)
   !
   use proc_patch_data_module
   use mpistuff
-  use GridModule, only:verbose
   implicit none
   !     
   type(proc_patch)::g
@@ -682,6 +681,7 @@ end subroutine GSRB_const_Lap
 subroutine Apply_const_Lap(uxo,ux,g)
   use GridModule
   use mpistuff, only:mype
+  use domain, only:verbose
   implicit none
   type(proc_patch):: g
   double precision,intent(out):: &

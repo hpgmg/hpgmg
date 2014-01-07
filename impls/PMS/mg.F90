@@ -4,12 +4,13 @@
 !-----------------------------------------------------------------
 subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
   use GridModule
+  use domain, only:dom_max_grids,nvcycles,nfcycles,rtol,verbose
   use mpistuff
   use error_data_module
   implicit none
   !
-  type(proc_patch),intent(in)::g(0:max_grids-1)
-  type(error_data),intent(out)::errors(0:max_grids-1+nvcycles)
+  type(proc_patch),intent(in)::g(0:dom_max_grids-1)
+  type(error_data),intent(out)::errors(0:dom_max_grids-1+nvcycles)
   external Apply1, Apply2, Relax1
   double precision,intent(out)::Res0
   integer,intent(out):: nViters
@@ -25,7 +26,7 @@ subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
   !call Apply2(L2u_f,ux,g(0)) ! ux==0 
   call formRHS(rhs,g(0))
   Res0 = norm(rhs,g(0),2)
-  if(mype==0.and.verbose.gt.0)write(6,'(A9,E14.6)') '[ 0]solve: |f|=',Res0
+  if(mype==0.and.verbose.gt.0)write(6,'(A,E14.6)') '0) solve: |f|=',Res0
   Reslast = Res0
   ! FMG solve
   iter = 0
@@ -35,19 +36,18 @@ subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
      call MGF(ux,rhs,g,0,Apply1,Apply2,Relax1,errors)
      call Apply2(L2u_f,ux,g(0))
      Res = norm(rhs-L2u_f,g(0),2)
-     if(mype==0.and.verbose.gt.0)write(6,'(A1,I2,A10,E14.6,A7,F10.6)') &
-          '[',iter,']solve: |f-Au|_2=',Res,', rate=',Res/Reslast
+     if(mype==0.and.verbose.gt.0)write(6,'(I2,A,E14.6,A,F10.6)') &
+          iter,') solve: |f-Au|_2=',Res,', rate=',Res/Reslast
      Reslast=Res
   else
      ! initailize what is done in FMG
-     ux = 3.4567d300
      call formRHS(rhs,g(0)) ! form RHS explicity on fine grid for vycycles
      Res = Res0
   end if
   
   ! find coarsest grid for diagnostics
   coarsest_grid = -1
-  do ii=0,max_grids-1
+  do ii=0,dom_max_grids-1
      if( is_top(g(ii)) ) then
         coarsest_grid = ii
         exit
@@ -65,8 +65,8 @@ subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
      ! residual
      call Apply2(L2u_f,ux,g(0))            
      Res = norm(rhs-L2u_f,g(0),2)
-     if(mype==0.and.verbose.gt.0)write(6,'(A1,I2,A10,E14.6,A7,F10.6)') &
-          '[',iter,']solve: |f-Au|_2=',Res,', rate=',Res/Reslast
+     if(mype==0.and.verbose.gt.0)write(6,'(I2,A,E14.6,A,F10.6)') &
+          iter,') solve: |f-Au|_2=',Res,', rate=',Res/Reslast
      
      ! form errors & convergance measure
      errors(err_lev)%resid = Res
@@ -74,7 +74,7 @@ subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
      errors(err_lev)%uerror = norm(L2u_f-ux,g(0),error_norm)
      call formGradError(L2u_f,ux,g(0),errors(err_lev)%graduerr,error_norm)
      err_lev = err_lev + 1
-     
+
      Reslast=Res
      nViters = nViters + 1
   enddo
@@ -85,9 +85,10 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
   use GridModule
   use mpistuff,only:mype
   use error_data_module
+  use domain, only:dom_max_grids,nfmgvcycles,ncoarsesolveits,verbose,nvcycles
   implicit none
   integer,intent(in) :: lev
-  type(proc_patch),intent(in)::g(0:max_grids-1)
+  type(proc_patch),intent(in)::g(0:dom_max_grids-1)
   double precision,intent(in),dimension(&
        g(lev)%ilo:g(lev)%ihi, g(lev)%jlo:g(lev)%jhi,& 
        g(lev)%klo:g(lev)%khi, nvar) :: rhs
@@ -95,7 +96,7 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
        g(lev)%ilo:g(lev)%ihi, g(lev)%jlo:g(lev)%jhi,& 
        g(lev)%klo:g(lev)%khi, nvar) :: ux
   external Apply1, Apply2, Relax1
-  type(error_data),intent(out)::errors(0:max_grids-1+nvcycles)
+  type(error_data),intent(out)::errors(0:dom_max_grids-1+nvcycles)
   ! Local Vars - Coarse. This is new data on the stack
   integer :: ii,jj,kk
   double precision :: norm,tt
@@ -106,24 +107,15 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
        g(lev)%klo:g(lev)%khi, nvar)::tmp
 
   ux = 0.d0 ! everthing uses initial solution except FMG
-  if (verbose.gt.0) then
-     tt = norm(rhs,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6,A,I8,A,I4)') &
-          'lev=',lev,') MGF |f_0|=',tt,', nx=',g(lev)%imax,', npe x=',g(lev)%nprocx
-  end if
   if( is_top(g(lev)) ) then
      ! the real start of FMG - coarse grid solve
      if (lev.gt.0 .and. is_top(g(lev-1))) stop 'MGF: not coarsest grid'
-     ! defect correction
-     !call Apply2(Res2,ux,g(lev)) 
-     !call Apply1(Res,ux,g(lev)) 
-     !Res = rhs - Res2 + Res
-     if (verbose.gt.1) then
-        if(mype==0.and.verbose.gt.4)write(6,'(I2,A,I2,A,E14.6)') '[ 0]MGF: bot solve lev=',lev,', |rhs|=',norm(rhs,g(lev),2)
-     end if
+     if(mype==0.and.verbose.gt.4)write(6,'(I2,A,I2,A,E14.6)') '[ 0]MGF: bot solve lev=',lev
      !call MGV(ux,rhs,g,lev,Apply1,Relax1)
      call Relax1(ux,rhs,g(lev),ncoarsesolveits)  ! coar grid solve
      if (verbose.gt.1) then
-        tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') MGF bot |u_1|=',tt
+        tt = norm(ux,g(lev),2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') MGF bot |u_1|=',tt
      end if
   else
      ! go "down" the V, allating data (on stack), forming RHS, zero out u
@@ -132,48 +124,43 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
      ! prolongate and correct
      call Prolong_2(ux,uxC,g(lev),g(lev+1))
      if (verbose.gt.1) then
-        tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') MGF |u_1|=',tt
-        tt = norm(rhs,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') MGF |f_1|=',tt
+        tt = norm(ux,g(lev),2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') MGF |u_1|=',tt
      end if
      ! start of multiple v-cycle
      jj = nfmgvcycles !; if(lev==0) jj=10
      do ii=1,jj
-        ! defect correction
-        ! call Apply2(Res2,ux,g(lev)) 
-        ! call Apply1(Res,ux,g(lev))
-        ! Res = rhs - Res2 + Res
-        !     solve
         call MGV(ux,rhs,g,lev,Apply1,Relax1)
      enddo
-     if (verbose.gt.1) then
-        tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') V0: MGF |u_1|=',tt
-     end if
+     if (verbose.gt.1.and.mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev
   end if
 
-  if (verbose.gt.1) then
-     tt = norm(rhs,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)') 'lev=',lev,') MGF form errors |f_0|=',tt
-  end if
   ! form errors & convergance measure, recursive so goes from coarse to fine (good)
   call formExactU(tmp,g(lev))
   errors(err_lev)%uerror = norm(tmp-ux,g(lev),error_norm)
   call formGradError(tmp,ux,g(lev),errors(err_lev)%graduerr,error_norm)
   call Apply2(tmp,ux,g(lev))
   errors(err_lev)%resid = norm(tmp-rhs,g(lev),2)
-  if (verbose.gt.1) then
-     tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6,A,I2)') 'lev=',lev,') MGF done |u_0|=',tt,', level ',lev
+ 
+  if (verbose.gt.0) then
+     if(mype==0)write(6,'(A,I2,A,E14.6,A,E14.6,A,I8,A,I4)') &
+          '     lev=',lev,') MGF |res|_2=',errors(err_lev)%resid,&
+          ', |error|=',errors(err_lev)%uerror,&
+          ', nx=',g(lev)%imax*g(lev)%nprocx,', npe x=',g(lev)%nprocx
   end if
+  
   err_lev = err_lev + 1
-
   return
 end subroutine MGF
 !-----------------------------------------------------------------------
 recursive subroutine MGV(ux,rhs,g,lev,Apply,Relax)
   use GridModule
   use mpistuff, only:mype
+  use domain, only:dom_max_grids,verbose,ncoarsesolveits,ncycles,nsmoothsdown,nsmoothsup,mg_min_size
   !
   implicit none
   integer,intent(in):: lev
-  type(proc_patch),intent(in)::g(0:max_grids-1)
+  type(proc_patch),intent(in)::g(0:dom_max_grids-1)
   external Apply,Relax
   !
   double precision,dimension(&
@@ -245,6 +232,7 @@ end subroutine MGV
 subroutine destroy_grids_private(gg,max_sz)
   use GridModule
   use mpistuff
+  use domain, only:mg_min_size
   implicit none
   integer,intent(in):: max_sz
   type(proc_patch):: gg(0:max_sz-1)
@@ -262,11 +250,13 @@ subroutine destroy_grids_private(gg,max_sz)
 #endif
         ! normal reduction, no split yet -- nothing to destroy
      else 
-        !       reduce number of procs on grid by 2          
-        call MPI_COMM_free(gg(n)%comm,ierr)
-        call MPI_COMM_free(gg(n)%loc_comm,ierr) 
-        call MPI_comm_free(gg(n)%comm3d, ierr)
-     endif
+        ! reduce number of procs on grid by 2
+        if (gg(n)%nprocx .ne. gg(n-1)%nprocx ) then
+           call MPI_COMM_free(gg(n)%comm,ierr)
+           call MPI_COMM_free(gg(n)%loc_comm,ierr) 
+           call MPI_comm_free(gg(n)%comm3d, ierr)
+        end if
+     end if
      !       
   enddo
   return
@@ -280,7 +270,7 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
   implicit none
   integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
   integer :: NProcAxis(3),iProcAxis(3)
-  type(proc_patch),intent(out):: gg(0:max_grids-1)
+  type(proc_patch),intent(out):: gg(0:dom_max_grids-1)
   integer :: n,ndims,ii,jj,kk,proc_id,rank
   logical :: periods(3)
   ndims = 3
@@ -341,7 +331,7 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
   periods(3) = .true.
 #endif  
   ! start at 1 as 0 was just done
-  do n=1,max_grids-1
+  do n=1,dom_max_grids-1
      gg(n)%dxg = gg(n-1)%dxg*2.d0
      gg(n)%dyg = gg(n-1)%dyg*2.d0
 #ifdef TWO_D
@@ -353,7 +343,7 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
      ! take care of reductions
      if( is_top(gg(n-1)) ) then
         ! all done - clear rest of grids
-        do ii=n,max_grids-1
+        do ii=n,dom_max_grids-1
            gg(ii)%nprocx = 0 
            gg(ii)%nprocy = 0 
            gg(ii)%nprocz = 0 
@@ -373,7 +363,7 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
 #ifndef TWO_D
           .and. gg(n-1)%kmax>mg_min_size &
 #endif
-        ) then
+          ) then
         !     normal reduction, no split yet	      
         gg(n)%imax=gg(n-1)%imax/2
         gg(n)%jmax=gg(n-1)%jmax/2
@@ -390,7 +380,7 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
         gg(n)%nprocx = gg(n-1)%nprocx
         gg(n)%nprocy = gg(n-1)%nprocy
         gg(n)%nprocz = gg(n-1)%nprocz
-         
+        
         gg(n)%left = gg(n-1)%left
         gg(n)%right = gg(n-1)%right
         gg(n)%top = gg(n-1)%top
@@ -400,75 +390,116 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
         gg(n)%loc_comm = mpi_comm_null
      else  ! gg(n-1)%imax == min_psize ...
         !     reduce number of procs on grid by 2
-        gg(n)%nprocx = gg(n-1)%nprocx/2
-        gg(n)%nprocy = gg(n-1)%nprocy/2
-        gg(n)%iprocx = (gg(n-1)%iprocx-1)/2 + 1
-        gg(n)%iprocy = (gg(n-1)%iprocy-1)/2 + 1
-#ifdef TWO_D
-        gg(n)%nprocz = gg(n-1)%nprocz
-        gg(n)%iprocz = gg(n-1)%iprocz
+        if(gg(n-1)%nprocz==1 .or. gg(n-1)%nprocy==1 &
+#ifndef TWO_D
+             .or. gg(n-1)%nprocx==1 ) then ! one proc reduction, copy comm stuff
 #else
-        gg(n)%nprocz = gg(n-1)%nprocz/2
-        gg(n)%iprocz = (gg(n-1)%iprocz-1)/2 + 1
+           ) then
 #endif
-        if(gg(n)%nprocz==0 .or. gg(n)%nprocy==0 .or. &
-             gg(n)%nprocx==0 ) then
-           gg(n)%nprocz=0; gg(n)%nprocy=0; gg(n)%nprocx=0
-           if(mype==0) write(6,*)'[',mype,'] domain is too thin'
-           exit ! domain is too thin
-        endif
-        ! zero based proc ID
-        proc_id = (gg(n)%iprocx-1)*gg(n)%nprocy*gg(n)%nprocz &
-             + (gg(n)%iprocy-1)*gg(n)%nprocz + (gg(n)%iprocz-1)
-        
-        ii = mod(gg(n-1)%iprocx-1,2)
-        jj = mod(gg(n-1)%iprocy-1,2)
-        kk = mod(gg(n-1)%iprocz-1,2)
+           gg(n)%nprocx = gg(n-1)%nprocx
+           gg(n)%nprocy = gg(n-1)%nprocy
+           gg(n)%iprocx = gg(n-1)%iprocx
+           gg(n)%iprocy = gg(n-1)%iprocy
+           gg(n)%nprocz = gg(n-1)%nprocz
+           gg(n)%iprocz = gg(n-1)%iprocz
+           
+           gg(n)%imax=gg(n-1)%imax/2
+           gg(n)%jmax=gg(n-1)%jmax/2
+#ifndef TWO_D
+           gg(n)%kmax=gg(n-1)%kmax/2
+#else
+           gg(n)%kmax=gg(n-1)%kmax ! 1
+#endif
+           ! use old comms, really just comm_self
+           gg(n)%comm3d = gg(n-1)%comm3d
+           gg(n)%comm = gg(n-1)%comm
+           gg(n)%loc_comm = gg(n-1)%loc_comm
+
+           gg(n)%left = gg(n-1)%left
+           gg(n)%right = gg(n-1)%right
+           gg(n)%top = gg(n-1)%top
+           gg(n)%bottom = gg(n-1)%bottom
+           gg(n)%forward = gg(n-1)%forward
+           gg(n)%behind = gg(n-1)%behind
+           if (mype==0.and.verbose.gt.4)then
+              write(0,*) '[',mype, '] one pe reduction'
+              write(0,*) '[',mype, '] X:',gg(n)%iprocx
+              write(0,*) '[',mype, '] Y:',gg(n)%iprocy
+              write(0,*) '[',mype, '] Z:',gg(n)%iprocz
+              write(0,*) '[',mype, '] nx', gg(n)%nprocx
+              write(0,*) '[',mype, '] ny', gg(n)%nprocy
+              write(0,*) '[',mype, '] nz', gg(n)%nprocz
+           endif
+        else ! normal split
+           gg(n)%nprocx = gg(n-1)%nprocx/2
+           gg(n)%nprocy = gg(n-1)%nprocy/2
+           gg(n)%iprocx = (gg(n-1)%iprocx-1)/2 + 1
+           gg(n)%iprocy = (gg(n-1)%iprocy-1)/2 + 1
 #ifdef TWO_D
-        ii = jj + 2*ii           ! local zero based ID
-#else 
-        ii = kk + 2*jj + 4*ii    ! local zero based ID
+           gg(n)%nprocz = gg(n-1)%nprocz
+           gg(n)%iprocz = gg(n-1)%iprocz
+#else
+           gg(n)%nprocz = gg(n-1)%nprocz/2
+           gg(n)%iprocz = (gg(n-1)%iprocz-1)/2 + 1
 #endif
-        call MPI_COMM_SPLIT(gg(n-1)%comm,ii,proc_id,gg(n)%comm,ierr)
-        call MPI_COMM_SPLIT(gg(n-1)%comm,proc_id,ii,gg(n)%loc_comm,ierr)
-
-        NProcAxis(1) = gg(n)%nprocx
-        NProcAxis(2) = gg(n)%nprocy
-        NProcAxis(3) = gg(n)%nprocz
-    
-        call MPI_cart_create( gg(n)%comm, ndims, NProcAxis, &
-             periods, .false., gg(n)%comm3D, ierr)
-        if(ierr.ne.0) stop 'MPI_cart_create'
-
-        ! debug              
-        call MPI_comm_rank(gg(n)%comm3D,ii,ierr)
-        call MPI_Cart_Coords(gg(n)%comm3D,ii,ndims,NProcAxis,ierr)
-        if(gg(n)%iprocx.ne.NProcAxis(1)+1) stop '%iprocx'
-        if(gg(n)%iprocy.ne.NProcAxis(2)+1) stop '%iprocy'
-        if(gg(n)%iprocz.ne.NProcAxis(3)+1) stop '%iprocz'
-        if (mype==npe/2.and.verbose.gt.4)then
-           write(0,*) '[',mype, '] cart rank',ii
-           write(0,*) '[',mype, '] X:',gg(n)%iprocx,NProcAxis(1)+1
-           write(0,*) '[',mype, '] Y:',gg(n)%iprocy,NProcAxis(2)+1
-           write(0,*) '[',mype, '] Z:',gg(n)%iprocz,NProcAxis(3)+1
+           ! zero based proc ID
+           proc_id = (gg(n)%iprocx-1)*gg(n)%nprocy*gg(n)%nprocz &
+                + (gg(n)%iprocy-1)*gg(n)%nprocz + (gg(n)%iprocz-1)
            ii = mod(gg(n-1)%iprocx-1,2)
            jj = mod(gg(n-1)%iprocy-1,2)
-           write(0,*) '[',mype,'] ii=',ii,'jj=',jj,'proc_id=',proc_id
-           write(0,*) '[',mype, '] nx', gg(n)%nprocx
-           write(0,*) '[',mype, '] ny', gg(n)%nprocy
-           write(0,*) '[',mype, '] nz', gg(n)%nprocz
-        endif
-        
-        call MPI_Cart_Shift(gg(n)%comm3D,0,1,gg(n)%left,gg(n)%right,ierr)! Neighbors
-        call MPI_Cart_Shift(gg(n)%comm3D,1,1,gg(n)%bottom,gg(n)%top,ierr)
-        call MPI_cart_Shift(gg(n)%comm3D,2,1,gg(n)%behind,gg(n)%forward,ierr)
-        !     logical size of grid stays the same
-        gg(n)%imax=gg(n-1)%imax
-        gg(n)%jmax=gg(n-1)%jmax
-#ifndef TWO_D
-        gg(n)%kmax=gg(n-1)%kmax
+           kk = mod(gg(n-1)%iprocz-1,2)
+#ifdef TWO_D
+           ii = jj + 2*ii           ! local zero based ID
+#else 
+           ii = kk + 2*jj + 4*ii    ! local zero based ID
 #endif
+           call MPI_COMM_SPLIT(gg(n-1)%comm,ii,proc_id,gg(n)%comm,ierr)
+           call MPI_COMM_SPLIT(gg(n-1)%comm,proc_id,ii,gg(n)%loc_comm,ierr)
+           
+           NProcAxis(1) = gg(n)%nprocx
+           NProcAxis(2) = gg(n)%nprocy
+           NProcAxis(3) = gg(n)%nprocz
+           
+           call MPI_cart_create( gg(n)%comm, ndims, NProcAxis, &
+                periods, .false., gg(n)%comm3D, ierr)
+           
+           ! debug              
+           call MPI_comm_rank(gg(n)%comm3D,ii,ierr)
+           call MPI_Cart_Coords(gg(n)%comm3D,ii,ndims,NProcAxis,ierr)
+           if(gg(n)%iprocx.ne.NProcAxis(1)+1) stop '%iprocx'
+           if(gg(n)%iprocy.ne.NProcAxis(2)+1) stop '%iprocy'
+           if(gg(n)%iprocz.ne.NProcAxis(3)+1) stop '%iprocz'
+           if (mype==npe/2.and.verbose.gt.4)then
+              write(0,*) '[',mype, '] cart rank',ii
+              write(0,*) '[',mype, '] X:',gg(n)%iprocx,NProcAxis(1)+1
+              write(0,*) '[',mype, '] Y:',gg(n)%iprocy,NProcAxis(2)+1
+              write(0,*) '[',mype, '] Z:',gg(n)%iprocz,NProcAxis(3)+1
+              ii = mod(gg(n-1)%iprocx-1,2)
+              jj = mod(gg(n-1)%iprocy-1,2)
+              write(0,*) '[',mype,'] ii=',ii,'jj=',jj,'proc_id=',proc_id
+              write(0,*) '[',mype, '] nx', gg(n)%nprocx
+              write(0,*) '[',mype, '] ny', gg(n)%nprocy
+              write(0,*) '[',mype, '] nz', gg(n)%nprocz
+           endif
+           
+           call MPI_Cart_Shift(gg(n)%comm3D,0,1,gg(n)%left,gg(n)%right,ierr)! Neighbors
+           call MPI_Cart_Shift(gg(n)%comm3D,1,1,gg(n)%bottom,gg(n)%top,ierr)
+           call MPI_cart_Shift(gg(n)%comm3D,2,1,gg(n)%behind,gg(n)%forward,ierr)
+           !     logical size of grid stays the same
+           gg(n)%imax=gg(n-1)%imax
+           gg(n)%jmax=gg(n-1)%jmax
+#ifndef TWO_D
+           gg(n)%kmax=gg(n-1)%kmax
+#endif
+        endif
+     end if
+     if(gg(n)%nprocz==0 .or. gg(n)%nprocy==0 .or. &
+          gg(n)%nprocx==0 ) then
+        gg(n)%nprocz=0; gg(n)%nprocy=0; gg(n)%nprocx=0
+        if(mype==0) write(6,*)'[',mype,'] domain is too thin',gg(n)%nprocx==0,gg(n)%nprocy==0,gg(n)%nprocz==0
+        stop 'domain is too thin' ! domain is too thin
      endif
+     
      ! add ghosts
      gg(n)%ilo=-ng+1
      gg(n)%ihi= gg(n)%imax+ng
@@ -482,10 +513,10 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
      gg(n)%khi=gg(n)%kmax+ng
 #endif
      ! cache global indices -- could use these for ilo,...
-     gg(n)%iglobalx = getIglobalx(gg(n)) ! one based
+     gg(n)%iglobalx = getIglobalx(gg(n)) ! one based, could compute on fly
      gg(n)%iglobaly = getIglobaly(gg(n))
      gg(n)%iglobalz = getIglobalz(gg(n))
-
+     
      ! print topology
      if(mype==0.and.verbose.gt.3) then
         write(6,*) '[',mype,'] level ',n, ', nxl=',gg(n)%imax, ', nxl=',gg(n)%imax

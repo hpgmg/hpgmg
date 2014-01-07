@@ -14,7 +14,7 @@ include ${PETSC_DIR}/conf/rules
 
 #.SUFFIXES: .o .F
 
-FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -O0
+FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -O3
 pms: ${OBJ} 
 	-${FLINKER} -o pms.ex ${OBJ}
 #	-/opt/local/bin/gfortran -o pms.ex ${OBJ}
@@ -32,13 +32,13 @@ run:
 	-@./pms.ex -problem 0 -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1 -verbose 1
 
 debug:
-	-@/usr/bin/gdb --args ./pms.ex -problem 0 -nx 4 -ny 4 -nz 4
+	-@/usr/bin/gdb --args ./pms.ex -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1 -verbose 4
 
 val:
-	-@valgrind --dsymutil=yes --leak-check=no --gen-suppressions=yes --num-callers=20 ./pms.ex -problem 0 -nx 16 -ny 16 -nz 16 -nvcycles 0 -nfcycles 1
+	-@valgrind --dsymutil=yes --leak-check=no --gen-suppressions=yes --num-callers=20 ./pms.ex -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1 -verbose 4
 
 runcray:
 	-@aprun -n 8 ./pms.ex -nxloc 8 -nyloc 64 -nzloc 8 -nvcycles 0 -nfcycles 1
 
 runmpi:
-	-@${MPIEXEC} -n 64 ./pms.ex -nxloc 32 -nyloc 32 -nzloc 32 -nvcycles 0 -nfcycles 1 -verbose 1
+	-@${MPIEXEC} -n 8 ./pms.ex -nxloc 32 -nyloc 32 -nzloc 32 -nvcycles 10 -nfcycles 1 -verbose 1 -nsmooths 2

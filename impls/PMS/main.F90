@@ -3,7 +3,7 @@
 !       Copyright 2014
 !-----------------------------------------------------------------
 program PMS
-  use GridModule, only:verbose
+  use domain, only:verbose
   use mpistuff
   implicit none
   integer:: rank,comm3d,ndims
@@ -73,13 +73,12 @@ program PMS
   call MPI_cart_create(MPI_COMM_WORLD,ndims,NProcAxis,periods,&
        .true.,comm3d,ierr) ! reoder is ignored???
   call MPI_comm_rank(comm3d,rank,ierr) ! new rank?
-  if(mype==0.or.mype.ne.rank) then
+  if((mype==0.and.verbose.gt.3).or.mype.ne.rank) then
      if (verbose.gt.0) write(6,*) 'main: warning old mype=',mype,', comm3D new rank = ',rank
   endif
   mype=rank
 
   call MPI_Cart_Coords(comm3d,rank,ndims,iProcAxis,ierr)
-  !print *,'[',mype,'] iProcAxis=',iProcAxis
   iProcAxis(1) = iProcAxis(1) + 1 ! one based
   iProcAxis(2) = iProcAxis(2) + 1
   iProcAxis(3) = iProcAxis(3) + 1
@@ -96,11 +95,12 @@ end program PMS
 !-----------------------------------------------------------------
 subroutine go(NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
   use GridModule
+  use domain, only:dom_max_grids
   implicit none
   integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
   integer :: NProcAxis(3),iProcAxis(3)
   !
-  type(proc_patch)::grids(0:max_grids-1)
+  type(proc_patch)::grids(0:dom_max_grids-1)
 
   call SetupDomain() ! sets size of domain
 
@@ -109,7 +109,7 @@ subroutine go(NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
   ! do it 
   call driver(grids)
 
-  call destroy_grids_private(grids,max_grids)
+  call destroy_grids_private(grids,dom_max_grids)
   
 end subroutine go
 !-----------------------------------------------------------------
@@ -119,25 +119,25 @@ subroutine driver(grids)
   !
   use iounits
   use mpistuff, only:mype
-  use domain, only:problemType
+  use domain
   use GridModule
   use error_data_module
   implicit none
   !
-  type(proc_patch)::grids(0:max_grids-1)
+  type(proc_patch)::grids(0:dom_max_grids-1)
   !
   integer:: isolve,maxiter,ii,coarsest_grid,nViters
   !integer:: output_flag, binary_flag
   integer,parameter:: dummy_size=1 ! cache flush array size
   double precision:: dummy(dummy_size),res0,rateu,rategrad
-  type(error_data)::errors(0:max_grids-1+nvcycles)
+  type(error_data)::errors(0:dom_max_grids-1+nvcycles)
   external Apply_const_Lap
   external GSRB_const_Lap
   double precision,parameter:: log2r = 1.d0/log(2.d0);
 
-  !output_flag=0 ! parameters
+  !output_flag=0 ! parameter
   !binary_flag=1
-  maxiter = 1   ! parameter (10-1000)
+  maxiter = 10 ! parameter
 
   do isolve=1,maxiter
      ! flush cache
@@ -162,7 +162,7 @@ subroutine driver(grids)
         if (verbose .gt.1) write(6,*)'output: g(0).istop=',is_top(grids(0)),&
              'nfcycles=',nfcycles
         if (nfcycles .ne. 0 .and. .not. is_top(grids(0)) ) then
-           do ii=1,max_grids-1
+           do ii=1,dom_max_grids-1
               ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
               rateu = errors(ii-1)%uerror/errors(ii)%uerror
               rategrad = errors(ii-1)%graduerr/errors(ii)%graduerr
@@ -213,13 +213,11 @@ end subroutine driver
 !-----------------------------------------------------------------       
 subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
      nx, ny, nz, nxlocal, nylocal, nzlocal)
-  use domain, only:problemType
+  use domain
   use mpistuff
-  use GridModule
 #ifndef HAVE_COMM_ARGS
   use f2kcli        ! command line args class
 #endif
-  !use mpistuff, only:mype
   implicit none
   integer,intent(out) :: nprocx,nprocy,nprocz,nx,ny,nz,nxlocal,nylocal,nzlocal
   integer,intent(in) :: nprocs
@@ -252,8 +250,8 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
   nfmgvcycles = 1 ! no interface for this
   nsmooths = 1
   verbose = 0
-  bot_min_size = 4 ! min size for bottom solver
-  mg_min_size = 4  ! or 16 ...
+  bot_min_size = 2 ! min size for bottom solver (grad get messed up with 1)
+  mg_min_size = 8  ! or 16 ...
   ! read in args
   if( mype==0 ) then
      NARG = COMMAND_ARGUMENT_COUNT()
@@ -554,7 +552,6 @@ subroutine FormRHS(rhs,g)
 !!$  do i=IXLO, IXHI,1
 !!$     xc(i)=xl+(ig+i-1)*dx-0.5*dx
 !!$  enddo
-  rhs = 1.23456789d300 ! debug
   select case (problemType)
   case(0)
      ! x^4 - x^2

@@ -2,12 +2,27 @@
 !       Ravi Samtaney & Mark Adams
 !       Copyright 2014
 !-----------------------------------------------------------------
+#define MAX_GRIDS 20
+! domain size + global topology and solver and general parameters
 module domain
   save
   double precision:: xl,xr,yl,yr,zl,zr
   integer :: problemType
-  !  double precision:: dx,dy,dz
-  !  double precision, allocatable,dimension(:):: xc,yc,zc
+  ! topo
+  integer,parameter:: dom_max_grids=MAX_GRIDS
+  integer:: bot_min_size ! min size for bottom solver
+  integer:: mg_min_size  ! min size box to start aggregating
+  ! solver
+  integer:: nvcycles ! 0 for pure FMG
+  integer:: nfcycles ! 0 for no FMG
+  integer:: ncycles  ! V==1, W==2
+  integer:: nfmgvcycles ! 1 for normal FMG, more for more power
+  double precision:: rtol
+  integer:: nsmoothsup 
+  integer:: nsmoothsdown
+  integer:: ncoarsesolveits
+  ! general
+  integer:: verbose 
 end module domain
 !-----------------------------------------------------------------------
 module iounits
@@ -50,7 +65,7 @@ module proc_patch_data_module
      integer:: imax,jmax,kmax                       ! size w/0 ghosts
      integer:: ilo,ihi,jlo,jhi,klo,khi              ! data size w/ ghosts
      integer:: left,right,top,bottom,behind,forward ! cache of proc neighbors
-     integer:: comm3d,comm,loc_comm ! 3d comm, base (mpi_comm_world or split), comm with r^D pes
+     integer:: comm3d,loc_comm,comm ! 3d comm, local comm of redunent parents, normal comm  (needed?)
      integer:: iprocx,iprocy,iprocz ! my proc in 3D index space
      integer:: nprocx,nprocy,nprocz ! size if proc index space
      integer:: iglobalx,iglobaly,iglobalz ! easy to generate, could remove
@@ -58,31 +73,16 @@ module proc_patch_data_module
   end type proc_patch
 end module proc_patch_data_module
 !-----------------------------------------------------------------------
-#define MAX_GRIDS 20
 module GridModule
   use proc_patch_data_module
   implicit none
-  ! PDE,Disc
+  ! PDE, Disc
   integer,parameter:: ng=1     
-  integer,parameter:: nvar=1   
-  ! topo
-  integer,parameter:: max_grids=MAX_GRIDS
-  integer:: bot_min_size ! min size for bottom solver
-  integer:: mg_min_size  ! min size box to start aggregating
-  integer:: ncoarsesolveits
-  ! solver
-  integer:: nvcycles ! 0 for pure FMG
-  integer:: nfcycles ! 0 for no FMG
-  integer:: ncycles  ! V==1, W==2
-  integer:: nfmgvcycles ! 1 for normal FMG, more for more power
-  double precision:: rtol
-  integer:: nsmoothsup 
-  integer:: nsmoothsdown
-  ! general
-  integer:: verbose 
+  integer,parameter:: nvar=1
 contains
   !-----------------------------------------------------------------
   logical function is_top(g)
+    use domain
     implicit none
     type(proc_patch):: g
     is_top = ( &
@@ -117,7 +117,7 @@ contains
     implicit none    
     integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
     integer :: NProcAxis(3),iProcAxis(3)
-    type(proc_patch),intent(out):: g(0:max_grids-1)
+    type(proc_patch),intent(out):: g(0:MAX_GRIDS-1)
     interface       
        subroutine new_grids_private(g,NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
          use proc_patch_data_module
