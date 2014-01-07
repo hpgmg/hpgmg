@@ -4,12 +4,13 @@
 !-----------------------------------------------------------------
 subroutine SetBCs(ux,g)
   use GridModule
+  use mpistuff
   implicit none
-  !
+
   type(proc_patch),intent(in) :: g
   double precision:: ux(g%ilo:g%ihi,g%jlo:g%jhi,&
        g%klo:g%khi,nvar)
-  !	
+
   call SetXBC(ux,g)
   call XExchange(ux,g)
   call SetYBC(ux,g)
@@ -18,7 +19,6 @@ subroutine SetBCs(ux,g)
   call SetZBC(ux,g)
   call ZExchange(ux,g)
 #endif
-  !
   return
 end subroutine SetBCs
 !-----------------------------------------------------------------------
@@ -34,7 +34,7 @@ subroutine XExchange(ux,g)
   double precision:: xbuffer_recv(ng,g%jmax,g%kmax,nvar)
 	
   integer:: XBUFFSIZE
-  integer:: ii,jj,mm,kk,idest
+  integer:: jj,mm,kk,idest
   integer:: msg_id_send_x_low
   integer:: msg_id_send_x_hi
   integer:: msg_id_recv_x_low
@@ -42,7 +42,7 @@ subroutine XExchange(ux,g)
   !       -------X DIRECTION COMMUNICATION
   !       Update x-low boundaries
   XBUFFSIZE = nvar*(ng)*(g%jmax)*(g%kmax)
-  
+
 #ifndef XPERIODIC
   if (g%iprocx .gt. 1) then
 #endif
@@ -54,7 +54,7 @@ subroutine XExchange(ux,g)
 #endif
   
 #ifndef XPERIODIC
-  if (g%iprocx .lt. g%XPROCS) then
+  if (g%iprocx .lt. g%nprocx) then
 #endif
      do kk=1,g%kmax
         do jj = 1,g%jmax
@@ -89,7 +89,7 @@ subroutine XExchange(ux,g)
 #endif 
  
 #ifndef XPERIODIC
-  if (g%iprocx .lt. g%XPROCS) then
+  if (g%iprocx .lt. g%nprocx) then
 #endif
      call MPI_Wait(msg_id_send_x_low, status, ierr)
      Call ErrorHandler(ierr,ERROR_WAIT)
@@ -98,7 +98,7 @@ subroutine XExchange(ux,g)
 #endif  
   !	update x-high boundaries
 #ifndef XPERIODIC
-  if (g%iprocx .lt. g%XPROCS) then
+  if (g%iprocx .lt. g%nprocx) then
 #endif
      call MPI_Irecv(xbuffer_recv, XBUFFSIZE, MPI_DOUBLE_PRECISION,&
           g%right, MSG_XCH_XHI_TAG, g%comm3D,msg_id_recv_x_hi,ierr)
@@ -126,7 +126,7 @@ subroutine XExchange(ux,g)
 #endif
   
 #ifndef XPERIODIC
-  if (g%iprocx .lt. g%XPROCS) then
+  if (g%iprocx .lt. g%nprocx) then
 #endif
      call MPI_Wait(msg_id_recv_x_hi, status, ierr)
      Call ErrorHandler(ierr,ERROR_WAIT)
@@ -164,7 +164,7 @@ subroutine YExchange(ux,g)
   double precision:: ybuffer_send(g%ilo:g%ihi,ng,g%kmax,nvar)
   double precision:: ybuffer_recv(g%ilo:g%ihi,ng,g%kmax,nvar)
   integer:: YBUFFSIZE
-  integer:: ii,jj,mm,kk,idest
+  integer:: ii,mm,kk,idest
   integer:: msg_id_send_y_low
   integer:: msg_id_send_y_hi
   integer:: msg_id_recv_y_low
@@ -172,7 +172,7 @@ subroutine YExchange(ux,g)
   ! -------Y DIRECTION COMMUNICATION
   !	update y-low boundaries
   YBUFFSIZE=(g%ihi-g%ilo+1)*g%kmax*nvar*ng
-  
+
 #ifndef YPERIODIC
   if (g%iprocy .gt. 1) then
 #endif  
@@ -184,7 +184,7 @@ subroutine YExchange(ux,g)
 #endif  
   
 #ifndef YPERIODIC
-  if (g%iprocy .lt. g%YPROCS) then
+  if (g%iprocy .lt. g%nprocy) then
 #endif  
      do kk=1,g%kmax
         do ii = g%ilo,g%ihi
@@ -218,7 +218,7 @@ subroutine YExchange(ux,g)
 #endif  
   
 #ifndef YPERIODIC
-  if (g%iprocy .lt. g%YPROCS) then
+  if (g%iprocy .lt. g%nprocy) then
 #endif
      call MPI_Wait(msg_id_send_y_low, status, ierr)
      Call ErrorHandler(ierr,ERROR_WAIT)
@@ -227,7 +227,7 @@ subroutine YExchange(ux,g)
 #endif
   !	update y-high boundaries
 #ifndef YPERIODIC
-  if (g%iprocy .lt. g%YPROCS) then
+  if (g%iprocy .lt. g%nprocy) then
 #endif  
      call MPI_Irecv(ybuffer_recv, YBUFFSIZE, MPI_DOUBLE_PRECISION,&
           g%top, MSG_XCH_YHI_TAG, g%comm3D, msg_id_recv_y_hi,ierr)
@@ -253,9 +253,9 @@ subroutine YExchange(ux,g)
 #ifndef YPERIODIC
   endif
 #endif
-  
+
 #ifndef YPERIODIC
-  if (g%iprocy .lt. g%YPROCS) then
+  if (g%iprocy .lt. g%nprocy) then
 #endif
      call MPI_Wait(msg_id_recv_y_hi, status, ierr)
      Call ErrorHandler(ierr,ERROR_WAIT)
@@ -292,7 +292,7 @@ subroutine ZExchange(ux,g)
   double precision:: zbuffer_send(g%ilo:g%ihi,g%jlo:g%jhi,ng,nvar)
   double precision:: zbuffer_recv(g%ilo:g%ihi,g%jlo:g%jhi,ng,nvar)
   integer:: ZBUFFSIZE
-  integer:: ii,jj,mm,kk,idest
+  integer:: ii,jj,mm,idest
   integer:: msg_id_send_z_low
   integer:: msg_id_send_z_hi
   integer:: msg_id_recv_z_low
@@ -312,7 +312,7 @@ subroutine ZExchange(ux,g)
 #endif  
 
 #ifndef ZPERIODIC
-  if ( g%iprocz < g%ZPROCS ) then
+  if ( g%iprocz < g%nprocz ) then
 #endif  
      do mm = 1,ng
         do jj = g%jlo, g%jhi
@@ -346,7 +346,7 @@ subroutine ZExchange(ux,g)
 #endif  
 
 #ifndef ZPERIODIC
-  if ( g%iprocz < g%ZPROCS ) then
+  if ( g%iprocz < g%nprocz ) then
 #endif  
      call MPI_Wait(msg_id_send_z_hi, status, ierr)
      call ErrorHandler(ierr,ERROR_WAIT)
@@ -355,7 +355,7 @@ subroutine ZExchange(ux,g)
 #endif       
   !       update z-high boundaries
 #ifndef ZPERIODIC
-  if ( g%iprocz < g%ZPROCS ) then
+  if ( g%iprocz < g%nprocz ) then
 #endif  
      call MPI_Irecv(zbuffer_recv, ZBUFFSIZE, MPI_DOUBLE_PRECISION,&
           g%forward, MSG_XCH_ZLOW_TAG, g%comm3D,msg_id_recv_z_low, ierr)
@@ -383,7 +383,7 @@ subroutine ZExchange(ux,g)
 #endif 
  
 #ifndef ZPERIODIC
-  if ( g%iprocz < g%ZPROCS ) then
+  if ( g%iprocz < g%nprocz ) then
 #endif  
      call MPI_Wait(msg_id_recv_z_low, status, ierr)
      call ErrorHandler(ierr,ERROR_WAIT)
@@ -454,7 +454,7 @@ subroutine SetXBC(u,g)
      endif
   endif  
   !  If bdry_type then typeing boundary
-  if (g%iprocx .eq. g%xprocs) then
+  if (g%iprocx .eq. g%nprocx) then
      ii=g%imax+1
      if(xbdry_type.eq.0) then ! zero gradient
         do kk=1,g%kmax,1
@@ -509,7 +509,7 @@ subroutine SetYBC(u,g)
         endif
      endif
      !	yr Boundary: Typeing
-     if (g%iprocy .eq. g%yprocs) then
+     if (g%iprocy .eq. g%nprocy) then
         jj=g%jmax+1
         if(ybdry_type.eq.0) then
            do kk=1,g%kmax
@@ -561,7 +561,7 @@ subroutine SetZBC(u,g)
         endif
      endif
      !	zr Boundary: Typeing
-     if (g%iprocz .eq. g%zprocs) then
+     if (g%iprocz .eq. g%nprocz) then
         kk=g%kmax+1
         if(zbdry_type.eq.0) then
            do jj=g%jlo,g%jhi,1

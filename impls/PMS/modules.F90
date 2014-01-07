@@ -26,7 +26,7 @@ end module tags
 module mpistuff
   include "mpif.h"
   integer:: status(MPI_STATUS_SIZE),ierr
-  integer:: mype,npe
+  integer:: mype ,npe
   integer,parameter::ERROR_CARTCOORDS=1
   integer,parameter::ERROR_CARTSHIFT=2
   integer,parameter::ERROR_WAIT=3
@@ -52,7 +52,8 @@ module proc_patch_data_module
      integer:: left,right,top,bottom,behind,forward ! cache of proc neighbors
      integer:: comm3d,comm,loc_comm ! 3d comm, base (mpi_comm_world or split), comm with r^D pes
      integer:: iprocx,iprocy,iprocz ! my proc in 3D index space
-     integer:: xprocs,yprocs,zprocs ! size if proc index space
+     integer:: nprocx,nprocy,nprocz ! size if proc index space
+     integer:: iglobalx,iglobaly,iglobalz ! easy to generate, could remove
      double precision:: dxg,dyg,dzg ! why 'g'?
   end type proc_patch
 end module proc_patch_data_module
@@ -61,48 +62,56 @@ end module proc_patch_data_module
 module GridModule
   use proc_patch_data_module
   implicit none
+  ! PDE,Disc
+  integer,parameter:: ng=1     
+  integer,parameter:: nvar=1   
+  ! topo
   integer,parameter:: max_grids=MAX_GRIDS
-  integer,parameter:: min_psize=4
-  integer,parameter:: ncoarsesolveits=min_psize*min_psize ! min_psize^2
-  integer,parameter:: ng=1
-  integer,parameter:: nvar=1
+  integer:: bot_min_size ! min size for bottom solver
+  integer:: mg_min_size  ! min size box to start aggregating
+  integer:: ncoarsesolveits
+  ! solver
   integer:: nvcycles ! 0 for pure FMG
   integer:: nfcycles ! 0 for no FMG
   integer:: ncycles  ! V==1, W==2
   integer:: nfmgvcycles ! 1 for normal FMG, more for more power
-  logical,parameter:: reorder=.false.  ! use  true!!! todo
   double precision:: rtol
+  integer:: nsmoothsup 
+  integer:: nsmoothsdown
+  ! general
+  integer:: verbose 
 contains
   !-----------------------------------------------------------------
   logical function is_top(g)
     implicit none
     type(proc_patch):: g
     is_top = ( &
-         (g%imax.le.min_psize .and. g%iprocx.eq.1) .or. &
-         (g%jmax.le.min_psize .and. g%iprocy.eq.1) &
+         (g%imax.le.bot_min_size .and. g%nprocx.eq.1) .or. &
+         (g%jmax.le.bot_min_size .and. g%nprocy.eq.1) &
 #ifndef TWO_D
-         .or. (g%kmax.le.min_psize .and. g%iprocz.eq.1) &
+         .or. (g%kmax.le.bot_min_size .and. g%nprocz.eq.1) &
 #endif
          )
   end function is_top
   !-----------------------------------------------------------------
-  integer function iglobal(g)
+  integer function getIglobalx(g)
+    use mpistuff, only:mype
     implicit none
     type(proc_patch):: g
-    iglobal = (g%iprocx-1)*g%imax + 1 ! one based of first index
-  end function iglobal
+    getiglobalx = (g%iprocx-1)*g%imax + 1 ! one based of my first index
+  end function getIglobalx
  !-----------------------------------------------------------------
-  integer function jglobal(g)
+  integer function getIglobaly(g)
     implicit none
     type(proc_patch):: g
-    jglobal = (g%iprocy-1)*g%jmax + 1 ! one based of first index
-  end function jglobal
+    getiglobaly = (g%iprocy-1)*g%jmax + 1 
+  end function getIglobaly
  !-----------------------------------------------------------------
-  integer function kglobal(g)
+  integer function getIglobalz(g)
     implicit none
     type(proc_patch):: g
-    kglobal = (g%iprocz-1)*g%kmax + 1 ! one based of first index
-  end function kglobal
+    getiglobalz = (g%iprocz-1)*g%kmax + 1 
+  end function getIglobalz
   !-----------------------------------------------------------------
   subroutine new_grids(g,NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
     implicit none    

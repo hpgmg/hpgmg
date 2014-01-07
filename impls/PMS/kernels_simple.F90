@@ -13,7 +13,7 @@ double precision function level_norm1(ux,g)
   !
   double precision::t1,t2,vol    
   
-  vol = g%dxg*g%dyg&
+  vol = g%dxg*g%dyg &
 #ifndef TWO_D
        *g%dzg
 #endif
@@ -26,12 +26,14 @@ double precision function level_norm2(ux,g)
   !
   use proc_patch_data_module
   use mpistuff
+  use GridModule, only:verbose
   implicit none
   !     
   type(proc_patch)::g
   double precision::ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   !     
   double precision::t1,t2,vol  
+  integer :: i,j,k
 
   vol = g%dxg*g%dyg&
 #ifndef TWO_D
@@ -41,6 +43,7 @@ double precision function level_norm2(ux,g)
   t1 = sum(ux(1:g%imax,1:g%jmax,1:g%kmax,1)**2)
   call MPI_Allreduce(t1,t2,1,MPI_DOUBLE_PRECISION,MPI_SUM,g%comm3D,ierr)
   level_norm2 = sqrt(t2*vol)
+
 end function level_norm2
 !-----------------------------------------------------------------
 double precision function level_norminf(ux,g)
@@ -80,7 +83,7 @@ double precision function norm(ux,g,type)
   end if
 end function norm
 !-----------------------------------------------------------------------
-subroutine Restrict(uxC,ux,gf,gc,order)
+subroutine Restrict(uxC,ux,gc,gf,order)
   use GridModule
   use mpistuff
   use tags
@@ -93,10 +96,10 @@ subroutine Restrict(uxC,ux,gf,gc,order)
   integer,intent(in) :: order ! not used in 3D
   !     Local vars
 #ifdef TWO_D
-  double precision,dimension(gc%imax/2,gc%jmax/2,1,nvar)::&
+  double precision,dimension(gc%imax/2, gc%jmax/2, 1,         nvar)::&
        sb,rb1,rb2,rb3,rb0
 #else
-  double precision,dimension(gc%imax/2,gc%jmax/2,gc%kmax/2,nvar)::&
+  double precision,dimension(gc%imax/2, gc%jmax/2, gc%kmax/2, nvar)::&
        sb,rb1,rb2,rb3,rb0,rb4,rb5,rb6,rb7
 #endif
   double precision :: a11,a22,a33,a44
@@ -104,6 +107,8 @@ subroutine Restrict(uxC,ux,gf,gc,order)
   integer:: msg_id_recv(0:7),bufsz,msg_id_send(0:7)
   integer:: ii,jj,kk,ist,jst,kst
 
+  !call MPI_Cart_Coords(gg(n)%comm3D,ii,ndims,NProcAxis,ierr)
+  
 #ifdef TWO_D
   a11 = 9.d0/64.d0
   a22 = 3.d0/64.d0
@@ -112,10 +117,12 @@ subroutine Restrict(uxC,ux,gf,gc,order)
   a11 = 27.d0/64.d0/4.d0
   a22 = 9.d0/64.d0/4.d0
   a33 = 3.d0/64.d0/4.d0
-  a44 = 1.d0/64.d0/4.d0
+  a44 = 1.d0/64.d0/4.d0 ! not used
 #endif
   
   if(gf%imax == gc%imax)then ! split grid
+     ist = gc%imax/2+1
+     jst = gc%jmax/2+1
 #ifdef TWO_D
      bufsz = (nvar)*(gc%jmax/2)*(gc%imax/2)
      lnp = 4
@@ -144,9 +151,6 @@ subroutine Restrict(uxC,ux,gf,gc,order)
      call MPI_Irecv(rb7,bufsz,MPI_DOUBLE_PRECISION,&
           7,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(7),ierr)
 #endif
-     call MPI_comm_rank(gc%loc_comm,ii,ierr)
-     write(6,*)'[',mype,'] Restrict local rank=',ii
-     
      !     only one quarter/eighth of coarse vector (all of fine)
      cimax2 = gc%imax/2
      cjmax2 = gc%jmax/2
@@ -177,12 +181,12 @@ subroutine Restrict(uxC,ux,gf,gc,order)
 #else 
               if(order==1) then
                  sb(ic,jc,kc,:)=.125d0*(&
-                      ux(ii,jj,kk,:)+ux(ii+1,jj,kk,:)&
-                      +ux(ii+1,jj+1,kk,:)+ux(ii,jj+1,kk,:)&
-                      +ux(ii,jj,kk+1,:)+ux(ii+1,jj,kk+1,:)&
-                      +ux(ii+1,jj+1,kk+1,:)+ux(ii,jj+1,kk+1,:))
+                       ux(ii,  jj,  kk,  :)+ux(ii+1,jj,  kk,  :)&
+                      +ux(ii+1,jj+1,kk,  :)+ux(ii,  jj+1,kk,  :)&
+                      +ux(ii,  jj,  kk+1,:)+ux(ii+1,jj,  kk+1,:)&
+                      +ux(ii+1,jj+1,kk+1,:)+ux(ii,  jj+1,kk+1,:))
               else
-                 stop '3D not done Restrict'
+                 stop '3D linear not done Restrict'
               endif
 #endif
            enddo
@@ -194,8 +198,6 @@ subroutine Restrict(uxC,ux,gf,gc,order)
              MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_send(pp),ierr)
      enddo
      
-     ist = gc%imax/2+1
-     jst = gc%jmax/2+1
      !     0    recv (includes self recv)  (1,1[,1])
      call MPI_Wait(msg_id_recv(0), status, ierr)
      do kc=1,ckmax2,1
@@ -328,9 +330,9 @@ subroutine Restrict(uxC,ux,gf,gc,order)
      do pp=0,lnp-1
         call MPI_Wait(msg_id_send(pp), status, ierr)
      enddo
-  else
+  else ! normal grid (not split)
      do kc=1,gc%kmax,1
-        kk=(kc-1)*2+1 ! 1
+        kk=(kc-1)*2+1 
         do jc=1,gc%jmax,1
            jj=(jc-1)*2+1
            do ic=1,gc%imax,1
@@ -355,28 +357,32 @@ subroutine Restrict(uxC,ux,gf,gc,order)
                       +ux(ii-1,jj+2,kc,:)+ux(ii+2,jj+2,kc,:))
               endif
 #else 
+              ! only constant restriction in 3D
               uxC(ic,jc,kc,:)=.125D0*(&
-                   ux(ii,jj,kk,:)+ux(ii,jj+1,kk,:)&
-                   +ux(ii+1,jj,kk,:)+ux(ii+1,jj+1,kk,:)&
-                   +ux(ii,jj,kk+1,:)+ux(ii,jj+1,kk+1,:)&
+                    ux(ii,  jj,kk,  :)+ux(ii,  jj+1,kk,  :)&
+                   +ux(ii+1,jj,kk,  :)+ux(ii+1,jj+1,kk,  :)&
+                   +ux(ii,  jj,kk+1,:)+ux(ii,  jj+1,kk+1,:)&
                    +ux(ii+1,jj,kk+1,:)+ux(ii+1,jj+1,kk+1,:))
 #endif
            enddo
         enddo
      enddo
   endif
-  
-  if(gc%jmax*gc%yprocs==4.and.mype==-1)then
-     do ic=1,gc%imax,1
-        write(6,*)'[',mype,'] uc=',uxC(ic,1:gc%jmax,1,1)
-     enddo
-     do ic=1,gf%imax,1
-        !            write(6,*)my_pe,'] uf=',ux(ic,1:gf%jmax,1,1)
-     enddo
-  endif
-  
+    
   call SetBCs(uxC,gc)
-  
+
+!!$  call flush(6)
+!!$  call sleep(mype)
+!!$  do kk=1,gc%kmax
+!!$     write(6,*) '[',mype,'] Restrict done:k=',kk
+!!$     do jj=1,gc%jmax
+!!$        write(6,'(E11.3,E11.3,E11.3,E11.3)') uxC(1:gc%imax,jj,kk,1)
+!!$     end do
+!!$  end do
+!!$  call flush(6)
+!!$  call sleep(8-mype)
+!!$  stop
+
   return
 end subroutine Restrict
 !-----------------------------------------------------------------------
@@ -394,56 +400,71 @@ subroutine Prolong_2(ux,uxC,gf,gc)
        gf%klo:gf%khi, nvar)
   
   !     Local vars
-  integer:: ic,jc,jj,kc,ii,kk,ist,ifn,jst,jfn,kst,kfn,lpe
+  integer:: ic,jc,jj,kc,ii,kk,ist,iend,jst,jend,kst,kend,lpe
   double precision :: vv(nvar),a11,a22,a33,a44
   
   ! the whole coarse pathc
   ist = 1
-  ifn = gc%imax
+  iend = gc%imax
   jst = 1 
-  jfn = gc%jmax
+  jend = gc%jmax
   kst = 1
-  kfn = gc%kmax
+  kend = gc%kmax
   if(gf%imax == gc%imax) then ! split grid - chop it
      call MPI_comm_rank(gc%loc_comm,lpe,ierr)
-     if( lpe == 0 ) then
-        ifn = ifn/2
-        jfn = jfn/2
-        kfn = kfn/2
-     else if ( lpe == 1 ) then
-        ifn = ifn/2
+#ifdef TWO_D
+     kend = 1
+     if( lpe == 0 ) then       ! (1,1)
+        iend = iend/2
+        jend = jend/2
+     else if ( lpe == 1 ) then ! (1,2)
+        iend = iend/2
         jst = gc%jmax/2+1
-        kfn = kfn/2
-     else if ( lpe == 2 ) then
+     else if ( lpe == 2 ) then ! (2,1)
         ist = gc%imax/2+1
-        jfn = jfn/2
-        kfn = kfn/2
-     else if ( lpe == 3 ) then
+        jend = jend/2
+     else if ( lpe == 3 ) then ! (2,2)
         ist = gc%imax/2+1
         jst = gc%jmax/2+1
-        kfn = kfn/2
-#ifndef TWO_D  
-     else
+     end if
+#else
+     if( lpe == 0 ) then       ! (1,1,1)
+        iend = iend/2
+        jend = jend/2
+        kend = kend/2
+     else if ( lpe == 1 ) then ! (1,1,2)
+        iend = iend/2
+        jend = jend/2
         kst = gc%kmax/2+1
-        if( lpe == 4 ) then
-           ifn = ifn/2
-           jfn = jfn/2
-        else if ( lpe == 5 ) then
-           ifn = ifn/2
+     else if ( lpe == 2 ) then ! (1,2,1)
+        iend = iend/2
+        jst = gc%jmax/2+1
+        kend = kend/2
+     else if ( lpe == 3 ) then ! (1,2,2)
+        iend = iend/2
+        jst = gc%jmax/2+1
+        kst = gc%kmax/2+1
+     else
+        ist = gc%imax/2+1
+        if( lpe == 4 ) then  ! (2,1,1)
+           jend = jend/2
+           kend = kend/2
+        else if ( lpe == 5 ) then ! (2,1,2)
+           jend = jend/2
+           kst = gc%kmax/2+1
+        else if ( lpe == 6 ) then ! (2,2,1)
            jst = gc%jmax/2+1
-        else if ( lpe == 6 ) then
-           ist = gc%imax/2+1
-           jfn = jfn/2
-        else if ( lpe == 7 ) then
-           ist = gc%imax/2+1
+           kend = kend/2
+        else if ( lpe == 7 ) then ! (2,2,2)
            jst = gc%jmax/2+1
+           kst = gc%kmax/2+1
         else
            stop 'should not be here 3): Prolong_2'
         endif
+     end if
 #endif
-     endif
-  endif
-  
+  endif ! else not split
+   
 #ifdef TWO_D
   a11 = 9.d0/16.d0
   a22 = 3.d0/16.d0
@@ -600,40 +621,41 @@ subroutine Prolong_2(ux,uxC,gf,gc)
         enddo
      enddo
   enddo
-  
+
   call SetBCs(ux,gf)
-  
+
   return
 end subroutine Prolong_2
 
 !-----------------------------------------------------------------------
 subroutine GSRB_const_Lap(phi,rhs,g,nits)
   use GridModule
+  use mpistuff
   implicit none
   type(proc_patch):: g
-  double precision:: &
-       phi(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
-  double precision,intent(in)::&
-       rhs(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
+  double precision:: phi(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
+  double precision,intent(in)::rhs(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   integer,intent(in):: nits
   !     Local vars
-  integer:: m,ii,jj,kk,ip,im,jm,jp,mm,rbi,si
+  integer:: m,ii,jj,j,kk,ip,im,jm,jp,mm,rbi,offi
   double precision:: ti,tj,tk,dxi2,dyi2,numer,deno
+  double precision norm
 #ifndef TWO_D
   double precision:: dzi2
 #endif
+
   dxi2=1.d0/g%dxg**2
   dyi2=1.d0/g%dyg**2
 #ifndef TWO_D
   dzi2=1.d0/g%dzg**2
 #endif
   do m=1,nits
-     !     red/black
-     do rbi = 1,2,1
-        do kk=1,g%kmax,1
-           do jj=1,g%jmax,1
-              si = mod(jj + kk + rbi, 2) + 1
-              do ii=si,g%imax,2
+     ! red/black
+     do rbi = 0,1
+        do kk=1,g%kmax
+           do jj=1,g%jmax
+              offi = mod(g%iglobalx+jj+g%iglobaly+kk+g%iglobalz-1+rbi,2)+1
+              do ii=offi,g%imax,2
                  ti = dxi2*(phi(ii+1,jj,kk,1)+phi(ii-1,jj,kk,1))
                  tj = dyi2*(phi(ii,jj+1,kk,1)+phi(ii,jj-1,kk,1))
                  !     set
@@ -646,19 +668,20 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
                  numer = numer - tk
                  deno = deno - 2.d0*dzi2
 #endif
-                 phi(ii,jj,kk,1) = numer/deno                       
+                 phi(ii,jj,kk,1) = numer/deno
               enddo       ! ii
            enddo          ! jj
-        enddo             ! kk
+        enddo             ! kk        
         call SetBCs(phi,g)
      enddo                ! r/b i
   enddo                   ! iters
-   
+
 end subroutine GSRB_const_Lap
-        
+
 !-----------------------------------------------------------------------
 subroutine Apply_const_Lap(uxo,ux,g)
   use GridModule
+  use mpistuff, only:mype
   implicit none
   type(proc_patch):: g
   double precision,intent(out):: &
@@ -669,6 +692,7 @@ subroutine Apply_const_Lap(uxo,ux,g)
   integer its
   integer:: ii,jj,kk
   double precision:: dxl,dyl,ti,tj,tk,dxi2,dyi2
+  double precision norm
 #ifndef TWO_D
   double precision:: dzi2,dzl
 #endif
@@ -696,5 +720,7 @@ subroutine Apply_const_Lap(uxo,ux,g)
   enddo                     ! kk
 
   call SetBCs(uxo,g)
-  
+  if (verbose.gt.2) then
+     tk = norm(uxo,g,2); if(mype==0)write(6,'(A,E14.6)')'        Apply_const_Lap: done |u|=',tk
+  end if
 end subroutine Apply_const_Lap

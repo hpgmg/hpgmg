@@ -3,11 +3,11 @@
 !       Copyright 2014
 !-----------------------------------------------------------------
 program PMS
-  use GridModule, only:reorder
+  use GridModule, only:verbose
   use mpistuff
   implicit none
-  integer:: rank,comm3d
-  integer:: ndims,NProcAxis(3),iProcAxis(3),xprocs,yprocs,zprocs,nx,ny,nz,nxlocal,nylocal,nzlocal
+  integer:: rank,comm3d,ndims
+  integer:: NProcAxis(3),iProcAxis(3),nprocx,nprocy,nprocz,nx,ny,nz,nxlocal,nylocal,nzlocal
   logical:: periods(3)
   ! MPI init - globals
   call MPI_init(ierr)
@@ -50,14 +50,14 @@ program PMS
 #endif
 
   ! get fine grid parameters and problem type
-  call get_params(npe, xprocs, yprocs, zprocs, nx, ny, nz, &
+  call get_params(npe, nprocx, nprocy, nprocz, nx, ny, nz, &
        nxlocal, nylocal, nzlocal)
 
   ! Initialize the fine grid communicator
   ndims = 3
-  NProcAxis(1) = xprocs
-  NProcAxis(2) = yprocs
-  NProcAxis(3) = zprocs
+  NProcAxis(1) = nprocx
+  NProcAxis(2) = nprocy
+  NProcAxis(3) = nprocz
   periods(1) = .false.
   periods(2) = .false.
   periods(3) = .false.
@@ -71,14 +71,15 @@ program PMS
   periods(3) = .true.
 #endif
   call MPI_cart_create(MPI_COMM_WORLD,ndims,NProcAxis,periods,&
-       reorder,comm3d,ierr)
-  call MPI_comm_rank(comm3d,rank,ierr) ! new rank if reorder==true -- OK!!!
-
-  if(mype==0) then
-     write(6,*) 'main: mype=',mype,', comm3D rank = ',rank
+       .true.,comm3d,ierr) ! reoder is ignored???
+  call MPI_comm_rank(comm3d,rank,ierr) ! new rank?
+  if(mype==0.or.mype.ne.rank) then
+     if (verbose.gt.0) write(6,*) 'main: warning old mype=',mype,', comm3D new rank = ',rank
   endif
+  mype=rank
 
   call MPI_Cart_Coords(comm3d,rank,ndims,iProcAxis,ierr)
+  !print *,'[',mype,'] iProcAxis=',iProcAxis
   iProcAxis(1) = iProcAxis(1) + 1 ! one based
   iProcAxis(2) = iProcAxis(2) + 1
   iProcAxis(3) = iProcAxis(3) + 1
@@ -158,12 +159,15 @@ subroutine driver(grids)
      ! output run data and convergance data
      if(mype==0) then
         coarsest_grid = 0
+        if (verbose .gt.1) write(6,*)'output: g(0).istop=',is_top(grids(0)),&
+             'nfcycles=',nfcycles
         if (nfcycles .ne. 0 .and. .not. is_top(grids(0)) ) then
            do ii=1,max_grids-1
-              ! go from coarse to fine.  Need to pass through top empty 'coarse' grids              
+              ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
               rateu = errors(ii-1)%uerror/errors(ii)%uerror
               rategrad = errors(ii-1)%graduerr/errors(ii)%graduerr
-              write(6,'(I5,A8,I2,A20,E14.6,A10,E14.6)') isolve,': level ',ii, ': converg order u=', &
+              if (verbose .gt.1) write(6,'(I5,A8,I2,A20,E14.6,A10,E14.6)') isolve,&
+                   ': level ',ii, ': converg order u=', &
                    log(rateu)*log2r,', grad(u)=',log(rategrad)*log2r
               write(iconv,900) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(ii)%uerror,&
                    errors(ii)%graduerr,errors(ii)%resid
@@ -176,16 +180,17 @@ subroutine driver(grids)
         end if
         
         do ii=coarsest_grid,coarsest_grid+nViters-1 ! i is zero bases for 'errors'
-           !write(6,'(A13,I2,A20,E14.6,A8,E14.6)') 'driver: level', ii, ': error=',errors(ii)%uerror,&
-            !    ': resid=',errors(ii)%resid
-           write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,errors(ii)%graduerr,errors(ii)%resid
+           if (verbose.gt.2) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: level',&
+                ii, ': error=',errors(ii)%uerror,&
+                ': resid=',errors(ii)%resid
+           write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,errors(ii)%graduerr,&
+                errors(ii)%resid
         end do
-        
+
         ! general output
         ii = nfcycles*(coarsest_grid+1) + nViters - 1
-        write(6,888) 'solve ',isolve,' done |r|/|f|=',errors(ii)%resid/res0
+        if (verbose.gt.1) write(6,888) 'solve ',isolve,' done |r|/|f|=',errors(ii)%resid/res0
         write(irun,700) isolve,errors(ii)%uerror,errors(ii)%graduerr,errors(ii)%resid/res0
-
      endif
   enddo
 700 format (I7,6x,E14.6,E14.6,3x,E14.6)
@@ -206,29 +211,29 @@ end subroutine driver
 !-----------------------------------------------------------------
 ! get command line args, set problemType and fine grid sizes
 !-----------------------------------------------------------------       
-subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
+subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
      nx, ny, nz, nxlocal, nylocal, nzlocal)
   use domain, only:problemType
   use mpistuff
-  use GridModule, only:nvcycles,nfcycles,rtol,ncycles,nfmgvcycles
+  use GridModule
 #ifndef HAVE_COMM_ARGS
   use f2kcli        ! command line args class
 #endif
   !use mpistuff, only:mype
   implicit none
-  integer,intent(out) :: xprocs,yprocs,zprocs,nx,ny,nz,nxlocal,nylocal,nzlocal
+  integer,intent(out) :: nprocx,nprocy,nprocz,nx,ny,nz,nxlocal,nylocal,nzlocal
   integer,intent(in) :: nprocs
   !       
   CHARACTER(LEN=256) :: LINE
   CHARACTER(LEN=10)  :: CMD,CMD2
-  INTEGER            :: NARG,IARG,fact
+  INTEGER            :: NARG,IARG,fact,nsmooths
   integer*8 :: ti
-  integer, parameter :: nargs=14
+  integer, parameter :: nargs=18
   double precision t2,t1,iarray(nargs)
   !       default input args: ?local, n?, ?procs
-  xprocs=-1
-  yprocs=-1
-  zprocs=-1
+  nprocx=-1
+  nprocy=-1
+  nprocz=-1
   nx=-1
   ny=-1
   nz=-1
@@ -245,6 +250,10 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
   rtol = 1.d-12  
   ncycles = 1  ! v-cycles or w-cycles
   nfmgvcycles = 1 ! no interface for this
+  nsmooths = 1
+  verbose = 0
+  bot_min_size = 4 ! min size for bottom solver
+  mg_min_size = 4  ! or 16 ...
   ! read in args
   if( mype==0 ) then
      NARG = COMMAND_ARGUMENT_COUNT()
@@ -259,20 +268,25 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
         if( CMD == '-nyloc' ) READ (CMD2, '(I10)') nylocal
         if( CMD == '-nzloc' ) READ (CMD2, '(I10)') nzlocal
         
-        if( CMD == '-nxpes' ) READ (CMD2, '(I10)') xprocs
-        if( CMD == '-nypes' ) READ (CMD2, '(I10)') yprocs
-        if( CMD == '-nzpes' ) READ (CMD2, '(I10)') zprocs
-        
+        if( CMD == '-nxpes' ) READ (CMD2, '(I10)') nprocx
+        if( CMD == '-nypes' ) READ (CMD2, '(I10)') nprocy
+        if( CMD == '-nzpes' ) READ (CMD2, '(I10)') nprocz
+
+        if( CMD == '-bot_min_size' ) READ (CMD2, '(I10)') bot_min_size
+        if( CMD == '-mg_min_size' ) READ (CMD2, '(I10)') mg_min_size
+
         if( CMD == '-problem' ) READ (CMD2, '(I10)') problemType
 
         if( CMD == '-nvcycles' ) READ (CMD2, '(I10)') nvcycles
+        if( CMD == '-nsmooths' ) READ (CMD2, '(I10)') nsmooths
         if( CMD == '-nfcycles' ) READ (CMD2, '(I10)') nfcycles
         if( CMD == '-rtol' )    READ (CMD2, '(E14.6)') rtol
         if( CMD == '-ncycle' )  READ (CMD2, '(I10)') ncycles
 
+        if( CMD == '-verbose' )  READ (CMD2, '(I10)') verbose
      END DO
 #ifdef TWO_D
-     nz = 1; nzlocal = 1; zprocs = 1;
+     nz = 1; nzlocal = 1; nprocz = 1;
 #endif
      iarray(1) = nx
      iarray(2) = ny
@@ -282,9 +296,9 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
      iarray(5) = nylocal
      iarray(6) = nzlocal
      
-     iarray(7) = xprocs
-     iarray(8) = yprocs
-     iarray(9) = zprocs
+     iarray(7) = nprocx
+     iarray(8) = nprocy
+     iarray(9) = nprocz
      
      iarray(10) = problemType
   
@@ -292,6 +306,12 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
      iarray(12) = nfcycles
      iarray(13) = rtol
      iarray(14) = ncycles
+     iarray(15) = nsmooths
+
+     iarray(16) = verbose
+
+     iarray(17) = bot_min_size
+     iarray(18) = mg_min_size
 
      call MPI_Bcast(iarray,nargs,MPI_DOUBLE_PRECISION, 0, &
           mpi_comm_world, ierr)
@@ -306,9 +326,9 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
      nylocal = int(iarray(5))
      nzlocal = int(iarray(6))
      
-     xprocs = int(iarray(7))
-     yprocs = int(iarray(8))
-     zprocs = int(iarray(9))
+     nprocx = int(iarray(7))
+     nprocy = int(iarray(8))
+     nprocz = int(iarray(9))
      
      problemType = int(iarray(10))
 
@@ -316,17 +336,27 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
      nfcycles =    int(iarray(12))
      rtol     =        iarray(13) 
      ncycles  =    int(iarray(14))
+     nsmooths =    int(iarray(15))
+
+     verbose  =    int(iarray(16))
+
+     bot_min_size  = int(iarray(17))
+     mg_min_size   = int(iarray(18))
   endif
   if (nfcycles .ne. 0) nfcycles = 1 ! only valid 0,1
   if (nvcycles .lt. 0) nvcycles = 0 ! only valid 0,1
   if (nfcycles+nvcycles .le. 0) print *, 'no solver iterations!!!'
+  nsmoothsup = nsmooths
+  nsmoothsdown = nsmooths
+  ncoarsesolveits = bot_min_size*bot_min_size
+
   ! get ijk procs
   t1=nprocs
 #ifdef TWO_D
-  zprocs = 1
+  nprocz = 1
   nz = 1
   nzlocal = 1
-  if (xprocs == -1) then
+  if (nprocx == -1) then
      if( abs(dsqrt(t1) - floor(dsqrt(t1))) > 0.d0 ) then
         if(abs(dsqrt(t1/2.d0)-floor(dsqrt(t1/2.d0)))>0.d0)then
            if(abs(dsqrt(t1/4.d0)-floor(dsqrt(t1/4.d0)))>0.d0)then
@@ -340,77 +370,77 @@ subroutine get_params(nprocs, xprocs, yprocs, zprocs, &
      else
         fact=1
      endif
-     xprocs=fact*floor(dsqrt(t1/fact))
-     yprocs=t1/xprocs
-     if (nprocs .ne. zprocs*xprocs*yprocs) then
-        write(6,*) 'INCORRECT NP:', NPROCS,'xprocs=',xprocs,&
-             'yprocs=',yprocs,'zprocs=',zprocs,'nprocs=',nprocs
+     nprocx=fact*floor(dsqrt(t1/fact))
+     nprocy=t1/nprocx
+     if (nprocs .ne. nprocz*nprocx*nprocy) then
+        write(6,*) 'INCORRECT NP:', NPROCS,'nprocx=',nprocx,&
+             'nprocy=',nprocy,'nprocz=',nprocz,'nprocs=',nprocs
         stop
      endif
   else
-     yprocs=t1/xprocs
-     if(yprocs<1)stop'too many xprocs???'
-     fact = xprocs/yprocs
+     nprocy=t1/nprocx
+     if(nprocy<1)stop'too many nprocx???'
+     fact = nprocx/nprocy
      if( fact < 1 ) then
-        write(6,*) 'xprocs must be greater than yprocs', NPROCS,&
-       'xprocs=',xprocs,&
-       'yprocs=',yprocs,'zprocs=',zprocs,'nprocs=',nprocs
+        write(6,*) 'nprocx must be greater than nprocy', NPROCS,&
+       'nprocx=',nprocx,&
+       'nprocy=',nprocy,'nprocz=',nprocz,'nprocs=',nprocs
         stop
      endif
   endif
 #else
-  if (xprocs == -1) then
+  if (nprocx == -1) then
      t1 = nprocs
      if(nprocs==1) then
-        xprocs = 1; yprocs = 1; zprocs = 1;
+        nprocx = 1; nprocy = 1; nprocz = 1;
      elseif(nx==ny .and. ny==nz)then
-        xprocs = floor(t1**.3333333334d0)
-        yprocs = xprocs
-        zprocs = nprocs/(xprocs*yprocs)
+        nprocx = floor(t1**.3333333334d0)
+        nprocy = nprocx
+        nprocz = nprocs/(nprocx*nprocy)
      elseif(nz==ny)then
         t1 = ny*nprocs; t2 = nx; t1 = t1/t2 
-        yprocs = floor(t1**.333333334d0)
-        zprocs = yprocs
-        xprocs = nprocs/(yprocs*zprocs) 
+        nprocy = floor(t1**.333333334d0)
+        nprocz = nprocy
+        nprocx = nprocs/(nprocy*nprocz) 
      elseif(nz==nx)then
         t1 = nz*nprocs; t2 = ny; t1 = t1/t2 
-        xprocs = floor(t1**.333333334d0)
-        zprocs = xprocs
-        yprocs = nprocs/(xprocs*zprocs) 
+        nprocx = floor(t1**.333333334d0)
+        nprocz = nprocx
+        nprocy = nprocs/(nprocx*nprocz) 
      elseif(nx==ny)then
         t1 = ny*nprocs; t2 = nz; t1 = t1/t2 
-        yprocs = floor(t1**.333333334d0)
-        xprocs = yprocs
-        zprocs = nprocs/(yprocs*xprocs) 
+        nprocy = floor(t1**.333333334d0)
+        nprocx = nprocy
+        nprocz = nprocs/(nprocy*nprocx) 
      else
         stop 'need to specify x/y/z proc'
      endif
   endif
 #endif     
-  if (nprocs .ne. zprocs*xprocs*yprocs) then
-     write(6,*) 'INCORRECT NP: xprocs=',xprocs, &
-          'yprocs=',yprocs,'zprocs=',zprocs,'nprocs=',nprocs
+  if (nprocs .ne. nprocz*nprocx*nprocy) then
+     write(6,*) 'INCORRECT NP: nprocx=',nprocx, &
+          'nprocy=',nprocy,'nprocz=',nprocz,'nprocs=',nprocs
      stop
   endif
   ! x
   if (nxlocal.eq.-1 .and. nx.eq.-1) nxlocal = 8        ! default
-  if (nxlocal.eq.-1 .and. nx.ne.-1) nxlocal = nx/xprocs 
-  if (nxlocal.ne.-1 .and. nx.eq.-1) nx = nxlocal*xprocs 
-  if (nx .ne. nxlocal*xprocs) stop 'nx .ne. nxlocal*xprocs'
+  if (nxlocal.eq.-1 .and. nx.ne.-1) nxlocal = nx/nprocx 
+  if (nxlocal.ne.-1 .and. nx.eq.-1) nx = nxlocal*nprocx 
+  if (nx .ne. nxlocal*nprocx) stop 'nx .ne. nxlocal*nprocx'
   ! y
   if (nylocal.eq.-1 .and. ny.eq.-1) nylocal = nxlocal   ! default square
-  if (nylocal.eq.-1 .and. ny.ne.-1) nylocal = ny/yprocs 
-  if (nylocal.ne.-1 .and. ny.eq.-1) ny = nylocal*yprocs 
-  if (ny .ne. nylocal*yprocs) stop 'ny .ne. nylocal*yprocs'
+  if (nylocal.eq.-1 .and. ny.ne.-1) nylocal = ny/nprocy 
+  if (nylocal.ne.-1 .and. ny.eq.-1) ny = nylocal*nprocy 
+  if (ny .ne. nylocal*nprocy) stop 'ny .ne. nylocal*nprocy'
   ! z
   if (nzlocal.eq.-1 .and. nz.eq.-1) nzlocal = nxlocal   ! default square
-  if (nzlocal.eq.-1 .and. nz.ne.-1) nzlocal = nz/zprocs 
-  if (nzlocal.ne.-1 .and. nz.eq.-1) nz = nzlocal*zprocs 
-  if (nz .ne. nzlocal*zprocs) stop 'nz .ne. nzlocal*zprocs'
+  if (nzlocal.eq.-1 .and. nz.ne.-1) nzlocal = nz/nprocz 
+  if (nzlocal.ne.-1 .and. nz.eq.-1) nz = nzlocal*nprocz 
+  if (nz .ne. nzlocal*nprocz) stop 'nz .ne. nzlocal*nprocz'
   ! print topology
-  if(mype==-1) then
+  if(mype==0 .and. verbose .gt. 3) then
      write(6,*) '[',mype,'] nx =',nx,     ',ny= ',ny     ,',nz= ',nz
-     write(6,*) '[',mype,'] npx=',xprocs, ',npy=',yprocs, ',npz=',zprocs
+     write(6,*) '[',mype,'] npx=',nprocx, ',npy=',nprocy, ',npz=',nprocz
      write(6,*) '[',mype,'] nxl=',nxlocal,',nyl=',nylocal,',nzl=',nzlocal
   endif
 end subroutine get_params
@@ -426,9 +456,9 @@ subroutine formExactU(exact,g)
   integer:: ig,jg,kg
   double precision::coord(3),x2(3),a(3),b(3)
 
-  ig = iglobal(g) ! one bases
-  jg = jglobal(g)
-  kg = kglobal(g)
+  ig = g%iglobalx
+  jg = g%iglobaly
+  kg = g%iglobalz
   select case (problemType)
   case(0)
      do kk=1,g%kmax
@@ -511,9 +541,9 @@ subroutine FormRHS(rhs,g)
   integer:: ig,jg,kg
   double precision::coord(3),x2(3),a(3),b(3)
  
-  ig = iglobal(g)
-  jg = jglobal(g)
-  kg = kglobal(g)
+  ig = g%iglobalx
+  jg = g%iglobaly
+  kg = g%iglobalz
 !!$  !     
 !!$  do k=IZLO, IZHI,1
 !!$     zc(k)=zl+(kg+k-1)*dz-0.5*dz
