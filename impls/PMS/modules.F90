@@ -39,7 +39,11 @@ module tags
 end module tags
 !-----------------------------------------------------------------------
 module mpistuff
+#ifndef HAVE_PETSC
   include "mpif.h"
+#else
+  use petsc
+#endif
   integer:: status(MPI_STATUS_SIZE),ierr
   integer:: mype ,npe
   integer,parameter::ERROR_CARTCOORDS=1

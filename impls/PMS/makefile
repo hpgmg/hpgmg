@@ -14,7 +14,7 @@ include ${PETSC_DIR}/conf/rules
 
 #.SUFFIXES: .o .F
 
-FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -O3
+FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -fast -DHAVE_PETSC
 pms: ${OBJ} 
 	-${FLINKER} -o pms.ex ${OBJ}
 #	-/opt/local/bin/gfortran -o pms.ex ${OBJ}

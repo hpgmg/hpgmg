@@ -137,7 +137,7 @@ subroutine driver(grids)
 
   !output_flag=0 ! parameter
   !binary_flag=1
-  maxiter = 10 ! parameter
+  maxiter = 100 ! parameter
 
   do isolve=1,maxiter
      ! flush cache
@@ -245,10 +245,10 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
   ! solver parameters
   nvcycles = 0 ! pure FMG
   nfcycles = 1 ! pure FMG
-  rtol = 1.d-12  
-  ncycles = 1  ! v-cycles or w-cycles
-  nfmgvcycles = 1 ! no interface for this
-  nsmooths = 1
+  rtol = 1.d-10
+  ncycles = 1     ! v-cycles or w-cycles
+  nfmgvcycles = 1 ! no interface for this (always 1)
+  nsmooths = 2
   verbose = 0
   bot_min_size = 2 ! min size for bottom solver (grad get messed up with 1)
   mg_min_size = 8  ! or 16 ...
@@ -421,7 +421,7 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
      stop
   endif
   ! x
-  if (nxlocal.eq.-1 .and. nx.eq.-1) nxlocal = 8        ! default
+  if (nxlocal.eq.-1 .and. nx.eq.-1) nxlocal = 64        ! default
   if (nxlocal.eq.-1 .and. nx.ne.-1) nxlocal = nx/nprocx 
   if (nxlocal.ne.-1 .and. nx.eq.-1) nx = nxlocal*nprocx 
   if (nx .ne. nxlocal*nprocx) stop 'nx .ne. nxlocal*nprocx'
