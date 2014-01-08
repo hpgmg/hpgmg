@@ -108,6 +108,7 @@ subroutine Restrict(uxC,ux,gc,gf,order)
   
 #ifdef HAVE_PETSC
   flops = 2*gf%imax*gf%jmax*gf%kmax
+  call PetscLogEventBegin(events(3),ierr)
   call PetscLogFlops(flops,ierr)
 #endif
   
@@ -384,6 +385,9 @@ subroutine Restrict(uxC,ux,gc,gf,order)
 !!$  call flush(6)
 !!$  call sleep(8-mype)
 !!$  stop
+#ifdef HAVE_PETSC
+  call PetscLogEventEnd(events(3),ierr)
+#endif
 
   return
 end subroutine Restrict
@@ -407,6 +411,7 @@ subroutine Prolong_2(ux,uxC,gf,gc)
 #ifndef TWO_D
 #ifdef HAVE_PETSC
   flops = 106*gc%imax*gc%jmax*gc%kmax
+  call PetscLogEventBegin(events(5),ierr)
   call PetscLogFlops(flops,ierr)
 #endif
 #endif
@@ -628,7 +633,9 @@ subroutine Prolong_2(ux,uxC,gf,gc)
         enddo
      enddo
   enddo
-
+#ifdef HAVE_PETSC
+  call PetscLogEventEnd(events(5),ierr)
+#endif
   call SetBCs(ux,gf)
 
   return
@@ -651,10 +658,9 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
   double precision:: dzi2
 #endif
 #ifndef TWO_D
-#ifdef HAVE_PETSC
-  flops = 13*g%imax*g%jmax*g%kmax
-  call PetscLogFlops(flops,ierr)
-#endif
+
+  flops = 13*g%imax*g%jmax*g%kmax/2 ! R/B
+
 #endif
   dxi2=1.d0/g%dxg**2
   dyi2=1.d0/g%dyg**2
@@ -664,6 +670,10 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
   do m=1,nits
      ! red/black
      do rbi = 0,1
+#ifdef HAVE_PETSC
+        call PetscLogEventBegin(events(2),ierr)
+        call PetscLogFlops(flops,ierr)
+#endif 
         do kk=1,g%kmax
            do jj=1,g%jmax
               offi = mod(g%iglobalx+jj+g%iglobaly+kk+g%iglobalz-1+rbi,2)+1
@@ -683,7 +693,10 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
                  phi(ii,jj,kk,1) = numer/deno
               enddo       ! ii
            enddo          ! jj
-        enddo             ! kk        
+        enddo             ! kk
+#ifdef HAVE_PETSC
+        call PetscLogEventEnd(events(2),ierr)
+#endif
         call SetBCs(phi,g)
      enddo                ! r/b i
   enddo                   ! iters
@@ -693,7 +706,7 @@ end subroutine GSRB_const_Lap
 !-----------------------------------------------------------------------
 subroutine Apply_const_Lap(uxo,ux,g)
   use GridModule
-  use mpistuff, only:mype,ierr,flops
+  use mpistuff
   use domain, only:verbose
   implicit none
   type(proc_patch):: g
@@ -712,6 +725,7 @@ subroutine Apply_const_Lap(uxo,ux,g)
 #ifndef TWO_D
 #ifdef HAVE_PETSC
   flops = 13*g%imax*g%jmax*g%kmax
+  call PetscLogEventBegin(events(4),ierr)
   call PetscLogFlops(flops,ierr)
 #endif
 #endif
@@ -737,9 +751,13 @@ subroutine Apply_const_Lap(uxo,ux,g)
         enddo               ! ii
      enddo                  ! jj
   enddo                     ! kk
-
+#ifdef HAVE_PETSC
+  call PetscLogEventEnd(events(4),ierr)
+#endif
   call SetBCs(uxo,g)
+
   if (verbose.gt.2) then
      tk = norm(uxo,g,2); if(mype==0)write(6,'(A,E14.6)')'        Apply_const_Lap: done |u|=',tk
   end if
+  return
 end subroutine Apply_const_Lap

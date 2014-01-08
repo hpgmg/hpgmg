@@ -10,7 +10,9 @@ subroutine SetBCs(ux,g)
   type(proc_patch),intent(in) :: g
   double precision:: ux(g%ilo:g%ihi,g%jlo:g%jhi,&
        g%klo:g%khi,nvar)
-
+#ifdef HAVE_PETSC
+  call PetscLogEventBegin(events(6),ierr)
+#endif
   call SetXBC(ux,g)
   call XExchange(ux,g)
   call SetYBC(ux,g)
@@ -18,6 +20,9 @@ subroutine SetBCs(ux,g)
 #ifndef TWO_D
   call SetZBC(ux,g)
   call ZExchange(ux,g)
+#endif
+#ifdef HAVE_PETSC
+  call PetscLogEventEnd(events(6),ierr)
 #endif
   return
 end subroutine SetBCs

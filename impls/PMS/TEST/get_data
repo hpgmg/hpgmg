@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# convergance data
+#
+for file in $( ls Convergence.Fcycle.*.256N.*.history ); do
+    /bin/rm -f errors_F_256N
+    grep ^"      1" $file | awk '{print $4 " " $5}' > errors_F_256N
+done
+
+for file in $( ls Convergence.Fcycle*.032N.*.history ); do
+    /bin/rm -f errors_F_032N
+    grep ^"      1" $file | awk '{print $4 " " $5}' > errors_F_032N
+done
+
+/bin/rm -f errors_V_256N
+for file in $( ls Run.Vcycles.*.history ); do
+    grep ^"      1" $file | awk '{print $2 " " $4}' >> errors_V_256N
+done
+#
+# timing data
+#
+/bin/rm -f times_F_256N
+for file in $( ls out_Fcycle_*_nx256_1solves ); do
+    grep "HPGMG solve" $file | awk '{print $5}' >> times_F_256N
+done
+/bin/rm -f times_F_032N
+for file in $( ls out_Fcycle_*_nx032_512solves ); do
+    grep "HPGMG solve" $file | awk '{print $5}' >> times_F_032N
+done
+/bin/rm -f times_V_256N
+for file in $( ls out_Vcycles_*_nx256_1solves ); do
+    grep "HPGMG solve" $file | awk '{print $5}' >> times_V_256N
+done

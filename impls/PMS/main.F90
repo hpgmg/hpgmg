@@ -117,7 +117,7 @@ end subroutine go
 !-----------------------------------------------------------------
 subroutine driver(grids)
   use iounits
-  use mpistuff !, only:mype,solve_event,ierr
+  use mpistuff 
   use domain
   use GridModule
   use error_data_module
@@ -125,9 +125,9 @@ subroutine driver(grids)
   !
   type(proc_patch)::grids(0:dom_max_grids-1)
   !
-  integer:: isolve,maxiter,ii,coarsest_grid,nViters
+  integer:: isolve,ii,coarsest_grid,nViters,kk
   !integer:: output_flag, binary_flag
-  integer,parameter:: dummy_size=1 ! cache flush array size
+  integer,parameter:: dummy_size=1024*1024 ! cache flush array size
   double precision:: dummy(dummy_size),res0,rateu,rategrad
   type(error_data)::errors(0:dom_max_grids-1+nvcycles)
   external Apply_const_Lap
@@ -136,68 +136,77 @@ subroutine driver(grids)
 #ifdef HAVE_PETSC
 
   call PetscInitialize(PETSC_NULL_CHARACTER,ierr)
-  call PetscLogEventRegister('HPGMG solve', 0, solve_event, ierr)
+  call PetscLogEventRegister('HPGMG solve', 0, events(1), ierr)
+  call PetscLogEventRegister('HPGMG   smooth', 0, events(2), ierr)
+  call PetscLogEventRegister('HPGMG   restrict', 0, events(3), ierr)
+  call PetscLogEventRegister('HPGMG   apply', 0, events(4), ierr)
+  call PetscLogEventRegister('HPGMG   prolong', 0, events(5), ierr)
+  call PetscLogEventRegister('HPGMG   BC & exch', 0, events(6), ierr)
+  call PetscLogEventRegister('HPGMG   form u,..', 0, events(7), ierr)
+  call PetscLogEventRegister('HPGMG   other', 0, events(8), ierr)
 #endif
   !output_flag=0 ! parameter
   !binary_flag=1
-  maxiter = 10 ! parameter
   call mpi_barrier(mpi_comm_world,ierr)
-  do isolve=1,maxiter
-     ! flush cache
-     do ii=1,dummy_size
-        dummy(ii) = 1.235d3
-     end do
-
-#ifdef HAVE_PETSC
-     call PetscLogEventBegin(solve_event,ierr)
-#endif
-     select case (problemType)
-     case(0)
-        call solve(grids,Apply_const_Lap,Apply_const_Lap,GSRB_const_Lap,res0,errors,nViters)
-     case(1)
-        if(mype==0) write(6,*) 'problemType 1 not implemented -- todo'
-     end select
-#ifdef HAVE_PETSC
-     call PetscLogEventEnd(solve_event,ierr)
-#endif
-
-     ! output run data and convergance data
-     if(mype==0) then
-        coarsest_grid = 0
-        if (verbose .gt.1) write(6,*)'output: g(0).istop=',is_top(grids(0)),&
-             'nfcycles=',nfcycles
-        if (nfcycles .ne. 0 .and. .not. is_top(grids(0)) ) then
-           do ii=1,dom_max_grids-1
-              ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
-              rateu = errors(ii-1)%uerror/errors(ii)%uerror
-              rategrad = errors(ii-1)%graduerr/errors(ii)%graduerr
-              if (verbose .gt.1) write(6,'(I5,A8,I2,A20,E14.6,A10,E14.6)') isolve,&
-                   ': level ',ii, ': converg order u=', &
-                   log(rateu)*log2r,', grad(u)=',log(rategrad)*log2r
-              write(iconv,900) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(ii)%uerror,&
-                   errors(ii)%graduerr,errors(ii)%resid
-                            
-              if( is_top(grids(ii)) ) then 
-                 coarsest_grid = ii
-                 exit ! grids and errors are in reverse order - this is just a counter
-              end if
-           end do
-        end if
-        
-        do ii=coarsest_grid,coarsest_grid+nViters-1 ! i is zero bases for 'errors'
-           if (verbose.gt.2) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: level',&
-                ii, ': error=',errors(ii)%uerror,&
-                ': resid=',errors(ii)%resid
-           write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,errors(ii)%graduerr,&
-                errors(ii)%resid
+  do kk=1,2
+     do isolve=1,num_solves
+        ! flush cache
+        do ii=1,dummy_size
+           dummy(ii) = 1.235d3
         end do
-
-        ! general output
-        ii = nfcycles*(coarsest_grid+1) + nViters - 1
-        if (verbose.gt.1) write(6,888) 'solve ',isolve,' done |r|/|f|=',errors(ii)%resid/res0
-        write(irun,700) isolve,errors(ii)%uerror,errors(ii)%graduerr,errors(ii)%resid/res0
-     endif
-  enddo
+#ifdef HAVE_PETSC
+        if (kk==2) call PetscLogEventBegin(events(1),ierr)
+#endif
+        select case (problemType)
+        case(0)
+           call solve(grids,Apply_const_Lap,Apply_const_Lap,GSRB_const_Lap,res0,errors,nViters)
+        case(1)
+           if(mype==0) write(6,*) 'problemType 1 not implemented -- todo'
+        end select
+#ifdef HAVE_PETSC
+        if (kk==2) call PetscLogEventEnd(events(1),ierr)
+#endif
+        if (kk==1) exit ! just do one solve to page everything in
+        ! output run data and convergance data
+        if(mype==0) then
+           coarsest_grid = 0
+           if (verbose .gt.1) write(6,*)'output: g(0).istop=',is_top(grids(0)),&
+                'nfcycles=',nfcycles
+           if (nfcycles .ne. 0 .and. .not. is_top(grids(0)) ) then
+              write(iconv,900) isolve,-1.d0,-1.d0,errors(0)%uerror,&
+                   errors(0)%graduerr,errors(0)%resid
+              do ii=1,dom_max_grids-1
+                 ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
+                 rateu = errors(ii-1)%uerror/errors(ii)%uerror
+                 rategrad = errors(ii-1)%graduerr/errors(ii)%graduerr
+                 if (verbose .gt.1) write(6,'(I5,A8,I2,A20,E14.6,A10,E14.6)') isolve,&
+                      ': level ',ii, ': converg order u=', &
+                      log(rateu)*log2r,', grad(u)=',log(rategrad)*log2r
+                 write(iconv,900) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(ii)%uerror,&
+                      errors(ii)%graduerr,errors(ii)%resid
+                 
+                 if( is_top(grids(ii)) ) then 
+                    coarsest_grid = ii
+                    exit ! grids and errors are in reverse order - this is just a counter
+                 end if
+              end do
+           end if
+ 
+           do ii=coarsest_grid,coarsest_grid+nViters-1 ! i is zero bases for 'errors'
+              if (verbose.gt.2) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: level',&
+                   ii, ': error=',errors(ii)%uerror,&
+                   ': resid=',errors(ii)%resid
+              write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,errors(ii)%graduerr,&
+                   errors(ii)%resid
+           end do
+           
+           ! general output
+           ii = nfcycles*(coarsest_grid+1) + nViters - 1
+           if (verbose.gt.1) write(6,888) 'solve ',isolve,' done |r|/|f|=',errors(ii)%resid/res0
+           write(irun,700) isolve,errors(ii)%uerror,errors(ii)%graduerr,errors(ii)%resid/res0
+        endif
+     enddo
+  end do
 700 format (I7,6x,E14.6,E14.6,3x,E14.6)
 900 format (I7,5x,E14.6,E14.6,3x,E14.6,E14.6,E14.6,E14.6)
 901 format (A,I5,5x,E14.6,E14.6,3x,E14.6,E14.6,E14.6,E14.6)
@@ -231,10 +240,10 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
   integer,intent(in) :: nprocs
   !       
   CHARACTER(LEN=256) :: LINE
-  CHARACTER(LEN=10)  :: CMD,CMD2
+  CHARACTER(LEN=32)  :: CMD,CMD2
   INTEGER            :: NARG,IARG,fact,nsmooths
   integer*8 :: ti
-  integer, parameter :: nargs=18
+  integer, parameter :: nargs=19
   double precision t2,t1,iarray(nargs)
   !       default input args: ?local, n?, ?procs
   nprocx=-1
@@ -253,13 +262,14 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
   ! solver parameters
   nvcycles = 0 ! pure FMG
   nfcycles = 1 ! pure FMG
-  rtol = 1.d-10
+  rtol = 1.d-6    ! only used for V-cycles
   ncycles = 1     ! v-cycles or w-cycles
   nfmgvcycles = 1 ! no interface for this (always 1)
   nsmooths = 2
-  verbose = 0
+  verbose = 1
   bot_min_size = 2 ! min size for bottom solver (grad get messed up with 1)
   mg_min_size = 8  ! or 16 ...
+  num_solves = 1
   ! read in args
   if( mype==0 ) then
      NARG = COMMAND_ARGUMENT_COUNT()
@@ -290,6 +300,7 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
         if( CMD == '-ncycle' )  READ (CMD2, '(I10)') ncycles
 
         if( CMD == '-verbose' )  READ (CMD2, '(I10)') verbose
+        if( CMD == '-num_solves' )  READ (CMD2, '(I10)') num_solves
      END DO
 #ifdef TWO_D
      nz = 1; nzlocal = 1; nprocz = 1;
@@ -318,6 +329,8 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
 
      iarray(17) = bot_min_size
      iarray(18) = mg_min_size
+     
+     iarray(19) = num_solves
 
      call MPI_Bcast(iarray,nargs,MPI_DOUBLE_PRECISION, 0, &
           mpi_comm_world, ierr)
@@ -348,6 +361,8 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
 
      bot_min_size  = int(iarray(17))
      mg_min_size   = int(iarray(18))
+
+     num_solves = int(iarray(19))
   endif
   if (nfcycles .ne. 0) nfcycles = 1 ! only valid 0,1
   if (nvcycles .lt. 0) nvcycles = 0 ! only valid 0,1
@@ -453,6 +468,7 @@ end subroutine get_params
 !-----------------------------------------------------------------------
 subroutine formExactU(exact,g)
   use GridModule
+  use mpistuff
   use domain
   implicit none
   type(proc_patch),intent(in):: g
@@ -461,7 +477,9 @@ subroutine formExactU(exact,g)
   integer:: ii,jj,kk
   integer:: ig,jg,kg
   double precision::coord(3),x2(3),a(3),b(3)
-
+#ifdef HAVE_PETSC
+  call PetscLogEventBegin(events(7),ierr)
+#endif
   ig = g%iglobalx
   jg = g%iglobaly
   kg = g%iglobalz
@@ -490,12 +508,16 @@ subroutine formExactU(exact,g)
      exact = 0.d0  
      print *,'**************** formExact not done for proble type 1: todo'
   end select
-  call SetBCs(exact,g)
+#ifdef HAVE_PETSC
+  call PetscLogEventEnd(events(7),ierr)
+#endif
+  !call SetBCs(exact,g)
 end subroutine formExactU
 !-----------------------------------------------------------------------
 subroutine formGradError(exactu,ux,g,gerr,order)
   use GridModule
   use domain
+  use mpistuff
   implicit none
   type(proc_patch),intent(in):: g
   double precision,intent(in)::exactu(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar) 
@@ -507,7 +529,9 @@ subroutine formGradError(exactu,ux,g,gerr,order)
   double precision::grad1(3),grad2(3)
   double precision::gradError(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar)
   double precision norm
-
+#ifdef HAVE_PETSC
+  call PetscLogEventBegin(events(7),ierr)
+#endif
   select case (problemType)
   case(0)
      do kk=1,g%kmax
@@ -534,11 +558,15 @@ subroutine formGradError(exactu,ux,g,gerr,order)
      gerr = 0.d0  
      print *,'**************** formGradError not done for proble type 1: todo'
   end select
+#ifdef HAVE_PETSC
+  call PetscLogEventEnd(events(7),ierr)
+#endif
 end subroutine formGradError
 !-----------------------------------------------------------------------
 subroutine FormRHS(rhs,g)
   use GridModule
   use domain
+  use mpistuff
   implicit none
   type(proc_patch),intent(in):: g
   double precision,intent(out)::rhs(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar)
@@ -546,7 +574,9 @@ subroutine FormRHS(rhs,g)
   integer:: ii,jj,kk
   integer:: ig,jg,kg
   double precision::coord(3),x2(3),a(3),b(3)
- 
+#ifdef HAVE_PETSC
+  call PetscLogEventBegin(events(7),ierr)
+#endif 
   ig = g%iglobalx
   jg = g%iglobaly
   kg = g%iglobalz
@@ -610,7 +640,9 @@ subroutine FormRHS(rhs,g)
      stop 'FormRHS not impl -- todo'
 
   end select
-  rhs(g%ilo,g%jlo,g%klo,1) = 1.d0
+#ifdef HAVE_PETSC
+  call PetscLogEventEnd(events(7),ierr)
+#endif
   return
 end subroutine FormRHS
 !-----------------------------------------------------------------

@@ -23,6 +23,7 @@ module domain
   integer:: ncoarsesolveits
   ! general
   integer:: verbose 
+  integer:: num_solves
 end module domain
 !-----------------------------------------------------------------------
 module iounits
@@ -45,7 +46,7 @@ module mpistuff
 #include "finclude/petsclogdef.h"  
   use petsc
   double precision :: flops
-  integer :: solve_event
+  integer :: events(10)
 #else
   include "mpif.h"
 #endif

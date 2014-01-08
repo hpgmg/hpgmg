@@ -14,10 +14,13 @@ include ${PETSC_DIR}/conf/rules
 
 #.SUFFIXES: .o .F
 
-FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC #-fast
+FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC -fast
 pms: ${OBJ} 
 	-@${FLINKER} -o pms.ex ${OBJ} ${PETSC_SYS_LIB}
-#	-/opt/local/bin/gfortran -o pms.ex ${OBJ}
+#	${RM} ${OBJ}	
+
+edison: ${OBJ} 
+	-@${FLINKER} -o pms.edison.ex ${OBJ} ${PETSC_SYS_LIB}
 #	${RM} ${OBJ}	
 
 #$(OBJ): modules.o

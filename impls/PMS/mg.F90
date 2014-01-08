@@ -26,7 +26,8 @@ subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
   !call Apply2(L2u_f,ux,g(0)) ! ux==0 
   call formRHS(rhs,g(0))
   Res0 = norm(rhs,g(0),2)
-  if(mype==0.and.verbose.gt.0)write(6,'(A,E14.6)') '0) solve: |f|=',Res0
+  if(mype==0.and.verbose.gt.0)write(6,'(A,E14.6,A,I5)') '0) solve: |f|=',&
+       Res0,', nx=',g(0)%imax*g(0)%nprocx
   Reslast = Res0
   ! FMG solve
   iter = 0
