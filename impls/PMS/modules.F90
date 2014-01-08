@@ -41,7 +41,6 @@ end module tags
 !-----------------------------------------------------------------------
 module mpistuff
 #ifdef HAVE_PETSC
-! needs # ???
 #include "finclude/petscdef.h" 
 #include "finclude/petsclogdef.h"  
   use petsc

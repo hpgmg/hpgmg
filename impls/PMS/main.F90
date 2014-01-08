@@ -511,7 +511,7 @@ subroutine formExactU(exact,g)
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(7),ierr)
 #endif
-  !call SetBCs(exact,g)
+  call SetBCs(exact,g)
 end subroutine formExactU
 !-----------------------------------------------------------------------
 subroutine formGradError(exactu,ux,g,gerr,order)

@@ -14,13 +14,17 @@ include ${PETSC_DIR}/conf/rules
 
 #.SUFFIXES: .o .F
 
-FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC -fast
+FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC
 pms: ${OBJ} 
-	-@${FLINKER} -o pms.ex ${OBJ} ${PETSC_SYS_LIB}
+	-@${FLINKER} -fast -o pms.ex ${OBJ} ${PETSC_SYS_LIB}
 #	${RM} ${OBJ}	
 
 edison: ${OBJ} 
-	-@${FLINKER} -o pms.edison.ex ${OBJ} ${PETSC_SYS_LIB}
+	-@${FLINKER}  -fast -o pms.edison.ex ${OBJ} ${PETSC_SYS_LIB}
+#	${RM} ${OBJ}	
+
+osx: ${OBJ} 
+	-@${FLINKER} -o pms.ex ${OBJ} ${PETSC_SYS_LIB}
 #	${RM} ${OBJ}	
 
 #$(OBJ): modules.o
@@ -40,8 +44,8 @@ debug:
 val:
 	-@valgrind --dsymutil=yes --leak-check=no --gen-suppressions=yes --num-callers=20 ./pms.ex -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1 -verbose 4
 
-runcray:
-	-@aprun -n 8 ./pms.ex -nxloc 8 -nyloc 64 -nzloc 8 -nvcycles 0 -nfcycles 1
-
 runmpi:
 	-@${MPIEXEC} -n 8 ./pms.ex -verbose 1
+
+runv:
+	-@${MPIEXEC} -n 8 ./pms.ex -verbose 1 -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 10 -nfcycles 0 
