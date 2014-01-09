@@ -649,6 +649,8 @@ subroutine SetBCsNoCorners(ux,g)
 #ifndef TWO_D
   call SetZBC(ux,g)
 #endif
+  ! set incremental tag
+  !msg_tag_inc = mod(msg_tag_inc+1,100)
   !	update z-low boundaries
   ZBUFFSIZE = g%imax*g%jmax*nvar*ng
   XBUFFSIZE = nvar*ng*g%jmax*g%kmax

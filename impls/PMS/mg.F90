@@ -44,6 +44,7 @@ subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
      ! initailize what is done in FMG
      call formRHS(rhs,g(0)) ! form RHS explicity on fine grid for vycycles
      Res = Res0
+     ux=0.d0
   end if
   
   ! find coarsest grid for diagnostics
@@ -107,7 +108,7 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
   double precision,dimension(g(lev)%ilo:g(lev)%ihi,g(lev)%jlo:g(lev)%jhi,&
        g(lev)%klo:g(lev)%khi, nvar)::tmp
 
-  ux = 0.d0 ! everthing uses initial solution except FMG
+  ux=0.d0 ! everthing uses initial solution except FMG
   if( is_top(g(lev)) ) then
      ! the real start of FMG - coarse grid solve
      if (lev.gt.0 .and. is_top(g(lev-1))) stop 'MGF: not coarsest grid'
@@ -133,7 +134,6 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
      do ii=1,jj
         call MGV(ux,rhs,g,lev,Apply1,Relax1)
      enddo
-     if (verbose.gt.1.and.mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev
   end if
 
   ! form errors & convergance measure, recursive so goes from coarse to fine (good)
@@ -519,8 +519,8 @@ subroutine new_grids_private(gg,NProcAxis,iProcAxis,nx,ny,nz,&
      gg(n)%iglobalz = getIglobalz(gg(n))
      
      ! print topology
-     if(mype==0.and.verbose.gt.3) then
-        write(6,*) '[',mype,'] level ',n, ', nxl=',gg(n)%imax, ', nxl=',gg(n)%imax
+     if(mype==0.and.verbose.gt.1) then
+        write(6,*) '[',mype,'] level ',n,', nxl=',gg(n)%imax,'npx=',gg(n)%nprocx
         if (mype==-1) then
            write(6,*) '[',mype,'] ipx=',gg(n)%iprocx, ',ipy=',gg(n)%iprocy,',ipz= ',gg(n)%iprocz
            write(6,*) '[',mype,'] npx=',gg(n)%nprocx, ',npy=',gg(n)%nprocy,',npz=',gg(n)%nprocz

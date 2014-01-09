@@ -232,6 +232,7 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
      nx, ny, nz, nxlocal, nylocal, nzlocal)
   use domain
   use mpistuff
+  !use tags, only:msg_tag_inc
 #ifndef HAVE_COMM_ARGS
   use f2kcli        ! command line args class
 #endif
@@ -270,6 +271,7 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
   bot_min_size = 2 ! min size for bottom solver (grad get messed up with 1)
   mg_min_size = 8  ! or 16 ...
   num_solves = 1
+  !msg_tag_inc = 0 ! better place to initilize this?
   ! read in args
   if( mype==0 ) then
      NARG = COMMAND_ARGUMENT_COUNT()
