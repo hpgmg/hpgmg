@@ -4,12 +4,12 @@
 #
 for file in $( ls Convergence.Fcycle.*.256N.*.history ); do
     /bin/rm -f errors_F_256N
-    grep ^"      1" $file | awk '{print $4 " " $5}' > errors_F_256N
+    grep ^"      1" $file | awk '{print $4 " " $6}' > errors_F_256N
 done
 
 for file in $( ls Convergence.Fcycle*.032N.*.history ); do
     /bin/rm -f errors_F_032N
-    grep ^"      1" $file | awk '{print $4 " " $5}' > errors_F_032N
+    grep ^"      1" $file | awk '{print $4 " " $6}' > errors_F_032N
 done
 
 /bin/rm -f errors_V_256N

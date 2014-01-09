@@ -109,14 +109,14 @@ print(gcf,'-djpeg100','converg_Vcycles_256N')
 figure
 loglog(N_F256(1:mf256),errors_F_256N(:,1),'bs-.'),hold on
 loglog(N_V256(1:mv256),errors_V_256N(:,1),'rx--'),hold on
-legend('1 F-cycle w/ V(2,2), N=256/PE, one solve','V-cycles w/ V(2,2), N=256/PE, rtol=1.^{-8}',1),
+legend('1 F-cycle w/ V(2,2), N=256/PE, one solve','V-cycles w/ V(2,2), N=256/PE, rtol=1.^{-6}',1),
 set(gca,'XTick',N_V256(1:mv256))
 V=axis;
-V(1)=N_V256(1);
-V(2)=N_V256(mv256);
-V(3)=errors_V_256N(mv256)*.9;
-V(4)=errors_V_256N(1)*1.2;
-%axis(V);
+V(1)=N_F256(1);
+V(2)=N_F256(mf256);
+V(3)=errors_F_256N(mf256)*.9;
+V(4)=errors_F_256N(1)*1.2;
+axis(V);
 xlabel('N cells X-Y-Z direction');
 ylabel('|error|_{\inf}')
 title('Error convergence: V-cycles rtol=1.^{-6}, constant coef. Laplacian, u=(x^4-x^2) on (0,1)^3, N=256/PE')

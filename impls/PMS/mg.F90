@@ -183,6 +183,7 @@ recursive subroutine MGV(ux,rhs,g,lev,Apply,Relax)
   end if
   if( is_top(g(lev)) ) then
      call Relax(ux,rhs,g(lev),ncoarsesolveits)
+     tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: coarse u_1=',tt
   else
      !     pre smoothing
      call Relax(ux,rhs,g(lev),nsmoothsdown)
