@@ -42,10 +42,10 @@ debug:
 	-@/usr/bin/gdb --args ./pms.ex -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1 -verbose 4
 
 val:
-	-@valgrind --dsymutil=yes --leak-check=no --gen-suppressions=yes --num-callers=20 ./pms.ex -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1 -verbose 4
+	-@${MPIEXEC} -n 8 valgrind --dsymutil=yes --leak-check=yes --gen-suppressions=yes --num-callers=20 ./pms.ex -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1 -verbose 2
 
 runmpi:
 	-@${MPIEXEC} -n 8 ./pms.ex -verbose 1
 
 runv:
-	-@${MPIEXEC} -n 8 ./pms.ex -verbose 1 -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 10 -nfcycles 0 
+	-@${MPIEXEC} -n 64 ./pms.ex -verbose 1 -nxloc 16 -nyloc 16 -nzloc 16 -nvcycles 10 -nfcycles 0 

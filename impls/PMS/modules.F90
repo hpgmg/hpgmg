@@ -33,10 +33,11 @@ module iounits
 end module iounits
 !-----------------------------------------------------------------------
 module tags
-  integer,parameter:: MSG_XCH_XLOW_TAG=1,MSG_XCH_XHI_TAG=2
-  integer,parameter:: MSG_XCH_YLOW_TAG=3,MSG_XCH_YHI_TAG=4
-  integer,parameter:: MSG_XCH_ZLOW_TAG=5,MSG_XCH_ZHI_TAG=6
-  integer,parameter:: MSG_MAX_TAG=10
+  integer,parameter:: MSG_XCH_XLOW_TAG=100,MSG_XCH_XHI_TAG=200
+  integer,parameter:: MSG_XCH_YLOW_TAG=300,MSG_XCH_YHI_TAG=400
+  integer,parameter:: MSG_XCH_ZLOW_TAG=500,MSG_XCH_ZHI_TAG=600
+  !integer:: msg_tag_inc
+  !integer,parameter:: MSG_MAX_TAG=10
 end module tags
 !-----------------------------------------------------------------------
 module mpistuff
