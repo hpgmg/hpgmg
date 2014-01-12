@@ -14,17 +14,17 @@ include ${PETSC_DIR}/conf/rules
 
 #.SUFFIXES: .o .F
 
-FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC
+FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC 
 pms: ${OBJ} 
-	-@${FLINKER} -fast -o pms.ex ${OBJ} ${PETSC_SYS_LIB}
+	-@${FLINKER} -o pms.ex ${OBJ} ${PETSC_SYS_LIB}
 	${RM} ${OBJ}	
 
 edison: ${OBJ} 
-	-@${FLINKER}  -fast -o pms.edison.ex ${OBJ} ${PETSC_SYS_LIB}
+	-@${FLINKER}  -o pms.edison.ex ${OBJ} ${PETSC_SYS_LIB}
 	${RM} ${OBJ}	
 
 hopper: ${OBJ} 
-	-@${FLINKER}  -fast -o pms.hopper.ex ${OBJ} ${PETSC_SYS_LIB}
+	-@${FLINKER}  -o pms.hopper.ex ${OBJ} ${PETSC_SYS_LIB}
 	${RM} ${OBJ}	
 
 osx: ${OBJ} 
