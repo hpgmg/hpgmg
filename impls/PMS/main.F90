@@ -179,8 +179,8 @@ subroutine driver(grids)
                  ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
                  rateu = errors(ii-1)%uerror/errors(ii)%uerror
                  rategrad = errors(ii-1)%graduerr/errors(ii)%graduerr
-                 if (verbose .gt.1) write(6,'(I5,A8,I2,A20,E14.6,A10,E14.6)') isolve,&
-                      ': level ',ii, ': converg order u=', &
+                 if (verbose .gt.0) write(6,'(A,I2,A,E14.6,A,E14.6)') &
+                      'driver: level ',ii, ': converg order u=', &
                       log(rateu)*log2r,', grad(u)=',log(rategrad)*log2r
                  write(iconv,900) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(ii)%uerror,&
                       errors(ii)%graduerr,errors(ii)%resid
@@ -192,8 +192,9 @@ subroutine driver(grids)
               end do
            end if
  
+           ! print V cycles
            do ii=coarsest_grid,coarsest_grid+nViters-1 ! i is zero bases for 'errors'
-              if (verbose.gt.2) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: level',&
+              if (verbose.gt.0) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: V cycle',&
                    ii, ': error=',errors(ii)%uerror,&
                    ': resid=',errors(ii)%resid
               write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,errors(ii)%graduerr,&
@@ -263,7 +264,7 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
   ! solver parameters
   nvcycles = 0 ! pure FMG
   nfcycles = 1 ! pure FMG
-  rtol = 1.d-6    ! only used for V-cycles
+  rtol = 1.d-5    ! only used for V-cycles
   ncycles = 1     ! v-cycles or w-cycles
   nfmgvcycles = 1 ! no interface for this (always 1)
   nsmooths = 2
@@ -374,7 +375,7 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
   ncoarsesolveits = bot_min_size*bot_min_size
 
   ! get ijk procs
-  t1=nprocs
+  t1 = nprocs
 #ifdef TWO_D
   nprocz = 1
   nz = 1
@@ -400,7 +401,7 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
              'nprocy=',nprocy,'nprocz=',nprocz,'nprocs=',nprocs
         stop
      endif
-  else
+  else (nprocy == -1) then
      nprocy=t1/nprocx
      if(nprocy<1)stop'too many nprocx???'
      fact = nprocx/nprocy
@@ -414,13 +415,13 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
 #else
   if (nprocx == -1) then
      t1 = nprocs
-     if(nprocs==1) then
+     if(nprocs==1) then ! one proc
         nprocx = 1; nprocy = 1; nprocz = 1;
-     elseif(nx==ny .and. ny==nz)then
+     elseif(nx==ny .and. ny==nz)then ! square
         nprocx = floor(t1**.3333333334d0)
         nprocy = nprocx
         nprocz = nprocs/(nprocx*nprocy)
-     elseif(nz==ny)then
+     elseif(nz==ny)then ! z==y
         t1 = ny*nprocs; t2 = nx; t1 = t1/t2 
         nprocy = floor(t1**.333333334d0)
         nprocz = nprocy

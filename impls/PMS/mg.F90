@@ -26,8 +26,12 @@ subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
   !call Apply2(L2u_f,ux,g(0)) ! ux==0 
   call formRHS(rhs,g(0))
   Res0 = norm(rhs,g(0),2)
-  if(mype==0.and.verbose.gt.0)write(6,'(A,E14.6,A,I5)') '0) solve: |f|=',&
-       Res0,', nx=',g(0)%imax*g(0)%nprocx
+  if(verbose.gt.0) then
+     call formExactU(L2u_f,g(0))
+     Reslast = norm(L2u_f,g(0),2) 
+     if(mype==0) write(6,'(A,E14.6,A,E14.6,A,I5)') '0) solve: |f|_2=',&
+          Res0,', |u_exact|_2=',Reslast,', nx=',g(0)%imax*g(0)%nprocx
+  end if
   Reslast = Res0
   ! FMG solve
   iter = 0
@@ -144,10 +148,11 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
   errors(err_lev)%resid = norm(tmp-rhs,g(lev),2)
  
   if (verbose.gt.0) then
-     if(mype==0)write(6,'(A,I2,A,E14.6,A,E14.6,A,I8,A,I4)') &
+     if(mype==0)write(6,'(A,I2,A,E14.6,A,E14.6,A,I8,I8,I8,A,I4,I4,I4)') &
           '     lev=',lev,') MGF |res|_2=',errors(err_lev)%resid,&
           ', |error|=',errors(err_lev)%uerror,&
-          ', nx=',g(lev)%imax*g(lev)%nprocx,', npe x=',g(lev)%nprocx
+          ', n=',g(lev)%imax*g(lev)%nprocx,g(lev)%jmax*g(lev)%nprocy,g(lev)%kmax*g(lev)%nprocz,&
+          ', npe=',g(lev)%nprocx,g(lev)%nprocy,g(lev)%nprocz
   end if
   
   err_lev = err_lev + 1
@@ -183,7 +188,9 @@ recursive subroutine MGV(ux,rhs,g,lev,Apply,Relax)
   end if
   if( is_top(g(lev)) ) then
      call Relax(ux,rhs,g(lev),ncoarsesolveits)
-     tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: coarse u_1=',tt
+     if (verbose.gt.2) then
+        tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: coarse u_1=',tt
+     end if
   else
      !     pre smoothing
      call Relax(ux,rhs,g(lev),nsmoothsdown)

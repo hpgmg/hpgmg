@@ -96,10 +96,15 @@ contains
     implicit none
     type(proc_patch):: g
     is_top = ( &
-         (g%imax.le.bot_min_size .and. g%nprocx.eq.1) .or. &
-         (g%jmax.le.bot_min_size .and. g%nprocy.eq.1) &
+!!$         (g%imax.le.bot_min_size .and. g%nprocx.eq.1) .or. &
+!!$         (g%jmax.le.bot_min_size .and. g%nprocy.eq.1) &
+!!$#ifndef TWO_D
+!!$         .or. (g%kmax.le.bot_min_size .and. g%nprocz.eq.1) &
+!!$#endif
+         (g%imax.le.bot_min_size) .or. &
+         (g%jmax.le.bot_min_size) &
 #ifndef TWO_D
-         .or. (g%kmax.le.bot_min_size .and. g%nprocz.eq.1) &
+         .or. (g%kmax.le.bot_min_size) &
 #endif
          )
   end function is_top
