@@ -697,8 +697,8 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
 #ifdef HAVE_PETSC
         call PetscLogEventEnd(events(2),ierr)
 #endif
+        call SetBCs(phi,g)
      enddo                ! r/b i
-     call SetBCs(phi,g)
   enddo                   ! iters
 end subroutine GSRB_const_Lap
 
