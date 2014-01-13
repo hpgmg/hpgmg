@@ -46,6 +46,7 @@ module tags
   integer:: MSG_XCH_XLOW_TAG,MSG_XCH_XHI_TAG
   integer:: MSG_XCH_YLOW_TAG,MSG_XCH_YHI_TAG
   integer:: MSG_XCH_ZLOW_TAG,MSG_XCH_ZHI_TAG
+  integer:: MSG_RESTRICT_TAG
 end module tags
 !-----------------------------------------------------------------------
 module mpistuff

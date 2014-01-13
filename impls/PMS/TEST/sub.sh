@@ -1,8 +1,9 @@
 #PBS -q regular
 ##PBS -l mppwidth=49152
 ##PBS -l mppwidth=768
-#PBS -l mppwidth=6144
-#PBS -l walltime=0:30:00
+##PBS -l mppwidth=6144
+#PBS -l mppwidth=768
+#PBS -l walltime=0:15:00
 #PBS -N hpgmg
 #PBS -V 
 #PBS -j eo
@@ -15,66 +16,66 @@ cd $PBS_O_WORKDIR
 #
 # 1 solve, N=256
 #
-aprun -n 32768 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 256 -num_solves 1 >& out_Fcycle_032768_nx256_1solves
+aprun -n 32768 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 256 -num_solves 1 >& out_Fcycle_032768_nx256_1solves
 /bin/mv Convergence.history Convergence.Fcycle.032768cores.256N.1solve.history
 /bin/mv Run.history Run.Fcycle.032768cores.256N.1solve.history
 
-aprun -n 4096 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 256 -num_solves 1 >& out_Fcycle_004096_nx256_1solves
+aprun -n 4096 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 256 -num_solves 1 >& out_Fcycle_004096_nx256_1solves
 /bin/mv Convergence.history Convergence.Fcycle.004096cores.256N.1solve.history
 /bin/mv Run.history Run.Fcycle.004096cores.256N.1solve.history
 
-aprun -n 512 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 256 -num_solves 1 >& out_Fcycle_000512_nx256_1solves
+aprun -n 512 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 256 -num_solves 1 >& out_Fcycle_000512_nx256_1solves
 /bin/mv Convergence.history Convergence.Fcycle.000512cores.256N.1solve.history
 /bin/mv Run.history Run.Fcycle.000512cores.256N.1solve.history
 
-aprun -n 64 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 256 -num_solves 1 >& out_Fcycle_000064_nx256_1solves
+aprun -n 64 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 256 -num_solves 1 >& out_Fcycle_000064_nx256_1solves
 /bin/mv Convergence.history Convergence.Fcycle.000064cores.256N.1solve.history
 /bin/mv Run.history Run.Fcycle.000064cores.256N.1solve.history
 
-aprun -n 8 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 256 -num_solves 1 >& out_Fcycle_000008_nx256_1solves
+aprun -n 8 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 256 -num_solves 1 >& out_Fcycle_000008_nx256_1solves
 /bin/mv Convergence.history Convergence.Fcycle.000008cores.256N.1solve.history
 /bin/mv Run.history Run.Fcycle.000008cores.256N.1solve.history
 #
 # 512 solves, N=32
 #
-aprun -n 32768 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 32 -num_solves 512 >& out_Fcycle_032768_nx032_512solves
+aprun -n 32768 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 32 -num_solves 512 >& out_Fcycle_032768_nx032_512solves
 /bin/mv Convergence.history Convergence.Fcycle.032768cores.032N.512solve.history
 /bin/mv Run.history Run.Fcycle.032768cores.032N.512solve.history
 
-aprun -n 4096 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 32 -num_solves 512 >& out_Fcycle_004096_nx032_512solves
+aprun -n 4096 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 32 -num_solves 512 >& out_Fcycle_004096_nx032_512solves
 /bin/mv Convergence.history Convergence.Fcycle.004096cores.032N.512solve.history
 /bin/mv Run.history Run.Fcycle.004096cores.032N.512solve.history
 
-aprun -n 512 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 32 -num_solves 512 >& out_Fcycle_000512_nx032_512solves
+aprun -n 512 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 32 -num_solves 512 >& out_Fcycle_000512_nx032_512solves
 /bin/mv Convergence.history Convergence.Fcycle.000512cores.032N.512solve.history
 /bin/mv Run.history Run.Fcycle.000512cores.032N.512solve.history
 
-aprun -n 64 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 32 -num_solves 512 >& out_Fcycle_000064_nx032_512solves
+aprun -n 64 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 32 -num_solves 512 >& out_Fcycle_000064_nx032_512solves
 /bin/mv Convergence.history Convergence.Fcycle.000064cores.032N.512solve.history
 /bin/mv Run.history Run.Fcycle.000064cores.032N.512solve.history
 
-aprun -n 8 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 32 -num_solves 512 >& out_Fcycle_000008_nx032_512solves
+aprun -n 8 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 32 -num_solves 512 >& out_Fcycle_000008_nx032_512solves
 /bin/mv Convergence.history Convergence.Fcycle.000008cores.032N.512solve.history
 /bin/mv Run.history Run.Fcycle.000008cores.032N.512solve.history
 #
 # V-cycles, 1 solve, N=256
 #
-aprun -n 32768 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 256 -nvcycles 100 -nfcycles 0 -rtol 1.e-6 -num_solves 1 >& out_Vcycles_032768_nx256_1solves
+aprun -n 32768 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 256 -nvcycles 100 -nfcycles 0 -rtol 1.e-6 -num_solves 1 >& out_Vcycles_032768_nx256_1solves
 /bin/mv Convergence.history Convergence.Vcycles.032768cores.256N.1solve.history
 /bin/mv Run.history Run.Vcycles.032768cores.256N.1solve.history
 
-aprun -n 4096 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 256 -nvcycles 100 -nfcycles 0 -rtol 1.e-6 -num_solves 1 >& out_Vcycles_004096_nx256_1solves
+aprun -n 4096 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 256 -nvcycles 100 -nfcycles 0 -rtol 1.e-6 -num_solves 1 >& out_Vcycles_004096_nx256_1solves
 /bin/mv Convergence.history Convergence.Vcycles.004096cores.256N.1solve.history
 /bin/mv Run.history Run.Vcycles.004096cores.256N.1solve.history
 
-aprun -n 512 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 256 -nvcycles 100 -nfcycles 0 -rtol 1.e-6 -num_solves 1 >& out_Vcycles_000512_nx256_1solves
+aprun -n 512 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 256 -nvcycles 100 -nfcycles 0 -rtol 1.e-6 -num_solves 1 >& out_Vcycles_000512_nx256_1solves
 /bin/mv Convergence.history Convergence.Vcycles.000512cores.256N.1solve.history
 /bin/mv Run.history Run.Vcycles.000512cores.256N.1solve.history
 
-aprun -n 64 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 256 -nvcycles 100 -nfcycles 0 -rtol 1.e-6 -num_solves 1 >& out_Vcycles_000064_nx256_1solves
+aprun -n 64 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 256 -nvcycles 100 -nfcycles 0 -rtol 1.e-6 -num_solves 1 >& out_Vcycles_000064_nx256_1solves
 /bin/mv Convergence.history Convergence.Vcycles.000064cores.256N.1solve.history
 /bin/mv Run.history Run.Vcycles.000064cores.256N.1solve.history
 
-aprun -n 8 -S 4 ../pms.hopper.ex -verbose 1 -nxloc 256 -nvcycles 100 -nfcycles 0 -rtol 1.e-6 -num_solves 1 >& out_Vcycles_000008_nx256_1solves
+aprun -n 8 -S 4 ../pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 256 -nvcycles 100 -nfcycles 0 -rtol 1.e-6 -num_solves 1 >& out_Vcycles_000008_nx256_1solves
 /bin/mv Convergence.history Convergence.Vcycles.000008cores.256N.1solve.history
 /bin/mv Run.history Run.Vcycles.000008cores.256N.1solve.history

@@ -196,13 +196,14 @@ recursive subroutine MGV(ux,rhs,g,lev,Apply,Relax)
      if (verbose.gt.2) then
         tt = norm(Res,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: res^f=',tt
      end if
-     call Restrict(FC,Res,g(lev+1),g(lev),1)
-     !call Restrict2(FC,uxC,Res,ux,uxC,g(lev+1),g(lev),1)
+     call RestrictFuse(g(lev+1),g(lev),FC,uxC,Res,ux,uxC)
+     !call Restrict(g(lev+1),g(lev),FC,Res)
+     !     restrict solution
+     !call Restrict(g(lev+1),g(lev),uxC,ux)
      if (verbose.gt.2) then
         tt = norm(FC,g(lev+1),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: res^c_0=',tt
      end if
-     !     restrict solution
-     call Restrict(uxC,ux,g(lev+1),g(lev),1)
+
      !     rhs = residual + Ac(Uc)
      call Apply(tmpC,uxC,g(lev+1))
      FC = FC + tmpC

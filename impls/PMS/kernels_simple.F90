@@ -79,7 +79,7 @@ double precision function norm(ux,g,type)
   end if
 end function norm
 !-----------------------------------------------------------------------
-subroutine Restrict(uxC,ux,gc,gf,order)
+subroutine Restrict(gc,gf,uxC,ux)
   use GridModule
   use mpistuff
   use tags
@@ -90,7 +90,7 @@ subroutine Restrict(uxC,ux,gc,gf,order)
        gc%klo:gc%khi, nvar)
   double precision,intent(in):: ux(gf%ilo:gf%ihi, gf%jlo:gf%jhi,&
        gf%klo:gf%khi, nvar)
-  integer,intent(in) :: order ! not used in 3D
+  !integer,intent(in) :: order ! not used in 3D
   !     Local vars
 #ifdef TWO_D
   double precision,dimension(gc%imax/2, gc%jmax/2, 1,         nvar)::&
@@ -134,25 +134,24 @@ subroutine Restrict(uxC,ux,gc,gf,order)
      bufsz = (nvar)*(gc%jmax/2)*(gc%imax/2)*(gc%kmax/2)
      lnp = 8
      ckmax2 = gc%kmax/2
-     kst = gc%kmax/2+1      ! (1,1,2)
 #endif
      call MPI_Irecv(rb0,bufsz,MPI_DOUBLE_PRECISION,&
-          0,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(0),ierr)
+          0,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(0),ierr)
      call MPI_Irecv(rb1,bufsz,MPI_DOUBLE_PRECISION,&
-          1,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(1),ierr)
+          1,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(1),ierr)
      call MPI_Irecv(rb2,bufsz,MPI_DOUBLE_PRECISION,&
-          2,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(2),ierr)
+          2,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(2),ierr)
      call MPI_Irecv(rb3,bufsz,MPI_DOUBLE_PRECISION,&
-          3,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(3),ierr)
+          3,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(3),ierr)
 #ifndef TWO_D  
      call MPI_Irecv(rb4,bufsz,MPI_DOUBLE_PRECISION,&
-          4,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(4),ierr)
+          4,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(4),ierr)
      call MPI_Irecv(rb5,bufsz,MPI_DOUBLE_PRECISION,&
-          5,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(5),ierr)
+          5,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(5),ierr)
      call MPI_Irecv(rb6,bufsz,MPI_DOUBLE_PRECISION,&
-          6,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(6),ierr)
+          6,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(6),ierr)
      call MPI_Irecv(rb7,bufsz,MPI_DOUBLE_PRECISION,&
-          7,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(7),ierr)
+          7,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(7),ierr)
 #endif
      !     only one quarter/eighth of coarse vector (all of fine)
      cimax2 = gc%imax/2
@@ -164,7 +163,7 @@ subroutine Restrict(uxC,ux,gc,gf,order)
            do ic=1,cimax2,1
               ii=(ic-1)*2+1
 #ifdef TWO_D
-              if(order==1) then
+              if(.true.) then
                  sb(ic,jc,kc,:)=.25d0*(&
                       ux(ii,jj,kk,:)+ux(ii+1,jj,kk,:)&
                       +ux(ii+1,jj+1,kk,:)+ux(ii,jj+1,kk,:))
@@ -182,7 +181,7 @@ subroutine Restrict(uxC,ux,gc,gf,order)
                       +ux(ii-1,jj+2,kk,:) + ux(ii+2,jj+2,kk,:))
               endif
 #else 
-              if(order==1) then
+              if(.true.) then
                  sb(ic,jc,kc,:)=.125d0*(&
                        ux(ii,  jj,  kk,  :)+ux(ii+1,jj,  kk,  :)&
                       +ux(ii+1,jj+1,kk,  :)+ux(ii,  jj+1,kk,  :)&
@@ -198,9 +197,9 @@ subroutine Restrict(uxC,ux,gc,gf,order)
      ! send to my cohort & me
      do pp=0,lnp-1            
         call MPI_Isend(sb,bufsz,MPI_DOUBLE_PRECISION,pp,&
-             MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_send(pp),ierr)
+             MSG_RESTRICT_TAG,gc%loc_comm,msg_id_send(pp),ierr)
      enddo
-     
+     MSG_RESTRICT_TAG = MSG_RESTRICT_TAG + 1
      !     0    recv (includes self recv)  (1,1[,1])
      call MPI_Wait(msg_id_recv(0), status, ierr)
      do kc=1,ckmax2,1
@@ -221,6 +220,7 @@ subroutine Restrict(uxC,ux,gc,gf,order)
         jj = jj + 1
      enddo
 #else 
+     kst = gc%kmax/2+1      
      kk = 1
      do kc=kst,gc%kmax,1    ! (1,1,2)
         do jc=1,cjmax2,1
@@ -341,7 +341,7 @@ subroutine Restrict(uxC,ux,gc,gf,order)
            do ic=1,gc%imax,1
               ii=(ic-1)*2+1
 #ifdef TWO_D
-              if(order==1)then
+              if(.true.)then
                  uxC(ic,jc,kc,:)=.25D0*(&
                       ux(ii,jj,kc,:)+ux(ii,jj+1,kc,:)&
                       +ux(ii+1,jj,kc,:)+ux(ii+1,jj+1,kc,:))
@@ -394,7 +394,7 @@ end subroutine Restrict
 !-----------------------------------------------------------------------
 ! Restrict2: fuse two restricts.  Only do BCs on 2nd!
 !-----------------------------------------------------------------------
-subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
+subroutine RestrictFuse(gc,gf,uC,uC2,ux,ux2)
   use GridModule
   use mpistuff
   use tags
@@ -409,7 +409,7 @@ subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
        gc%klo:gc%khi, nvar)
   double precision,intent(out):: uC2(gc%ilo:gc%ihi, gc%jlo:gc%jhi,& 
        gc%klo:gc%khi, nvar)
-  integer,intent(in) :: order ! not used in 3D
+  !integer,intent(in) :: order ! not used in 3D
   !     Local vars
 #ifdef TWO_D
   double precision,dimension(gc%imax/2,gc%jmax/2,1,2*nvar)::&
@@ -418,12 +418,12 @@ subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
   double precision,dimension(gc%imax/2,gc%jmax/2,gc%kmax/2,2*nvar)::&
        sb,rb0,rb1,rb2,rb3,rb4,rb5,rb6,rb7
 #endif
-  double precision :: a11,a22,a33,a44
+  double precision :: a11,a22,a33,a44,tmp
   integer:: ic,jc,kc,cimax2,ckmax2,cjmax2,pp,lnp
   integer:: msg_id_recv(0:7),bufsz,msg_id_send(0:7)
   integer:: ii,jj,kk,ist,jst,kst
   
-  if (mg_ref_ratio .ne. 2) stop 'Restrict not done for refratio != 2'
+  if (mg_ref_ratio .ne. 2) stop 'Restrict2 not done for refratio != 2'
 
 #ifdef HAVE_PETSC
   flops = 2*2*gf%imax*gf%jmax*gf%kmax
@@ -441,7 +441,6 @@ subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
   a33 = 3.d0/64.d0/4.d0
   a44 = 1.d0/64.d0/4.d0 ! not used
 #endif
-  
   if(gf%imax == gc%imax)then ! split grid
      ist = gc%imax/2+1
      jst = gc%jmax/2+1
@@ -453,25 +452,24 @@ subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
      bufsz = 2*nvar*(gc%jmax/2)*(gc%imax/2)*(gc%kmax/2)
      lnp = 8
      ckmax2 = gc%kmax/2
-     kst = gc%kmax/2+1      ! (1,1,2)
 #endif
      call MPI_Irecv(rb0,bufsz,MPI_DOUBLE_PRECISION,&
-          0,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(0),ierr)
+          0,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(0),ierr)
      call MPI_Irecv(rb1,bufsz,MPI_DOUBLE_PRECISION,&
-          1,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(1),ierr)
+          1,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(1),ierr)
      call MPI_Irecv(rb2,bufsz,MPI_DOUBLE_PRECISION,&
-          2,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(2),ierr)
+          2,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(2),ierr)
      call MPI_Irecv(rb3,bufsz,MPI_DOUBLE_PRECISION,&
-          3,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(3),ierr)
+          3,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(3),ierr)
 #ifndef TWO_D  
      call MPI_Irecv(rb4,bufsz,MPI_DOUBLE_PRECISION,&
-          4,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(4),ierr)
+          4,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(4),ierr)
      call MPI_Irecv(rb5,bufsz,MPI_DOUBLE_PRECISION,&
-          5,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(5),ierr)
+          5,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(5),ierr)
      call MPI_Irecv(rb6,bufsz,MPI_DOUBLE_PRECISION,&
-          6,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(6),ierr)
+          6,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(6),ierr)
      call MPI_Irecv(rb7,bufsz,MPI_DOUBLE_PRECISION,&
-          7,MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_recv(7),ierr)
+          7,MSG_RESTRICT_TAG,gc%loc_comm,msg_id_recv(7),ierr)
 #endif
      !     only one quarter/eighth of coarse vector (all of fine)
      cimax2 = gc%imax/2
@@ -483,13 +481,13 @@ subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
            do ic=1,cimax2,1
               ii=(ic-1)*2+1
 #ifdef TWO_D
-              if(order==1) then
+              if(.true.) then
                  sb(ic,jc,kc,1:nvar)=.25d0*(&
                       ux(ii,jj,kk,:)+ux(ii+1,jj,kk,:)&
                       +ux(ii+1,jj+1,kk,:)+ux(ii,jj+1,kk,:))
                  sb(ic,jc,kc,nvar+1:2*nvar)=.25d0*(&
-                      ux2(ii,jj,kk,:)+ux(ii+1,jj,kk,:)&
-                      +ux(ii+1,jj+1,kk,:)+ux(ii,jj+1,kk,:))
+                      ux2(ii,jj,kk,:)+ux2(ii+1,jj,kk,:)&
+                      +ux2(ii+1,jj+1,kk,:)+ux2(ii,jj+1,kk,:))
               else
                  sb(ic,jc,kc,1:nvar)=a11*(&
                       ux(ii,jj,kk,:)+ux(ii,jj+1,kk,:)&
@@ -515,7 +513,7 @@ subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
                       +ux2(ii-1,jj+2,kk,:) + ux2(ii+2,jj+2,kk,:))
               endif
 #else 
-              if(order==1) then
+              if(.true.) then
                  sb(ic,jc,kc,1:nvar)=.125d0*(&
                        ux(ii,  jj,  kk,  :)+ux(ii+1,jj,  kk,  :)&
                       +ux(ii+1,jj+1,kk,  :)+ux(ii,  jj+1,kk,  :)&
@@ -536,9 +534,9 @@ subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
      ! send to my cohort & me
      do pp=0,lnp-1            
         call MPI_Isend(sb,bufsz,MPI_DOUBLE_PRECISION,pp,&
-             MSG_XCH_XLOW_TAG,gc%loc_comm,msg_id_send(pp),ierr)
+             MSG_RESTRICT_TAG,gc%loc_comm,msg_id_send(pp),ierr)
      enddo
-     
+     MSG_RESTRICT_TAG = MSG_RESTRICT_TAG + 1
      !     0    recv (includes self recv)  (1,1[,1])
      call MPI_Wait(msg_id_recv(0), status, ierr)
      do kc=1,ckmax2,1
@@ -561,6 +559,7 @@ subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
         jj = jj + 1
      enddo
 #else 
+     kst = gc%kmax/2+1      
      kk = 1
      do kc=kst,gc%kmax,1    ! (1,1,2)
         do jc=1,cjmax2,1
@@ -690,7 +689,7 @@ subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
            do ic=1,gc%imax,1
               ii=(ic-1)*2+1
 #ifdef TWO_D
-              if(order==1)then
+              if(.true.)then
                  uC(ic,jc,kc,:)=.25D0*(&
                       ux(ii,jj,kc,:)+ux(ii,jj+1,kc,:)&
                       +ux(ii+1,jj,kc,:)+ux(ii+1,jj+1,kc,:))
@@ -740,16 +739,13 @@ subroutine Restrict2(uC,uC2,ux,ux2,gc,gf,order)
         enddo
      enddo
   endif
-    
   !call SetBCs(uC,gc) ! RHS!
   call SetBCs(uC2,gc)
-
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(3),ierr)
 #endif
-
   return
-end subroutine Restrict2
+end subroutine RestrictFuse
 !-----------------------------------------------------------------------
 subroutine Prolong_2(ux,uxC,gf,gc)
   !  ux = ux + P * uxC
@@ -764,7 +760,6 @@ subroutine Prolong_2(ux,uxC,gf,gc)
   double precision:: &
        ux(gf%ilo:gf%ihi, gf%jlo:gf%jhi, &
        gf%klo:gf%khi, nvar)
-  
   !     Local vars
   integer:: ic,jc,jj,kc,ii,kk,ist,iend,jst,jend,kst,kend,lpe
   double precision :: vv(nvar),a11,a22,a33,a44
@@ -1107,7 +1102,6 @@ subroutine Jacobi_const_Lap(phi,rhs,g,nits)
 
   if (.true.) then
      omega = diagi*4.d0/(3.d0*rhok)
-print *,omega
      do k=0,nits-1
         call Apply_const_Lap(Aux,phi,g)
         phi = phi + omega*(rhs - Aux)

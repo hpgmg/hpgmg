@@ -365,13 +365,13 @@ subroutine get_params(npes, npex, npey, npez, &
   nsmoothsup = nsmooths
   nsmoothsdown = nsmooths
   ncoarsesolveits = bot_min_sz*bot_min_sz
+  MSG_RESTRICT_TAG = 90 ! this goes slower than the exchange
   MSG_XCH_XLOW_TAG=100
   MSG_XCH_XHI_TAG=200
   MSG_XCH_YLOW_TAG=300
   MSG_XCH_YHI_TAG=400
   MSG_XCH_ZLOW_TAG=500
   MSG_XCH_ZHI_TAG=600
-
   ! get ijk pes
   t1 = npes
 #ifdef TWO_D
