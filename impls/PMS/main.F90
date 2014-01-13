@@ -2,13 +2,16 @@
 !       Ravi Samtaney & Mark Adams
 !       Copyright 2014
 !-----------------------------------------------------------------
-program PMS
-  use domain, only:verbose
+program main
+  use GridModule
+  use domain, only:periodic
+  use pms, only:verbose,dom_max_grids,dom_max_sr_grids
   use mpistuff
   implicit none
   integer:: rank,comm3d,ndims
-  integer:: NProcAxis(3),iProcAxis(3),nprocx,nprocy,nprocz,nx,ny,nz,nxlocal,nylocal,nzlocal
-  logical:: periods(3)
+  integer:: NPeAxis(3),iPeAxis(3),npex,npey,npez,nx,ny,nz,nxlocal,nylocal,nzlocal
+  type(pe_patch)::grids(dom_max_grids+dom_max_sr_grids)
+
   ! MPI init - globals
   call MPI_init(ierr)
   call MPI_comm_rank(MPI_COMM_WORLD, mype, ierr)
@@ -49,28 +52,28 @@ program PMS
   endif
 #endif
 
-  ! get fine grid parameters and problem type
-  call get_params(npe, nprocx, nprocy, nprocz, nx, ny, nz, &
+  ! get fine grid parameters, problem type, and global variables
+  call get_params(npe, npex, npey, npez, nx, ny, nz, &
        nxlocal, nylocal, nzlocal)
 
-  ! Initialize the fine grid communicator
+  ! Initialize the fine grid communicator, set periodicity
   ndims = 3
-  NProcAxis(1) = nprocx
-  NProcAxis(2) = nprocy
-  NProcAxis(3) = nprocz
-  periods(1) = .false.
-  periods(2) = .false.
-  periods(3) = .false.
+  NPeAxis(1) = npex
+  NPeAxis(2) = npey
+  NPeAxis(3) = npez
+  periodic(1) = .false.
+  periodic(2) = .false.
+  periodic(3) = .false.
 #ifdef XPERIODIC
-  periods(1) = .true.
+  periodic(1) = .true.
 #endif  
 #ifdef YPERIODIC
-  periods(2) = .true.
+  periodic(2) = .true.
 #endif  
 #ifdef ZPERIODIC
-  periods(3) = .true.
+  periodic(3) = .true.
 #endif
-  call MPI_cart_create(MPI_COMM_WORLD,ndims,NProcAxis,periods,&
+  call MPI_cart_create(MPI_COMM_WORLD,ndims,NPeAxis,periodic,&
        .true.,comm3d,ierr) ! reoder is ignored???
   call MPI_comm_rank(comm3d,rank,ierr) ! new rank?
   if((mype==0.and.verbose.gt.3).or.mype.ne.rank) then
@@ -78,63 +81,46 @@ program PMS
   endif
   mype=rank
 
-  call MPI_Cart_Coords(comm3d,rank,ndims,iProcAxis,ierr)
-  iProcAxis(1) = iProcAxis(1) + 1 ! one based
-  iProcAxis(2) = iProcAxis(2) + 1
-  iProcAxis(3) = iProcAxis(3) + 1
-
-  ! do it
-  call go(NProcAxis, iProcAxis, nx, ny, nz, nxlocal, nylocal, nzlocal, comm3d)
-
-  ! end it
-  call FinalizeIO()
-  call MPI_Finalize(ierr)
-end program PMS
-!-----------------------------------------------------------------
-!  go - sets up grids and calls the main driver
-!-----------------------------------------------------------------
-subroutine go(NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
-  use GridModule
-  use domain, only:dom_max_grids
-  implicit none
-  integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
-  integer :: NProcAxis(3),iProcAxis(3)
-  !
-  type(proc_patch)::grids(0:dom_max_grids-1)
-
+  call MPI_Cart_Coords(comm3d,rank,ndims,iPeAxis,ierr)
+  iPeAxis(1) = iPeAxis(1) + 1 ! one based
+  iPeAxis(2) = iPeAxis(2) + 1
+  iPeAxis(3) = iPeAxis(3) + 1
+  
+  ! run it
   call SetupDomain() ! sets size of domain
-
-  call new_grids(grids,NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
-
+  
+  ! sets global vars
+  call new_grids(grids,NPeAxis,iPeAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
+  
   ! do it 
   call driver(grids)
-
-  call destroy_grids_private(grids,dom_max_grids)
   
-end subroutine go
+  ! end it
+  call destroy_grids_private(grids)
+  call FinalizeIO()
+  call MPI_Finalize(ierr)
+end program MAIN
 !-----------------------------------------------------------------
-!  driver  
+!  driver - the PETSc main
 !-----------------------------------------------------------------
 subroutine driver(grids)
   use iounits
   use mpistuff 
-  use domain
+  use pms
   use GridModule
   use error_data_module
   implicit none
   !
-  type(proc_patch)::grids(0:dom_max_grids-1)
+  type(pe_patch)::grids(-dom_max_sr_grids:dom_max_grids-1)
   !
   integer:: isolve,ii,coarsest_grid,nViters,kk
-  !integer:: output_flag, binary_flag
   integer,parameter:: dummy_size=1024*1024 ! cache flush array size
   double precision:: dummy(dummy_size),res0,rateu,rategrad
-  type(error_data)::errors(0:dom_max_grids-1+nvcycles)
+  type(error_data)::errors(-nsr:ncgrids-1+nvcycles)
   external Apply_const_Lap
   external GSRB_const_Lap
   double precision,parameter:: log2r = 1.d0/log(2.d0);
 #ifdef HAVE_PETSC
-
   call PetscInitialize(PETSC_NULL_CHARACTER,ierr)
   call PetscLogEventRegister('HPGMG solve', 0, events(1), ierr)
   call PetscLogEventRegister('HPGMG   smooth', 0, events(2), ierr)
@@ -145,8 +131,6 @@ subroutine driver(grids)
   call PetscLogEventRegister('HPGMG   form u,..', 0, events(7), ierr)
   call PetscLogEventRegister('HPGMG   other', 0, events(8), ierr)
 #endif
-  !output_flag=0 ! parameter
-  !binary_flag=1
   call mpi_barrier(mpi_comm_world,ierr)
   do kk=1,2
      do isolve=1,num_solves
@@ -212,45 +196,37 @@ subroutine driver(grids)
 900 format (I7,5x,E14.6,E14.6,3x,E14.6,E14.6,E14.6,E14.6)
 901 format (A,I5,5x,E14.6,E14.6,3x,E14.6,E14.6,E14.6,E14.6)
 888 format (A,I5,A,E14.6)
-!!$  if(output_flag.eq.2) then
-!!$     if(binary_flag.nq.0) then
-!!$        if(mype==0) then
-!!$           write(6,*) 'Binary output at',timeStep, ttot
-!!$        endif
-!!$        Call WriteSiloBinaryFileParallel(ux,timeStep)
-!!$     endif
-!!$  endif
 #ifdef HAVE_PETSC
   call PetscFinalize(ierr)
 #endif
-
   return
 end subroutine driver
 !-----------------------------------------------------------------
 ! get command line args, set problemType and fine grid sizes
 !-----------------------------------------------------------------       
-subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
+subroutine get_params(npes, npex, npey, npez, &
      nx, ny, nz, nxlocal, nylocal, nzlocal)
-  use domain
+  use pms
   use mpistuff
+  use tags
   !use tags, only:msg_tag_inc
 #ifndef HAVE_COMM_ARGS
   use f2kcli        ! command line args class
 #endif
   implicit none
-  integer,intent(out) :: nprocx,nprocy,nprocz,nx,ny,nz,nxlocal,nylocal,nzlocal
-  integer,intent(in) :: nprocs
+  integer,intent(out) :: npex,npey,npez,nx,ny,nz,nxlocal,nylocal,nzlocal
+  integer,intent(in) :: npes
   !       
   CHARACTER(LEN=256) :: LINE
   CHARACTER(LEN=32)  :: CMD,CMD2
   INTEGER            :: NARG,IARG,fact,nsmooths
   integer*8 :: ti
-  integer, parameter :: nargs=19
+  integer, parameter :: nargs=22
   double precision t2,t1,iarray(nargs)
-  !       default input args: ?local, n?, ?procs
-  nprocx=-1
-  nprocy=-1
-  nprocz=-1
+  ! default input args: ?local, n?, ?pes
+  npex=-1
+  npey=-1
+  npez=-1
   nx=-1
   ny=-1
   nz=-1
@@ -259,7 +235,7 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
   nzlocal=-1
   !       Problem type 
   !       0: (x^4-x^2)^D - Diri BCs
-  !       1: bubble      - periodic domain
+  !       1: bubble      - periodic domain???
   problemType = 0
   ! solver parameters
   nvcycles = 0 ! pure FMG
@@ -269,9 +245,12 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
   nfmgvcycles = 1 ! no interface for this (always 1)
   nsmooths = 2
   verbose = 1
-  bot_min_size = 2 ! min size for bottom solver (grad get messed up with 1)
-  mg_min_size = 8  ! or 16 ...
+  bot_min_sz = 2 ! min size for bottom solver (grad get messed up with 1)
+  pe_min_sz = 8  ! or 16 ...
   num_solves = 1
+  sr_max_loc_sz = 0 ! no SR by default
+  sr_base_bufsz = 3
+  sr_bufsz_inc = 1
   !msg_tag_inc = 0 ! better place to initilize this?
   ! read in args
   if( mype==0 ) then
@@ -287,12 +266,12 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
         if( CMD == '-nyloc' ) READ (CMD2, '(I10)') nylocal
         if( CMD == '-nzloc' ) READ (CMD2, '(I10)') nzlocal
         
-        if( CMD == '-nxpes' ) READ (CMD2, '(I10)') nprocx
-        if( CMD == '-nypes' ) READ (CMD2, '(I10)') nprocy
-        if( CMD == '-nzpes' ) READ (CMD2, '(I10)') nprocz
+        if( CMD == '-nxpe' ) READ (CMD2, '(I10)') npex
+        if( CMD == '-nype' ) READ (CMD2, '(I10)') npey
+        if( CMD == '-nzpe' ) READ (CMD2, '(I10)') npez
 
-        if( CMD == '-bot_min_size' ) READ (CMD2, '(I10)') bot_min_size
-        if( CMD == '-mg_min_size' ) READ (CMD2, '(I10)') mg_min_size
+        if( CMD == '-bot_min_sz' ) READ (CMD2, '(I10)') bot_min_sz
+        if( CMD == 'pe_min_sz' ) READ (CMD2, '(I10)') pe_min_sz
 
         if( CMD == '-problem' ) READ (CMD2, '(I10)') problemType
 
@@ -304,9 +283,14 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
 
         if( CMD == '-verbose' )  READ (CMD2, '(I10)') verbose
         if( CMD == '-num_solves' )  READ (CMD2, '(I10)') num_solves
+
+        if( CMD == '-sr_max_loc_sz' )  READ (CMD2, '(I10)') sr_max_loc_sz
+
+        if( CMD == '-sr_base_bufsz' )  READ (CMD2, '(I10)') sr_base_bufsz
+        if( CMD == '-sr_bufsz_inc' )  READ (CMD2, '(I10)') sr_bufsz_inc
      END DO
 #ifdef TWO_D
-     nz = 1; nzlocal = 1; nprocz = 1;
+     nz = 1; nzlocal = 1; npez = 1;
 #endif
      iarray(1) = nx
      iarray(2) = ny
@@ -316,9 +300,9 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
      iarray(5) = nylocal
      iarray(6) = nzlocal
      
-     iarray(7) = nprocx
-     iarray(8) = nprocy
-     iarray(9) = nprocz
+     iarray(7) = npex
+     iarray(8) = npey
+     iarray(9) = npez
      
      iarray(10) = problemType
   
@@ -330,10 +314,14 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
 
      iarray(16) = verbose
 
-     iarray(17) = bot_min_size
-     iarray(18) = mg_min_size
+     iarray(17) = bot_min_sz
+     iarray(18) = pe_min_sz
      
      iarray(19) = num_solves
+
+     iarray(20) = sr_max_loc_sz
+     iarray(21) = sr_base_bufsz
+     iarray(22) = sr_bufsz_inc
 
      call MPI_Bcast(iarray,nargs,MPI_DOUBLE_PRECISION, 0, &
           mpi_comm_world, ierr)
@@ -348,9 +336,9 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
      nylocal = int(iarray(5))
      nzlocal = int(iarray(6))
      
-     nprocx = int(iarray(7))
-     nprocy = int(iarray(8))
-     nprocz = int(iarray(9))
+     npex = int(iarray(7))
+     npey = int(iarray(8))
+     npez = int(iarray(9))
      
      problemType = int(iarray(10))
 
@@ -362,25 +350,36 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
 
      verbose  =    int(iarray(16))
 
-     bot_min_size  = int(iarray(17))
-     mg_min_size   = int(iarray(18))
+     bot_min_sz  = int(iarray(17))
+     pe_min_sz   = int(iarray(18))
 
      num_solves = int(iarray(19))
+     
+     sr_max_loc_sz = int(iarray(20))
+     sr_base_bufsz = int(iarray(21))
+     sr_bufsz_inc = int(iarray(22))
   endif
   if (nfcycles .ne. 0) nfcycles = 1 ! only valid 0,1
   if (nvcycles .lt. 0) nvcycles = 0 ! only valid 0,1
   if (nfcycles+nvcycles .le. 0) print *, 'no solver iterations!!!'
+  ! general constructor stuff
   nsmoothsup = nsmooths
   nsmoothsdown = nsmooths
-  ncoarsesolveits = bot_min_size*bot_min_size
+  ncoarsesolveits = bot_min_sz*bot_min_sz
+  MSG_XCH_XLOW_TAG=100
+  MSG_XCH_XHI_TAG=200
+  MSG_XCH_YLOW_TAG=300
+  MSG_XCH_YHI_TAG=400
+  MSG_XCH_ZLOW_TAG=500
+  MSG_XCH_ZHI_TAG=600
 
-  ! get ijk procs
-  t1 = nprocs
+  ! get ijk pes
+  t1 = npes
 #ifdef TWO_D
-  nprocz = 1
+  npez = 1
   nz = 1
   nzlocal = 1
-  if (nprocx == -1) then
+  if (npex == -1) then
      if( abs(dsqrt(t1) - floor(dsqrt(t1))) > 0.d0 ) then
         if(abs(dsqrt(t1/2.d0)-floor(dsqrt(t1/2.d0)))>0.d0)then
            if(abs(dsqrt(t1/4.d0)-floor(dsqrt(t1/4.d0)))>0.d0)then
@@ -394,77 +393,77 @@ subroutine get_params(nprocs, nprocx, nprocy, nprocz, &
      else
         fact=1
      endif
-     nprocx=fact*floor(dsqrt(t1/fact))
-     nprocy=t1/nprocx
-     if (nprocs .ne. nprocz*nprocx*nprocy) then
-        write(6,*) 'INCORRECT NP:', NPROCS,'nprocx=',nprocx,&
-             'nprocy=',nprocy,'nprocz=',nprocz,'nprocs=',nprocs
+     npex=fact*floor(dsqrt(t1/fact))
+     npey=t1/npex
+     if (npes .ne. npez*npex*npey) then
+        write(6,*) 'INCORRECT NP:', NPES,'npex=',npex,&
+             'npey=',npey,'npez=',npez,'npes=',npes
         stop
      endif
-  else (nprocy == -1) then
-     nprocy=t1/nprocx
-     if(nprocy<1)stop'too many nprocx???'
-     fact = nprocx/nprocy
+  else (npey == -1) then
+     npey=t1/npex
+     if(npey<1)stop'too many npex???'
+     fact = npex/npey
      if( fact < 1 ) then
-        write(6,*) 'nprocx must be greater than nprocy', NPROCS,&
-       'nprocx=',nprocx,&
-       'nprocy=',nprocy,'nprocz=',nprocz,'nprocs=',nprocs
+        write(6,*) 'npex must be greater than npey', NPES,&
+       'npex=',npex,&
+       'npey=',npey,'npez=',npez,'npes=',npes
         stop
      endif
   endif
 #else
-  if (nprocx == -1) then
-     t1 = nprocs
-     if(nprocs==1) then ! one proc
-        nprocx = 1; nprocy = 1; nprocz = 1;
+  if (npex == -1) then
+     t1 = npes
+     if(npes==1) then ! one pe
+        npex = 1; npey = 1; npez = 1;
      elseif(nx==ny .and. ny==nz)then ! square
-        nprocx = floor(t1**.3333333334d0)
-        nprocy = nprocx
-        nprocz = nprocs/(nprocx*nprocy)
+        npex = floor(t1**.3333333334d0)
+        npey = npex
+        npez = npes/(npex*npey)
      elseif(nz==ny)then ! z==y
-        t1 = ny*nprocs; t2 = nx; t1 = t1/t2 
-        nprocy = floor(t1**.333333334d0)
-        nprocz = nprocy
-        nprocx = nprocs/(nprocy*nprocz) 
+        t1 = ny*npes; t2 = nx; t1 = t1/t2 
+        npey = floor(t1**.333333334d0)
+        npez = npey
+        npex = npes/(npey*npez) 
      elseif(nz==nx)then
-        t1 = nz*nprocs; t2 = ny; t1 = t1/t2 
-        nprocx = floor(t1**.333333334d0)
-        nprocz = nprocx
-        nprocy = nprocs/(nprocx*nprocz) 
+        t1 = nz*npes; t2 = ny; t1 = t1/t2 
+        npex = floor(t1**.333333334d0)
+        npez = npex
+        npey = npes/(npex*npez) 
      elseif(nx==ny)then
-        t1 = ny*nprocs; t2 = nz; t1 = t1/t2 
-        nprocy = floor(t1**.333333334d0)
-        nprocx = nprocy
-        nprocz = nprocs/(nprocy*nprocx) 
+        t1 = ny*npes; t2 = nz; t1 = t1/t2 
+        npey = floor(t1**.333333334d0)
+        npex = npey
+        npez = npes/(npey*npex) 
      else
-        stop 'need to specify x/y/z proc'
+        stop 'need to specify x/y/z pe'
      endif
   endif
 #endif     
-  if (nprocs .ne. nprocz*nprocx*nprocy) then
-     write(6,*) 'INCORRECT NP: nprocx=',nprocx, &
-          'nprocy=',nprocy,'nprocz=',nprocz,'nprocs=',nprocs
+  if (npes .ne. npez*npex*npey) then
+     write(6,*) 'INCORRECT NP: npex=',npex, &
+          'npey=',npey,'npez=',npez,'npes=',npes
      stop
   endif
   ! x
   if (nxlocal.eq.-1 .and. nx.eq.-1) nxlocal = 64        ! default
-  if (nxlocal.eq.-1 .and. nx.ne.-1) nxlocal = nx/nprocx 
-  if (nxlocal.ne.-1 .and. nx.eq.-1) nx = nxlocal*nprocx 
-  if (nx .ne. nxlocal*nprocx) stop 'nx .ne. nxlocal*nprocx'
+  if (nxlocal.eq.-1 .and. nx.ne.-1) nxlocal = nx/npex 
+  if (nxlocal.ne.-1 .and. nx.eq.-1) nx = nxlocal*npex 
+  if (nx .ne. nxlocal*npex) stop 'nx .ne. nxlocal*npex'
   ! y
   if (nylocal.eq.-1 .and. ny.eq.-1) nylocal = nxlocal   ! default square
-  if (nylocal.eq.-1 .and. ny.ne.-1) nylocal = ny/nprocy 
-  if (nylocal.ne.-1 .and. ny.eq.-1) ny = nylocal*nprocy 
-  if (ny .ne. nylocal*nprocy) stop 'ny .ne. nylocal*nprocy'
+  if (nylocal.eq.-1 .and. ny.ne.-1) nylocal = ny/npey 
+  if (nylocal.ne.-1 .and. ny.eq.-1) ny = nylocal*npey 
+  if (ny .ne. nylocal*npey) stop 'ny .ne. nylocal*npey'
   ! z
   if (nzlocal.eq.-1 .and. nz.eq.-1) nzlocal = nxlocal   ! default square
-  if (nzlocal.eq.-1 .and. nz.ne.-1) nzlocal = nz/nprocz 
-  if (nzlocal.ne.-1 .and. nz.eq.-1) nz = nzlocal*nprocz 
-  if (nz .ne. nzlocal*nprocz) stop 'nz .ne. nzlocal*nprocz'
+  if (nzlocal.eq.-1 .and. nz.ne.-1) nzlocal = nz/npez 
+  if (nzlocal.ne.-1 .and. nz.eq.-1) nz = nzlocal*npez 
+  if (nz .ne. nzlocal*npez) stop 'nz .ne. nzlocal*npez'
   ! print topology
   if(mype==0 .and. verbose .gt. 3) then
      write(6,*) '[',mype,'] nx =',nx,     ',ny= ',ny     ,',nz= ',nz
-     write(6,*) '[',mype,'] npx=',nprocx, ',npy=',nprocy, ',npz=',nprocz
+     write(6,*) '[',mype,'] npx=',npex, ',npy=',npey, ',npz=',npez
      write(6,*) '[',mype,'] nxl=',nxlocal,',nyl=',nylocal,',nzl=',nzlocal
   endif
 end subroutine get_params
@@ -472,9 +471,10 @@ end subroutine get_params
 subroutine formExactU(exact,g)
   use GridModule
   use mpistuff
+  use pms
   use domain
   implicit none
-  type(proc_patch),intent(in):: g
+  type(pe_patch),intent(in):: g
   double precision,intent(out)::exact(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar) 
   !
   integer:: ii,jj,kk
@@ -483,19 +483,20 @@ subroutine formExactU(exact,g)
 #ifdef HAVE_PETSC
   call PetscLogEventBegin(events(7),ierr)
 #endif
-  ig = g%iglobalx
-  jg = g%iglobaly
-  kg = g%iglobalz
-  select case (problemType)
-  case(0)
-     do kk=1,g%kmax
-        do jj=1,g%jmax
-           do ii=1,g%imax
-              coord(1) = xl+(ig+ii-1)*g%dxg-0.5*g%dxg
-              coord(2) = yl+(jg+jj-1)*g%dyg-0.5*g%dyg
+  ig = getIglobalx(g)
+  jg = getIglobaly(g)
+  kg = getIglobalz(g)
+  ! have to do exact by hand - valid region plus ghost
+  do kk=g%kvallo-nsg,g%kvalhi+nsg
+     do jj=g%jvallo-nsg,g%jvalhi+nsg
+        do ii=g%ivallo-nsg,g%ivalhi+nsg
+           coord(1) = xl+(ig+ii-1)*g%dxg-0.5*g%dxg
+           coord(2) = yl+(jg+jj-1)*g%dyg-0.5*g%dyg
 #ifndef TWO_D
-              coord(3) = zl+(kg+kk-1)*g%dzg-0.5*g%dzg
+           coord(3) = zl+(kg+kk-1)*g%dzg-0.5*g%dzg
 #endif
+           select case (problemType)
+           case(0)              
               !write (6,'(A18,E14.6,E14.6,E14.6)') "formExactU: coord=",coord
               x2 = coord*coord
               a = x2*(x2-1.);              
@@ -504,25 +505,24 @@ subroutine formExactU(exact,g)
 #else
               exact(ii,jj,kk,1) = a(1)*a(2)*a(3)
 #endif
-           end do
+           case(1)
+              exact = 0.d0  
+              print *,'**************** formExact not done for proble type 1: todo'
+           end select
         end do
      end do
-  case(1)
-     exact = 0.d0  
-     print *,'**************** formExact not done for proble type 1: todo'
-  end select
+  end do
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(7),ierr)
 #endif
-  call SetBCs(exact,g)
 end subroutine formExactU
 !-----------------------------------------------------------------------
 subroutine formGradError(exactu,ux,g,gerr,order)
   use GridModule
-  use domain
+  use pms
   use mpistuff
   implicit none
-  type(proc_patch),intent(in):: g
+  type(pe_patch),intent(in):: g
   double precision,intent(in)::exactu(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar) 
   double precision,intent(in)::ux    (g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar) 
   double precision,intent(out)::gerr
@@ -535,32 +535,26 @@ subroutine formGradError(exactu,ux,g,gerr,order)
 #ifdef HAVE_PETSC
   call PetscLogEventBegin(events(7),ierr)
 #endif
-  select case (problemType)
-  case(0)
-     do kk=1,g%kmax
-        do jj=1,g%jmax
-           do ii=1,g%imax
-              grad1(1) = 0.5d0*(ux(ii+1,jj,kk,1)-ux(ii-1,jj,kk,1))/g%dxg
-              grad1(2) = 0.5d0*(ux(ii,jj+1,kk,1)-ux(ii,jj-1,kk,1))/g%dyg
-              grad2(1) = 0.5d0*(exactu(ii+1,jj,kk,1)-exactu(ii-1,jj,kk,1))/g%dxg
-              grad2(2) = 0.5d0*(exactu(ii,jj+1,kk,1)-exactu(ii,jj-1,kk,1))/g%dyg
-              
+  do kk=g%kvallo,g%kvalhi
+     do jj=g%jvallo,g%jvalhi
+        do ii=g%ivallo,g%ivalhi
+           grad1(1) = 0.5d0*(ux(ii+1,jj,kk,1)-ux(ii-1,jj,kk,1))/g%dxg
+           grad1(2) = 0.5d0*(ux(ii,jj+1,kk,1)-ux(ii,jj-1,kk,1))/g%dyg
+           grad2(1) = 0.5d0*(exactu(ii+1,jj,kk,1)-exactu(ii-1,jj,kk,1))/g%dxg
+           grad2(2) = 0.5d0*(exactu(ii,jj+1,kk,1)-exactu(ii,jj-1,kk,1))/g%dyg
+           
 #ifndef TWO_D
-              grad1(3) = 0.5d0*(ux(ii,jj,kk+1,1)-ux(ii,jj,kk-1,1))/g%dzg
-              grad2(3) = 0.5d0*(exactu(ii,jj,kk+1,1)-exactu(ii,jj,kk-1,1))/g%dzg
-              gradError(ii,jj,kk,1) = sqrt((grad1(1)-grad2(1))**2 + (grad1(2)-grad2(2))**2 &
-                   + (grad1(3)-grad2(3))**2)
+           grad1(3) = 0.5d0*(ux(ii,jj,kk+1,1)-ux(ii,jj,kk-1,1))/g%dzg
+           grad2(3) = 0.5d0*(exactu(ii,jj,kk+1,1)-exactu(ii,jj,kk-1,1))/g%dzg
+           gradError(ii,jj,kk,1) = sqrt((grad1(1)-grad2(1))**2 + (grad1(2)-grad2(2))**2 &
+                + (grad1(3)-grad2(3))**2)
 #else
-              gradError(ii,jj,kk,1) = sqrt((grad1(1)-grad2(1))**2 + (grad1(2)-grad2(2))**2)
+           gradError(ii,jj,kk,1) = sqrt((grad1(1)-grad2(1))**2 + (grad1(2)-grad2(2))**2)
 #endif
-           end do
         end do
      end do
-     gerr = norm(gradError,g,order)
-  case(1)
-     gerr = 0.d0  
-     print *,'**************** formGradError not done for proble type 1: todo'
-  end select
+  end do
+  gerr = norm(gradError,g,order)
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(7),ierr)
 #endif
@@ -568,10 +562,11 @@ end subroutine formGradError
 !-----------------------------------------------------------------------
 subroutine FormRHS(rhs,g)
   use GridModule
+  use pms
   use domain
   use mpistuff
   implicit none
-  type(proc_patch),intent(in):: g
+  type(pe_patch),intent(in):: g
   double precision,intent(out)::rhs(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,nvar)
   
   integer:: ii,jj,kk
@@ -580,9 +575,9 @@ subroutine FormRHS(rhs,g)
 #ifdef HAVE_PETSC
   call PetscLogEventBegin(events(7),ierr)
 #endif 
-  ig = g%iglobalx
-  jg = g%iglobaly
-  kg = g%iglobalz
+  ig = getIglobalx(g)
+  jg = getIglobaly(g)
+  kg = getIglobalz(g)
 !!$  !     
 !!$  do k=IZLO, IZHI,1
 !!$     zc(k)=zl+(kg+k-1)*dz-0.5*dz
@@ -651,6 +646,7 @@ end subroutine FormRHS
 !-----------------------------------------------------------------
 subroutine SetupDomain()
   use domain
+  use pms, only:problemType
   implicit none
   !
   !     Problem type 

@@ -2,16 +2,26 @@
 !       Ravi Samtaney & Mark Adams
 !       Copyright 2014
 !-----------------------------------------------------------------
-#define MAX_GRIDS 20
-! domain size + global topology and solver and general parameters
+! domain size & BCs
 module domain
   save
   double precision:: xl,xr,yl,yr,zl,zr
+  logical:: periodic(3)
+end module domain
+!  topology and solver and general parametersdestroy
+module pms
+  ! 
   integer :: problemType
   ! topo
-  integer,parameter:: dom_max_grids=MAX_GRIDS
-  integer:: bot_min_size ! min size for bottom solver
-  integer:: mg_min_size  ! min size box to start aggregating
+  integer,parameter:: dom_max_grids=20
+  integer,parameter:: dom_max_sr_grids=10
+  integer,parameter:: mg_ref_ratio=2
+  integer:: bot_min_sz ! min size for bottom solver
+  integer:: pe_min_sz  ! min size box to start aggregating
+  integer:: sr_max_loc_sz    ! min size of box for finest grid in SR coarse grid solver
+  integer:: nsr ! number of SR grids, used to size grid array (0 is finest 'sr coarse grid')
+  integer:: ncgrids ! number of grids in SR coarse grid (0:ncgrids-1)
+  integer:: sr_base_bufsz,sr_bufsz_inc ! the SR buffer schedual
   ! solver
   integer:: nvcycles ! 0 for pure FMG
   integer:: nfcycles ! 0 for no FMG
@@ -24,7 +34,7 @@ module domain
   ! general
   integer:: verbose 
   integer:: num_solves
-end module domain
+end module pms
 !-----------------------------------------------------------------------
 module iounits
   integer, parameter:: irun=1
@@ -33,11 +43,9 @@ module iounits
 end module iounits
 !-----------------------------------------------------------------------
 module tags
-  integer,parameter:: MSG_XCH_XLOW_TAG=100,MSG_XCH_XHI_TAG=200
-  integer,parameter:: MSG_XCH_YLOW_TAG=300,MSG_XCH_YHI_TAG=400
-  integer,parameter:: MSG_XCH_ZLOW_TAG=500,MSG_XCH_ZHI_TAG=600
-  !integer:: msg_tag_inc
-  !integer,parameter:: MSG_MAX_TAG=10
+  integer:: MSG_XCH_XLOW_TAG,MSG_XCH_XHI_TAG
+  integer:: MSG_XCH_YLOW_TAG,MSG_XCH_YHI_TAG
+  integer:: MSG_XCH_ZLOW_TAG,MSG_XCH_ZHI_TAG
 end module tags
 !-----------------------------------------------------------------------
 module mpistuff
@@ -70,41 +78,36 @@ module error_data_module
 end module error_data_module
 !-----------------------------------------------------------------------
 ! Grid module
-module proc_patch_data_module
-  type proc_patch
-     integer:: imax,jmax,kmax                       ! size w/0 ghosts
+module pe_patch_data_module
+  type pe_patch
+     integer:: imax,jmax,kmax                       ! compute region w/0 ghosts
+     integer:: ivallo,jvallo,kvallo,ivalhi,jvalhi,kvalhi ! valid region
      integer:: ilo,ihi,jlo,jhi,klo,khi              ! data size w/ ghosts
-     integer:: left,right,top,bottom,behind,forward ! cache of proc neighbors
-     integer:: comm3d,loc_comm,comm ! 3d comm, local comm of redunent parents, normal comm  (needed?)
-     integer:: iprocx,iprocy,iprocz ! my proc in 3D index space
-     integer:: nprocx,nprocy,nprocz ! size if proc index space
-     integer:: iglobalx,iglobaly,iglobalz ! easy to generate, could remove
+     integer:: left,right,top,bottom,behind,forward ! cache of pe neighbors
+     integer:: comm3d,loc_comm,comm ! 3d comm, local comm of redunent parents, comm (split)
+     integer:: ipex,ipey,ipez ! my pe in 3D index space
+     integer:: npex,npey,npez ! size if pe index space
      double precision:: dxg,dyg,dzg ! why 'g'?
-  end type proc_patch
-end module proc_patch_data_module
+  end type pe_patch
+end module pe_patch_data_module
 !-----------------------------------------------------------------------
 module GridModule
-  use proc_patch_data_module
+  use pe_patch_data_module
   implicit none
   ! PDE, Disc
-  integer,parameter:: ng=1     
-  integer,parameter:: nvar=1
+  integer,parameter:: nsg=1  ! number of stencil ghosts     
+  integer,parameter:: nvar=1 ! num vars per cell
 contains
   !-----------------------------------------------------------------
   logical function is_top(g)
-    use domain
+    use pms, only:bot_min_sz
     implicit none
-    type(proc_patch):: g
+    type(pe_patch):: g
     is_top = ( &
-!!$         (g%imax.le.bot_min_size .and. g%nprocx.eq.1) .or. &
-!!$         (g%jmax.le.bot_min_size .and. g%nprocy.eq.1) &
-!!$#ifndef TWO_D
-!!$         .or. (g%kmax.le.bot_min_size .and. g%nprocz.eq.1) &
-!!$#endif
-         (g%imax.le.bot_min_size) .or. &
-         (g%jmax.le.bot_min_size) &
+         (g%imax.le.bot_min_sz) .or. &
+         (g%jmax.le.bot_min_sz) &
 #ifndef TWO_D
-         .or. (g%kmax.le.bot_min_size) &
+         .or. (g%kmax.le.bot_min_sz) &
 #endif
          )
   end function is_top
@@ -112,57 +115,59 @@ contains
   integer function getIglobalx(g)
     use mpistuff, only:mype
     implicit none
-    type(proc_patch):: g
-    getiglobalx = (g%iprocx-1)*g%imax + 1 ! one based of my first index
+    type(pe_patch):: g
+    getiglobalx = (g%ipex-1)*g%imax + 1 ! one based of my first index
   end function getIglobalx
  !-----------------------------------------------------------------
   integer function getIglobaly(g)
     implicit none
-    type(proc_patch):: g
-    getiglobaly = (g%iprocy-1)*g%jmax + 1 
+    type(pe_patch):: g
+    getiglobaly = (g%ipey-1)*g%jmax + 1 
   end function getIglobaly
  !-----------------------------------------------------------------
   integer function getIglobalz(g)
     implicit none
-    type(proc_patch):: g
-    getiglobalz = (g%iprocz-1)*g%kmax + 1 
+    type(pe_patch):: g
+    getiglobalz = (g%ipez-1)*g%kmax + 1 
   end function getIglobalz
   !-----------------------------------------------------------------
-  subroutine new_grids(g,NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
+  subroutine new_grids(g,NPeAxis,iPeAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
+    use pms, only:dom_max_sr_grids,dom_max_grids
     implicit none    
     integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
-    integer :: NProcAxis(3),iProcAxis(3)
-    type(proc_patch),intent(out):: g(0:MAX_GRIDS-1)
+    integer :: NPeAxis(3),iPeAxis(3)
+    type(pe_patch),intent(out):: g(-dom_max_sr_grids:dom_max_grids-1)
     interface       
-       subroutine new_grids_private(g,NProcAxis,iProcAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
-         use proc_patch_data_module
+       subroutine new_grids_private(g,NPeAxis,iPeAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
+         use pms, only:dom_max_sr_grids,dom_max_grids
+         use pe_patch_data_module
          implicit none
          integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
-         integer :: NProcAxis(3),iProcAxis(3)
-         type(proc_patch),intent(out):: g(0:MAX_GRIDS-1) ! this needs to be set but max_grids is not visable!!  
+         integer :: NPeAxis(3),iPeAxis(3)
+         type(pe_patch),intent(out):: g(-dom_max_sr_grids:dom_max_grids-1) ! this needs to be set but max_grids is not visable!!  
        end subroutine new_grids_private
     end interface
 
-    call new_grids_private(g,NProcAxis,iProcAxis,nx,ny,nz,&
+    call new_grids_private(g,NPeAxis,iPeAxis,nx,ny,nz,&
          nxlocal,nylocal,nzlocal,comm3d)
 
   end subroutine new_grids
   !-----------------------------------------------------------------
-  subroutine destroy_grids(g,max_sz)
-    use proc_patch_data_module
+  subroutine destroy_grids(g)
+    use pms, only:dom_max_sr_grids,dom_max_grids
+    use pe_patch_data_module
     implicit none    
-    integer,intent(in):: max_sz
-    type(proc_patch):: g(0:max_sz-1)
+    type(pe_patch):: g(-dom_max_sr_grids:dom_max_grids-1)
     interface       
-       subroutine destroy_grids_private(g,max_sz)
-         use proc_patch_data_module
+       subroutine destroy_grids_private(g)
+         use pms, only:dom_max_sr_grids,dom_max_grids
+         use pe_patch_data_module
          implicit none
-         integer,intent(in):: max_sz
-         type(proc_patch):: g(0:max_sz-1)       
+         type(pe_patch):: g(-dom_max_sr_grids:dom_max_grids-1)
        end subroutine destroy_grids_private
     end interface
     
-    call destroy_grids_private(g,max_sz)
+    call destroy_grids_private(g)
     
   end subroutine destroy_grids
   !
