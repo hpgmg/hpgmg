@@ -17,7 +17,7 @@ include ${PETSC_DIR}/conf/rules
 FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC 
 pms: ${OBJ} 
 	-@${FLINKER} -o pms.${PETSC_ARCH}.ex ${OBJ} ${PETSC_SYS_LIB}
-	${RM} ${OBJ} *.mod	
+#	${RM} ${OBJ} *.mod	
 
 #$(OBJ): modules.o
 
@@ -34,7 +34,7 @@ debug:
 	-@/usr/bin/gdb --args ./pms.${PETSC_ARCH}.ex -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1 -verbose 4
 
 val:
-	-@${MPIEXEC} -n 64 valgrind --dsymutil=yes --leak-check=yes --gen-suppressions=yes --num-callers=20 ./pms.${PETSC_ARCH}.ex -nxloc 16 -nyloc 16 -nzloc 16 -sr_max_loc_sz 32
+	-@${MPIEXEC} -n 1 valgrind --dsymutil=yes --leak-check=yes --gen-suppressions=yes --num-callers=20 ./pms.${PETSC_ARCH}.ex -nxloc 16 -nyloc 16 -nzloc 16 -sr_max_loc_sz 32
 
 run:
 	-@${MPIEXEC} -n 64 ./pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 16 -nyloc 16 -nzloc 16

@@ -156,25 +156,25 @@ recursive subroutine MGV(ux,rhs,g,lev,Apply,Relax)
   use mpistuff, only:mype
   use pms, only:dom_max_grids,verbose,ncoarsesolveits,ncycles,nsmoothsdown,&
        nsmoothsup,pe_min_sz,dom_max_sr_grids
-  !
   implicit none
   integer,intent(in):: lev
   type(pe_patch),intent(in)::g(-dom_max_sr_grids:dom_max_grids-1)
-  external Apply,Relax
-  !
   double precision,dimension(&
        g(lev)%ilo:g(lev)%ihi, g(lev)%jlo:g(lev)%jhi, &
        g(lev)%klo:g(lev)%khi, nvar) :: ux, rhs
+  external Apply,Relax
+  !
   double precision norm,tt
   integer:: ii,jj
-  !     Coarse 
+  !     Coarse, here is the allocation on stack
   double precision,dimension(&
        g(lev+1)%ilo:g(lev+1)%ihi, g(lev+1)%jlo:g(lev+1)%jhi, &
        g(lev+1)%klo:g(lev+1)%khi,nvar) :: uxC, tmpC, FC, ResC
-  !     This level
+  ! This level
   double precision,dimension(&
        g(lev)%ilo:g(lev)%ihi, g(lev)%jlo:g(lev)%jhi,& 
        g(lev)%klo:g(lev)%khi, nvar) :: Res
+  
   if (verbose.gt.1) then  
      tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: u_0=',tt
      tt = norm(rhs,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: f_0=',tt
@@ -197,6 +197,7 @@ recursive subroutine MGV(ux,rhs,g,lev,Apply,Relax)
         tt = norm(Res,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: res^f=',tt
      end if
      call Restrict(FC,Res,g(lev+1),g(lev),1)
+     !call Restrict2(FC,uxC,Res,ux,uxC,g(lev+1),g(lev),1)
      if (verbose.gt.2) then
         tt = norm(FC,g(lev+1),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: res^c_0=',tt
      end if
