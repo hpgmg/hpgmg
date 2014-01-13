@@ -14,7 +14,7 @@ include ${PETSC_DIR}/conf/rules
 
 #.SUFFIXES: .o .F
 
-FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC -fast
+FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC 
 pms: ${OBJ} 
 	-@${FLINKER} -o pms.${PETSC_ARCH}.ex ${OBJ} ${PETSC_SYS_LIB}
 	${RM} ${OBJ} *.mod	
