@@ -6,7 +6,7 @@
 #PBS -N hpgmg
 #PBS -V 
 #PBS -j eo
-#PBS -A m1792
+#PBS -A m499
 
 cd $PBS_O_WORKDIR
 

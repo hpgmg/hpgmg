@@ -14,7 +14,7 @@ include ${PETSC_DIR}/conf/rules
 
 #.SUFFIXES: .o .F
 
-FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC 
+FFLAGS += -DHAVE_COMM_ARGS ${FC_FLAGS} -DHAVE_PETSC -fast
 pms: ${OBJ} 
 	-@${FLINKER} -o pms.ex ${OBJ} ${PETSC_SYS_LIB}
 	${RM} ${OBJ}	
@@ -52,4 +52,4 @@ runmpi:
 	-@${MPIEXEC} -n 8 ./pms.ex -verbose 1
 
 runv:
-	-@${MPIEXEC} -n 64 ./pms.ex -verbose 1 -nxloc 16 -nyloc 16 -nzloc 16 -nvcycles 10 -nfcycles 0 
+	-@${MPIEXEC} -n 64 ./pms.ex -verbose 1 -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 20 -nfcycles 0 

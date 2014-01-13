@@ -698,8 +698,8 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
         call PetscLogEventEnd(events(2),ierr)
 #endif
      enddo                ! r/b i
+     call SetBCs(phi,g)
   enddo                   ! iters
-  call SetBCs(phi,g)
 end subroutine GSRB_const_Lap
 
 !-----------------------------------------------------------------------
