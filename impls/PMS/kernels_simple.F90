@@ -3,12 +3,11 @@
 !     Copyright 2014
 !-----------------------------------------------------------------
 double precision function level_norm1(ux,g)
-  !
-  use proc_patch_data_module
+  use pe_patch_data_module
   use mpistuff
   implicit none
   !     
-  type(proc_patch)::g
+  type(pe_patch)::g
   double precision::ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   !
   double precision::t1,t2,vol    
@@ -17,18 +16,17 @@ double precision function level_norm1(ux,g)
 #ifndef TWO_D
        *g%dzg
 #endif
-  t1 = sum(abs(ux(1:g%imax,1:g%jmax,1:g%kmax,1)))
+  t1 = sum(abs(ux(g%ivallo:g%ivalhi,g%jvallo:g%jvalhi,g%kvallo:g%kvalhi,1)))
   call MPI_Allreduce(t1,t2,1,MPI_DOUBLE_PRECISION,MPI_SUM,g%comm3D,ierr)
   level_norm1 = t2*vol
 end function level_norm1
 !-----------------------------------------------------------------
 double precision function level_norm2(ux,g)
-  !
-  use proc_patch_data_module
+  use pe_patch_data_module
   use mpistuff
   implicit none
   !     
-  type(proc_patch)::g
+  type(pe_patch)::g
   double precision::ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   !     
   double precision::t1,t2,vol  
@@ -39,35 +37,34 @@ double precision function level_norm2(ux,g)
        *g%dzg
 #endif
 
-  t1 = sum(ux(1:g%imax,1:g%jmax,1:g%kmax,1)**2)
+  t1 = sum(ux(g%ivallo:g%ivalhi,g%jvallo:g%jvalhi,g%kvallo:g%kvalhi,1)**2)
   call MPI_Allreduce(t1,t2,1,MPI_DOUBLE_PRECISION,MPI_SUM,g%comm3D,ierr)
   level_norm2 = sqrt(t2*vol)
 
 end function level_norm2
 !-----------------------------------------------------------------
 double precision function level_norminf(ux,g)
-  !
-  use proc_patch_data_module
+  use pe_patch_data_module
   use mpistuff
   implicit none
   !     
-  type(proc_patch)::g
+  type(pe_patch)::g
   double precision::ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   !     
   double precision::t1,t2
 
-  t1 = maxval(abs(ux(1:g%imax,1:g%jmax,1:g%kmax,1)))
+  t1 = maxval(abs(ux(g%ivallo:g%ivalhi,g%jvallo:g%jvalhi,g%kvallo:g%kvalhi,1)))
   call MPI_Allreduce(t1,t2,1,MPI_DOUBLE_PRECISION,MPI_MAX,g%comm3D,ierr)
   level_norminf = t2
 end function level_norminf
 !-----------------------------------------------------------------
 double precision function norm(ux,g,type)
   !
-  use proc_patch_data_module
+  use pe_patch_data_module
   implicit none
   double precision level_norm2,level_norminf,level_norm1
   !     
-  type(proc_patch)::g
+  type(pe_patch)::g
   double precision::ux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   integer :: type
   !     
@@ -86,8 +83,9 @@ subroutine Restrict(uxC,ux,gc,gf,order)
   use GridModule
   use mpistuff
   use tags
+  use pms, only:mg_ref_ratio
   implicit none
-  type(proc_patch):: gf, gc
+  type(pe_patch):: gf, gc
   double precision,intent(out):: uxC(gc%ilo:gc%ihi, gc%jlo:gc%jhi,& 
        gc%klo:gc%khi, nvar)
   double precision,intent(in):: ux(gf%ilo:gf%ihi, gf%jlo:gf%jhi,&
@@ -106,6 +104,8 @@ subroutine Restrict(uxC,ux,gc,gf,order)
   integer:: msg_id_recv(0:7),bufsz,msg_id_send(0:7)
   integer:: ii,jj,kk,ist,jst,kst
   
+  if (mg_ref_ratio .ne. 2) stop 'Restrict not done for refratio != 2'
+
 #ifdef HAVE_PETSC
   flops = 2*gf%imax*gf%jmax*gf%kmax
   call PetscLogEventBegin(events(3),ierr)
@@ -396,8 +396,9 @@ subroutine Prolong_2(ux,uxC,gf,gc)
   !  ux = ux + P * uxC
   use GridModule
   use mpistuff
+  use pms, only:mg_ref_ratio
   implicit none
-  type(proc_patch):: gf, gc
+  type(pe_patch):: gf, gc
   double precision,intent(in):: &
        uxC(gc%ilo:gc%ihi, gc%jlo:gc%jhi, &
        gc%klo:gc%khi, nvar)
@@ -415,7 +416,10 @@ subroutine Prolong_2(ux,uxC,gf,gc)
   call PetscLogFlops(flops,ierr)
 #endif
 #endif
-  ! the whole coarse pathc
+  
+  if (mg_ref_ratio .ne. 2) stop 'Prolong_2 not done for refratio != 2'
+
+  ! the whole coarse path
   ist = 1
   iend = gc%imax
   jst = 1 
@@ -646,12 +650,12 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
   use GridModule
   use mpistuff
   implicit none
-  type(proc_patch):: g
+  type(pe_patch):: g
   double precision:: phi(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   double precision,intent(in)::rhs(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   integer,intent(in):: nits
   !     Local vars
-  integer:: m,ii,jj,j,kk,ip,im,jm,jp,mm,rbi,offi
+  integer:: m,ii,jj,j,kk,ip,im,jm,jp,mm,rbi,offi,ig,jg,kg
   double precision:: ti,tj,tk,dxi2,dyi2,numer,deno
   double precision norm
 #ifndef TWO_D
@@ -660,6 +664,9 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
 #ifndef TWO_D
 
   flops = 13*g%imax*g%jmax*g%kmax/2 ! R/B
+  ig = getIglobalx(g)
+  jg = getIglobaly(g)
+  kg = getIglobalz(g)
 
 #endif
   dxi2=1.d0/g%dxg**2
@@ -676,7 +683,7 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
 #endif 
         do kk=1,g%kmax
            do jj=1,g%jmax
-              offi = mod(g%iglobalx+jj+g%iglobaly+kk+g%iglobalz-1+rbi,2)+1
+              offi = mod(ig+jj+jg+kk+kg-1+rbi,2)+1
               do ii=offi,g%imax,2
                  ti = dxi2*(phi(ii+1,jj,kk,1)+phi(ii-1,jj,kk,1))
                  tj = dyi2*(phi(ii,jj+1,kk,1)+phi(ii,jj-1,kk,1))
@@ -697,18 +704,18 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
 #ifdef HAVE_PETSC
         call PetscLogEventEnd(events(2),ierr)
 #endif
+        call SetBCs(phi,g)
      enddo                ! r/b i
   enddo                   ! iters
-  call SetBCs(phi,g)
 end subroutine GSRB_const_Lap
 
 !-----------------------------------------------------------------------
 subroutine Apply_const_Lap(uxo,ux,g)
   use GridModule
   use mpistuff
-  use domain, only:verbose
+  use pms, only:verbose
   implicit none
-  type(proc_patch):: g
+  type(pe_patch):: g
   double precision,intent(out):: &
        uxo(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
   double precision,intent(in):: &
