@@ -117,8 +117,7 @@ subroutine driver(grids)
   integer,parameter:: dummy_size=1024*1024 ! cache flush array size
   double precision:: dummy(dummy_size),res0,rateu,rategrad
   type(error_data)::errors(-nsr:ncgrids-1+nvcycles)
-  external Apply_const_Lap
-  external GSRB_const_Lap
+  external Apply_const_Lap,GSRB_const_Lap,Jacobi_const_Lap
   double precision,parameter:: log2r = 1.d0/log(2.d0);
 #ifdef HAVE_PETSC
   call PetscInitialize(PETSC_NULL_CHARACTER,ierr)

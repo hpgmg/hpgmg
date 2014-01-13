@@ -1067,6 +1067,85 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
      enddo                ! r/b i
   enddo                   ! iters
 end subroutine GSRB_const_Lap
+!-----------------------------------------------------------------------
+subroutine Jacobi_const_Lap(phi,rhs,g,nits)
+  use GridModule
+  use mpistuff
+  implicit none
+  type(pe_patch):: g
+  double precision:: phi(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
+  double precision,intent(in)::rhs(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
+  integer,intent(in):: nits
+  !     Local vars
+  double precision::Res(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
+  double precision::Dk(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
+  double precision::Aux(g%ilo:g%ihi,g%jlo:g%jhi,g%klo:g%khi,1)
+  double precision:: diagi,dxl,dyl,ti,tj,tk,dxi2,dyi2,dzi2,dzl
+  double precision:: over,under,rhok,rhokp1,beta,alpha,delta,theta,s1,ct1,ct2,omega
+  integer::k
+#ifndef TWO_D
+#ifdef HAVE_PETSC
+  flops = 13*g%imax*g%jmax*g%kmax
+  call PetscLogEventBegin(events(4),ierr)
+  call PetscLogFlops(flops,ierr)
+#endif
+#endif
+  dxl=g%dxg
+  dyl=g%dyg
+  dxi2=1.d0/dxl**2
+  dyi2=1.d0/dyl**2
+#ifndef TWO_D
+  dzl=g%dzg
+  dzi2=1.d0/dzl**2
+#endif  
+  diagi = -2.d0*(dxi2+dyi2)
+#ifndef TWO_D
+  diagi = -2.d0*(dxi2+dyi2+dzi2)
+#endif
+  diagi = 1.d0/diagi
+  rhok = 2.d0 ! max eigen of D^-1A
+
+  if (.true.) then
+     omega = diagi*4.d0/(3.d0*rhok)
+print *,omega
+     do k=0,nits-1
+        call Apply_const_Lap(Aux,phi,g)
+        phi = phi + omega*(rhs - Aux)
+     enddo 
+  else
+     over = 1.0d0
+     under = 1.d0/2.d0     
+     beta =  rhok * over 
+     alpha = rhok * under
+     delta = (beta - alpha)/2.
+     theta = (beta + alpha)/2.
+     s1 = theta / delta
+     rhok = 1./s1
+
+     call Apply_const_Lap(Dk,phi,g)
+     Dk = rhs - Dk
+     Dk = diagi * Dk
+     ct1 = 1.d0/theta
+
+     Dk = Dk*ct1
+     phi = phi + Dk
+     
+     do k=0,nits-2
+        rhokp1 = 1.d0/(2.d0*s1 - rhok)
+        ct1 = rhokp1*rhok
+        ct2 = 2.d0*rhokp1/delta
+        rhok = rhokp1
+
+        call Apply_const_Lap(Aux,phi,g)
+        Aux = rhs - Aux
+        Res = diagi * Aux
+        
+        ! Dk[] = rhokp1 * rhok * Dk[] + 2. * rhokp1 * res[] / ( delta * diag[] )
+        Dk =  ct1*Dk + ct2*Res
+        phi = phi + Dk
+     enddo                   ! iters
+  end if
+end subroutine Jacobi_const_Lap
 
 !-----------------------------------------------------------------------
 subroutine Apply_const_Lap(uxo,ux,g)
@@ -1082,11 +1161,8 @@ subroutine Apply_const_Lap(uxo,ux,g)
   !     Local vars
   integer its
   integer:: ii,jj,kk
-  double precision:: dxl,dyl,ti,tj,tk,dxi2,dyi2
+  double precision:: dxl,dyl,ti,tj,tk,dxi2,dyi2,dzi2,dzl
   double precision norm
-#ifndef TWO_D
-  double precision:: dzi2,dzl
-#endif
 #ifndef TWO_D
 #ifdef HAVE_PETSC
   flops = 13*g%imax*g%jmax*g%kmax
