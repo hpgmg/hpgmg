@@ -1010,24 +1010,28 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
   integer,intent(in):: nits
   !     Local vars
   integer:: m,ii,jj,j,kk,ip,im,jm,jp,mm,rbi,offi,ig,jg,kg
-  double precision:: ti,tj,tk,dxi2,dyi2,numer,deno
+  double precision:: ti,tj,tk,dxi2,dyi2,numer,denoi
   double precision norm
 #ifndef TWO_D
   double precision:: dzi2
 #endif
-#ifndef TWO_D
 
-  flops = 13*g%imax*g%jmax*g%kmax/2 ! R/B
   ig = getIglobalx(g)
   jg = getIglobaly(g)
   kg = getIglobalz(g)
-
+#ifndef TWO_D
+  flops = 13*g%imax*g%jmax*g%kmax/2 ! R/B
+#else
+  flops = 9*g%imax*g%jmax*g%kmax/2 ! R/B
 #endif
   dxi2=1.d0/g%dxg**2
   dyi2=1.d0/g%dyg**2
+  denoi = - 2.d0*(dxi2 + dyi2)  
 #ifndef TWO_D
   dzi2=1.d0/g%dzg**2
+  denoi = denoi - 2.d0*dzi2
 #endif
+  denoi = 1.d0/denoi
   do m=1,nits
      ! red/black
      do rbi = 0,1
@@ -1042,16 +1046,14 @@ subroutine GSRB_const_Lap(phi,rhs,g,nits)
                  ti = dxi2*(phi(ii+1,jj,kk,1)+phi(ii-1,jj,kk,1))
                  tj = dyi2*(phi(ii,jj+1,kk,1)+phi(ii,jj-1,kk,1))
                  !     set
-                 numer = rhs(ii,jj,kk,1) - ti - tj
-                 deno = - 2.d0*(dxi2 + dyi2)
+                 numer = rhs(ii,jj,kk,1) - ti - tj                 
 #ifndef TWO_D
                  ! Z direction
                  !     set
                  tk = dzi2*(phi(ii,jj,kk+1,1)+phi(ii,jj,kk-1,1))
                  numer = numer - tk
-                 deno = deno - 2.d0*dzi2
 #endif
-                 phi(ii,jj,kk,1) = numer/deno
+                 phi(ii,jj,kk,1) = numer*denoi
               enddo       ! ii
            enddo          ! jj
         enddo             ! kk
@@ -1089,14 +1091,12 @@ subroutine Jacobi_const_Lap(phi,rhs,g,nits)
   dyl=g%dyg
   dxi2=1.d0/dxl**2
   dyi2=1.d0/dyl**2
+  diagi = -2.d0*(dxi2+dyi2)
 #ifndef TWO_D
   dzl=g%dzg
   dzi2=1.d0/dzl**2
-#endif  
-  diagi = -2.d0*(dxi2+dyi2)
-#ifndef TWO_D
   diagi = -2.d0*(dxi2+dyi2+dzi2)
-#endif
+#endif  
   diagi = 1.d0/diagi
   rhok = 2.d0 ! max eigen of D^-1A
 
@@ -1104,7 +1104,8 @@ subroutine Jacobi_const_Lap(phi,rhs,g,nits)
      omega = diagi*4.d0/(3.d0*rhok)
      do k=0,nits-1
         call Apply_const_Lap(Aux,phi,g)
-        phi = phi + omega*(rhs - Aux)
+        Aux = rhs - Aux
+        phi = phi + omega*Aux
      enddo 
   else
      over = 1.0d0
