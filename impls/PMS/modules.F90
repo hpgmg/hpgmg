@@ -8,7 +8,7 @@ module domain
   double precision:: xl,xr,yl,yr,zl,zr
   logical:: periodic(3)
 end module domain
-!  topology and solver and general parametersdestroy
+!  topology, solver, and general parametersdestroy
 module pms
   ! 
   integer :: problemType
@@ -18,7 +18,7 @@ module pms
   integer,parameter:: mg_ref_ratio=2
   integer:: bot_min_sz ! min size for bottom solver
   integer:: pe_min_sz  ! min size box to start aggregating
-  integer:: sr_max_loc_sz    ! min size of box for finest grid in SR coarse grid solver
+  integer:: sr_max_loc_sz ! max size of box for finest grid in SR
   integer:: nsr ! number of SR grids, used to size grid array (0 is finest 'sr coarse grid')
   integer:: ncgrids ! number of grids in SR coarse grid (0:ncgrids-1)
   integer:: sr_base_bufsz,sr_bufsz_inc ! the SR buffer schedual
@@ -37,9 +37,24 @@ module pms
 end module pms
 !-----------------------------------------------------------------------
 module iounits
-  integer, parameter:: irun=1
-  integer, parameter:: ibinoutput=2
-  integer, parameter:: iconv=3
+  integer, parameter:: istderr=0
+  integer, parameter:: istdin=5
+  integer, parameter:: istdout=6
+  integer, parameter:: irun=8
+  integer, parameter:: imesh=16
+  integer, parameter:: ifluid=21
+  integer, parameter:: idump=71
+  integer, parameter:: ibinoutput=41
+  integer, parameter:: itecoutput=61
+  integer, parameter:: itime=81
+  integer, parameter:: idiag=91
+  integer, parameter:: iconv=92
+  integer, parameter:: imass=93
+  integer, parameter:: iEng=94
+  integer, parameter:: ipflux=95
+  integer, parameter:: iflux=97
+  integer, parameter:: iprof=999
+  integer, parameter:: itflux=96
 end module iounits
 !-----------------------------------------------------------------------
 module tags
@@ -60,7 +75,7 @@ module mpistuff
   include "mpif.h"
 #endif
   integer:: status(MPI_STATUS_SIZE),ierr
-  integer:: mype ,npe
+  integer:: mype,mpisize
   integer,parameter::ERROR_CARTCOORDS=1
   integer,parameter::ERROR_CARTSHIFT=2
   integer,parameter::ERROR_WAIT=3
@@ -72,105 +87,144 @@ end module mpistuff
 ! error data module
 module error_data_module
   type error_data
-     double precision:: uerror,graduerr,resid
+     double precision:: uerror,resid
   end type error_data
   integer :: err_lev ! cache of currant level for error output
-  integer,parameter::error_norm=3 ! 3 == inf
+  integer,parameter::error_norm=1 ! 3 == inf
 end module error_data_module
 !-----------------------------------------------------------------------
-! Grid module
+! patch data types
 module pe_patch_data_module
-  type pe_patch
-     integer:: imax,jmax,kmax                       ! compute region w/0 ghosts
-     integer:: ivallo,jvallo,kvallo,ivalhi,jvalhi,kvalhi ! valid region
-     integer:: ilo,ihi,jlo,jhi,klo,khi              ! data size w/ ghosts
-     integer:: left,right,top,bottom,behind,forward ! cache of pe neighbors
-     integer:: comm3d,loc_comm,comm ! 3d comm, local comm of redunent parents, comm (split)
-     integer:: ipex,ipey,ipez ! my pe in 3D index space
-     integer:: npex,npey,npez ! size if pe index space
-     double precision:: dxg,dyg,dzg ! why 'g'?
-  end type pe_patch
+  !
+  type ipoint
+     integer:: i,j,k
+  end type ipoint
+  !
+  type dpoint
+     double precision:: i,j,k
+  end type dpoint
+  !  
+  type box
+     type(ipoint):: lo,hi
+  end type box
+  ! mpi meta data for level
+  type topot
+     type(ipoint)::ipe ! my pe in 3D index space
+     type(ipoint)::npe ! size if pe index space
+     integer::left,right,top,bottom,behind,forward ! my neighbors - should be int[-1:1]^3 
+     integer::comm3d   ! 3d comm
+     integer::loc_comm ! local comm of redunent parents
+     integer::comm     ! comm (split) & norms
+  end type topot
+  ! meta data for operators (apply,relax)
+  type patcht
+     type(box)::max     ! compute region w/0 ghosts, lo=(1,1,1) now
+     type(box)::all     ! data size w/ ghosts
+     type(dpoint)::dx 
+  end type patcht
+  ! normal patch: patch meta data and processor topo stuff, could split this up more
+  type crs_patcht
+     type(patcht)::p  ! local size,dx,compute region
+     type(topot)::t   ! MPI stuff
+  end type crs_patcht
+  !
+  type sr_patcht
+     type(patcht)::p   ! local size,dx,compute region
+     type(topot)::t    ! no need for MPI topo in (pure) SR but need ipe for BCs and a comm for norms
+     type(ipoint)::cfoffset ! offset to line up with finer grid for R & P
+     type(box)::val    ! valid region, norms, zero level copy ...
+  end type sr_patcht
+  ! array pointer for making arrays of array pointers
+  type data_ptr
+     double precision,DIMENSION(:,:,:,:),pointer :: p
+  end type data_ptr
 end module pe_patch_data_module
 !-----------------------------------------------------------------------
-module GridModule
-  use pe_patch_data_module
-  implicit none
+module discretization
   ! PDE, Disc
   integer,parameter:: nsg=1  ! number of stencil ghosts     
   integer,parameter:: nvar=1 ! num vars per cell
+end module discretization
+!-----------------------------------------------------------------------
+module grid_module
+  use pe_patch_data_module
 contains
   !-----------------------------------------------------------------
   logical function is_top(g)
     use pms, only:bot_min_sz
     implicit none
-    type(pe_patch):: g
+    type(crs_patcht):: g
     is_top = ( &
-         (g%imax.le.bot_min_sz) .or. &
-         (g%jmax.le.bot_min_sz) &
+         ((g%p%max%hi%i-g%p%max%lo%i+1).le.bot_min_sz) .or. &
+         ((g%p%max%hi%j-g%p%max%lo%j+1).le.bot_min_sz) &
 #ifndef TWO_D
-         .or. (g%kmax.le.bot_min_sz) &
+         .or. ((g%p%max%hi%k-g%p%max%lo%k+1).le.bot_min_sz) &
 #endif
          )
   end function is_top
   !-----------------------------------------------------------------
-  integer function getIglobalx(g)
+  integer function getIglobalx(val,ip)
     use mpistuff, only:mype
     implicit none
-    type(pe_patch):: g
-    getiglobalx = (g%ipex-1)*g%imax + 1 ! one based of my first index
+    type(box),intent(in)::val
+    type(ipoint),intent(in)::ip
+    getiglobalx = (ip%i-1)*(val%hi%i-val%lo%i+1) + 1 ! one based of my first index
   end function getIglobalx
  !-----------------------------------------------------------------
-  integer function getIglobaly(g)
+  integer function getIglobaly(val,ip)
     implicit none
-    type(pe_patch):: g
-    getiglobaly = (g%ipey-1)*g%jmax + 1 
+    type(box),intent(in)::val
+    type(ipoint),intent(in)::ip
+    getiglobaly = (ip%j-1)*(val%hi%j-val%lo%j+1) + 1 
   end function getIglobaly
  !-----------------------------------------------------------------
-  integer function getIglobalz(g)
+  integer function getIglobalz(val,ip)
     implicit none
-    type(pe_patch):: g
-    getiglobalz = (g%ipez-1)*g%kmax + 1 
+    type(box),intent(in)::val
+    type(ipoint),intent(in)::ip
+    getiglobalz = (ip%k-1)*(val%hi%k-val%lo%k+1) + 1 
   end function getIglobalz
   !-----------------------------------------------------------------
-  subroutine new_grids(g,NPeAxis,iPeAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
-    use pms, only:dom_max_sr_grids,dom_max_grids
+  subroutine new_grids(gc,gsr,NPeAxis,iPeAxis,nloc,comm3d)
+    use pms,only:dom_max_sr_grids,dom_max_grids
     implicit none    
-    integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
+    type(ipoint)::nloc
+    integer,intent(in):: comm3d
     integer :: NPeAxis(3),iPeAxis(3)
-    type(pe_patch),intent(out):: g(-dom_max_sr_grids:dom_max_grids-1)
-    interface       
-       subroutine new_grids_private(g,NPeAxis,iPeAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
+    type(crs_patcht),intent(out):: gc(0:dom_max_grids-1)
+    type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
+    interface
+       subroutine new_grids_private(gc,gsr,NPeAxis,iPeAxis,nloc,comm3d)
          use pms, only:dom_max_sr_grids,dom_max_grids
          use pe_patch_data_module
          implicit none
-         integer,intent(in):: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
-         integer :: NPeAxis(3),iPeAxis(3)
-         type(pe_patch),intent(out):: g(-dom_max_sr_grids:dom_max_grids-1) ! this needs to be set but max_grids is not visable!!  
+         type(ipoint)::nloc
+         integer,intent(in)::comm3d
+         integer::NPeAxis(3),iPeAxis(3)
+         type(crs_patcht),intent(out):: gc(0:dom_max_grids-1)
+         type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
        end subroutine new_grids_private
     end interface
-
-    call new_grids_private(g,NPeAxis,iPeAxis,nx,ny,nz,&
-         nxlocal,nylocal,nzlocal,comm3d)
-
+    call new_grids_private(gc,gsr,NPeAxis,iPeAxis,nloc,comm3d)
   end subroutine new_grids
   !-----------------------------------------------------------------
-  subroutine destroy_grids(g)
+  subroutine destroy_grids(gc,gsr)
     use pms, only:dom_max_sr_grids,dom_max_grids
     use pe_patch_data_module
     implicit none    
-    type(pe_patch):: g(-dom_max_sr_grids:dom_max_grids-1)
+    type(crs_patcht),intent(out):: gc(0:dom_max_grids-1)
+    type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
     interface       
-       subroutine destroy_grids_private(g)
+       subroutine destroy_grids_private(gc,gsr)
          use pms, only:dom_max_sr_grids,dom_max_grids
          use pe_patch_data_module
          implicit none
-         type(pe_patch):: g(-dom_max_sr_grids:dom_max_grids-1)
+         type(crs_patcht),intent(out):: gc(0:dom_max_grids-1)
+         type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
        end subroutine destroy_grids_private
     end interface
-    
-    call destroy_grids_private(g)
-    
+    call destroy_grids_private(gc,gsr)
   end subroutine destroy_grids
   !
-end module GridModule
+end module grid_module
 

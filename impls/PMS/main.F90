@@ -3,19 +3,31 @@
 !       Copyright 2014
 !-----------------------------------------------------------------
 program main
-  use GridModule
+  use grid_module
   use domain, only:periodic
-  use pms, only:verbose,dom_max_grids,dom_max_sr_grids
+  use pms, only:verbose,dom_max_grids,dom_max_sr_grids,problemType
   use mpistuff
+  use tags
   implicit none
   integer:: rank,comm3d,ndims
-  integer:: NPeAxis(3),iPeAxis(3),npex,npey,npez,nx,ny,nz,nxlocal,nylocal,nzlocal
-  type(pe_patch)::grids(dom_max_grids+dom_max_sr_grids)
+  integer:: NPeAxis(3),iPeAxis(3)
+  type(ipoint):: nloc,npe
+  type(crs_patcht):: gc(0:dom_max_grids-1)
+  type(sr_patcht):: gsr(-dom_max_sr_grids:0)
+
+  ! global constructor stuff
+  MSG_RESTRICT_TAG = 90 ! this incs slower than the XCH
+  MSG_XCH_XLOW_TAG=100
+  MSG_XCH_XHI_TAG=200
+  MSG_XCH_YLOW_TAG=300
+  MSG_XCH_YHI_TAG=400
+  MSG_XCH_ZLOW_TAG=500
+  MSG_XCH_ZHI_TAG=600
 
   ! MPI init - globals
   call MPI_init(ierr)
   call MPI_comm_rank(MPI_COMM_WORLD, mype, ierr)
-  call MPI_comm_size(MPI_COMM_WORLD, npe, ierr)
+  call MPI_comm_size(MPI_COMM_WORLD, mpisize, ierr)
 
   call InitIO()
 
@@ -53,14 +65,13 @@ program main
 #endif
 
   ! get fine grid parameters, problem type, and global variables
-  call get_params(npe, npex, npey, npez, nx, ny, nz, &
-       nxlocal, nylocal, nzlocal)
+  call get_params(npe,nloc)
 
   ! Initialize the fine grid communicator, set periodicity
   ndims = 3
-  NPeAxis(1) = npex
-  NPeAxis(2) = npey
-  NPeAxis(3) = npez
+  NPeAxis(1) = npe%i
+  NPeAxis(2) = npe%j
+  NPeAxis(3) = npe%k
   periodic(1) = .false.
   periodic(2) = .false.
   periodic(3) = .false.
@@ -87,35 +98,36 @@ program main
   iPeAxis(3) = iPeAxis(3) + 1
   
   ! run it
-  call SetupDomain() ! sets size of domain
-  
-  ! sets global vars
-  call new_grids(grids,NPeAxis,iPeAxis,nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d)
-  
+  call SetupDomain(problemType) ! sets size of domain
+
+  ! creates grids meta data, comms, sets global topo vars
+  call new_grids(gc,gsr,NPeAxis,iPeAxis,nloc,comm3d)
+
   ! do it 
-  call driver(grids)
+  call driver(gc,gsr)
   
   ! end it
-  call destroy_grids_private(grids)
+  call destroy_grids_private(gc,gsr)
   call FinalizeIO()
   call MPI_Finalize(ierr)
 end program MAIN
 !-----------------------------------------------------------------
 !  driver - the PETSc main
 !-----------------------------------------------------------------
-subroutine driver(grids)
+subroutine driver(gc,gsr)
   use iounits
   use mpistuff 
   use pms
-  use GridModule
+  use grid_module
   use error_data_module
   implicit none
   !
-  type(pe_patch)::grids(-dom_max_sr_grids:dom_max_grids-1)
+  type(crs_patcht),intent(out):: gc(0:dom_max_grids-1)
+  type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
   !
   integer:: isolve,ii,coarsest_grid,nViters,kk
-  integer,parameter:: dummy_size=1024*1024 ! cache flush array size
-  double precision:: dummy(dummy_size),res0,rateu,rategrad
+  integer,parameter:: cache_flusher_size=1 !1024*1024 ! cache flush array size
+  double precision:: cache_flusher(cache_flusher_size),res0,rateu,rategrad
   type(error_data)::errors(-nsr:ncgrids-1+nvcycles)
   external Apply_const_Lap,GSRB_const_Lap,Jacobi_const_Lap
   double precision,parameter:: log2r = 1.d0/log(2.d0);
@@ -131,44 +143,44 @@ subroutine driver(grids)
   call PetscLogEventRegister('HPGMG   other', 0, events(8), ierr)
 #endif
   call mpi_barrier(mpi_comm_world,ierr)
-  do kk=1,2
+  do kk=1,1
      do isolve=1,num_solves
         ! flush cache
-        do ii=1,dummy_size
-           dummy(ii) = 1.235d3
+        do ii=1,cache_flusher_size
+           cache_flusher(ii) = 1.235d3
         end do
 #ifdef HAVE_PETSC
-        if (kk==2) call PetscLogEventBegin(events(1),ierr)
+        if (kk==1) call PetscLogEventBegin(events(1),ierr)
 #endif
         select case (problemType)
         case(0)
-           call solve(grids,Apply_const_Lap,Apply_const_Lap,GSRB_const_Lap,res0,errors,nViters)
+           call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,GSRB_const_Lap,res0,errors,nViters)
         case(1)
            if(mype==0) write(6,*) 'problemType 1 not implemented -- todo'
         end select
 #ifdef HAVE_PETSC
-        if (kk==2) call PetscLogEventEnd(events(1),ierr)
+        if (kk==1) call PetscLogEventEnd(events(1),ierr)
 #endif
-        if (kk==1) exit ! just do one solve to page everything in
+        !if (kk==1) exit ! just do one solve to page everything in
         ! output run data and convergance data
         if(mype==0) then
            coarsest_grid = 0
-           if (verbose .gt.1) write(6,*)'output: g(0).istop=',is_top(grids(0)),&
+           if (verbose .gt.1) write(6,*)'output: g(0).istop=',is_top(gc(0)),&
                 'nfcycles=',nfcycles
-           if (nfcycles .ne. 0 .and. .not. is_top(grids(0)) ) then
+           if (nfcycles .ne. 0 .and. .not. is_top(gc(0)) ) then
               write(iconv,900) isolve,-1.d0,-1.d0,errors(0)%uerror,&
-                   errors(0)%graduerr,errors(0)%resid
+                   -1.0,errors(0)%resid
               do ii=1,dom_max_grids-1
                  ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
                  rateu = errors(ii-1)%uerror/errors(ii)%uerror
-                 rategrad = errors(ii-1)%graduerr/errors(ii)%graduerr
-                 if (verbose .gt.0) write(6,'(A,I2,A,E14.6,A,E14.6)') &
+                 rategrad = 1.0
+                 if (verbose .gt.0) write(6,'(A,I2,A,E14.6)') &
                       'driver: level ',ii, ': converg order u=', &
-                      log(rateu)*log2r,', grad(u)=',log(rategrad)*log2r
+                      log(rateu)*log2r
                  write(iconv,900) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(ii)%uerror,&
-                      errors(ii)%graduerr,errors(ii)%resid
-                 
-                 if( is_top(grids(ii)) ) then 
+                      -1.0,errors(ii)%resid
+
+                 if( is_top(gc(ii)) ) then 
                     coarsest_grid = ii
                     exit ! grids and errors are in reverse order - this is just a counter
                  end if
@@ -180,14 +192,14 @@ subroutine driver(grids)
               if (verbose.gt.0) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: V cycle',&
                    ii, ': error=',errors(ii)%uerror,&
                    ': resid=',errors(ii)%resid
-              write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,errors(ii)%graduerr,&
+              write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,-1.0,&
                    errors(ii)%resid
            end do
            
            ! general output
            ii = nfcycles*(coarsest_grid+1) + nViters - 1
            if (verbose.gt.1) write(6,888) 'solve ',isolve,' done |r|/|f|=',errors(ii)%resid/res0
-           write(irun,700) isolve,errors(ii)%uerror,errors(ii)%graduerr,errors(ii)%resid/res0
+           write(irun,700) isolve,errors(ii)%uerror,-1.0,errors(ii)%resid/res0
         endif
      enddo
   end do
@@ -203,19 +215,18 @@ end subroutine driver
 !-----------------------------------------------------------------
 ! get command line args, set problemType and fine grid sizes
 !-----------------------------------------------------------------       
-subroutine get_params(npes, npex, npey, npez, &
-     nx, ny, nz, nxlocal, nylocal, nzlocal)
+subroutine get_params(npe,nloc)
   use pms
   use mpistuff
-  use tags
-  !use tags, only:msg_tag_inc
+  use pe_patch_data_module
 #ifndef HAVE_COMM_ARGS
   use f2kcli        ! command line args class
 #endif
+
   implicit none
-  integer,intent(out) :: npex,npey,npez,nx,ny,nz,nxlocal,nylocal,nzlocal
-  integer,intent(in) :: npes
-  !       
+  type(ipoint),intent(out)::npe,nloc
+  !
+  type(ipoint)::nglob
   CHARACTER(LEN=256) :: LINE
   CHARACTER(LEN=32)  :: CMD,CMD2
   INTEGER            :: NARG,IARG,fact,nsmooths
@@ -223,15 +234,15 @@ subroutine get_params(npes, npex, npey, npez, &
   integer, parameter :: nargs=22
   double precision t2,t1,iarray(nargs)
   ! default input args: ?local, n?, ?pes
-  npex=-1
-  npey=-1
-  npez=-1
-  nx=-1
-  ny=-1
-  nz=-1
-  nxlocal=-1
-  nylocal=-1
-  nzlocal=-1
+  npe%i=-1
+  npe%j=-1
+  npe%k=-1
+  nglob%i=-1
+  nglob%j=-1
+  nglob%k=-1
+  nloc%i=-1
+  nloc%j=-1
+  nloc%k=-1
   !       Problem type 
   !       0: (x^4-x^2)^D - Diri BCs
   !       1: bubble      - periodic domain???
@@ -248,8 +259,8 @@ subroutine get_params(npes, npex, npey, npez, &
   pe_min_sz = 8  ! or 16 ...
   num_solves = 1
   sr_max_loc_sz = 0 ! no SR by default
-  sr_base_bufsz = 3
-  sr_bufsz_inc = 1
+  sr_base_bufsz = 4
+  sr_bufsz_inc = 0
   !msg_tag_inc = 0 ! better place to initilize this?
   ! read in args
   if( mype==0 ) then
@@ -257,17 +268,17 @@ subroutine get_params(npes, npex, npey, npez, &
      DO IARG = 1,NARG,2
         CALL GET_COMMAND_ARGUMENT(IARG,CMD)
         CALL GET_COMMAND_ARGUMENT(IARG+1,CMD2)
-        if( CMD == '-nx' ) READ (CMD2, '(I10)') nx
-        if( CMD == '-ny' ) READ (CMD2, '(I10)') ny
-        if( CMD == '-nz' ) READ (CMD2, '(I10)') nz
+        if( CMD == '-nx' ) READ (CMD2, '(I10)') nglob%i
+        if( CMD == '-ny' ) READ (CMD2, '(I10)') nglob%j
+        if( CMD == '-nz' ) READ (CMD2, '(I10)') nglob%k
         
-        if( CMD == '-nxloc' ) READ (CMD2, '(I10)') nxlocal
-        if( CMD == '-nyloc' ) READ (CMD2, '(I10)') nylocal
-        if( CMD == '-nzloc' ) READ (CMD2, '(I10)') nzlocal
+        if( CMD == '-nxloc' ) READ (CMD2, '(I10)') nloc%i
+        if( CMD == '-nyloc' ) READ (CMD2, '(I10)') nloc%j
+        if( CMD == '-nzloc' ) READ (CMD2, '(I10)') nloc%k
         
-        if( CMD == '-nxpe' ) READ (CMD2, '(I10)') npex
-        if( CMD == '-nype' ) READ (CMD2, '(I10)') npey
-        if( CMD == '-nzpe' ) READ (CMD2, '(I10)') npez
+        if( CMD == '-nxpe' ) READ (CMD2, '(I10)') npe%i
+        if( CMD == '-nype' ) READ (CMD2, '(I10)') npe%j
+        if( CMD == '-nzpe' ) READ (CMD2, '(I10)') npe%k
 
         if( CMD == '-bot_min_sz' ) READ (CMD2, '(I10)') bot_min_sz
         if( CMD == 'pe_min_sz' ) READ (CMD2, '(I10)') pe_min_sz
@@ -289,19 +300,19 @@ subroutine get_params(npes, npex, npey, npez, &
         if( CMD == '-sr_bufsz_inc' )  READ (CMD2, '(I10)') sr_bufsz_inc
      END DO
 #ifdef TWO_D
-     nz = 1; nzlocal = 1; npez = 1;
+     nglob%k = 1; nloc%k = 1; npe%k = 1;
 #endif
-     iarray(1) = nx
-     iarray(2) = ny
-     iarray(3) = nz
+     iarray(1) = nglob%i
+     iarray(2) = nglob%j
+     iarray(3) = nglob%k
      
-     iarray(4) = nxlocal
-     iarray(5) = nylocal
-     iarray(6) = nzlocal
+     iarray(4) = nloc%i
+     iarray(5) = nloc%j
+     iarray(6) = nloc%k
      
-     iarray(7) = npex
-     iarray(8) = npey
-     iarray(9) = npez
+     iarray(7) = npe%i
+     iarray(8) = npe%j
+     iarray(9) = npe%k
      
      iarray(10) = problemType
   
@@ -327,17 +338,17 @@ subroutine get_params(npes, npex, npey, npez, &
   else
      call MPI_Bcast(iarray,nargs,MPI_DOUBLE_PRECISION, 0, &
           mpi_comm_world, ierr)
-     nx = int(iarray(1))
-     ny = int(iarray(2))
-     nz = int(iarray(3))
+     nglob%i = int(iarray(1))
+     nglob%j = int(iarray(2))
+     nglob%k = int(iarray(3))
      
-     nxlocal = int(iarray(4))
-     nylocal = int(iarray(5))
-     nzlocal = int(iarray(6))
+     nloc%i = int(iarray(4))
+     nloc%j = int(iarray(5))
+     nloc%k = int(iarray(6))
      
-     npex = int(iarray(7))
-     npey = int(iarray(8))
-     npez = int(iarray(9))
+     npe%i = int(iarray(7))
+     npe%j = int(iarray(8))
+     npe%k = int(iarray(9))
      
      problemType = int(iarray(10))
 
@@ -365,20 +376,13 @@ subroutine get_params(npes, npex, npey, npez, &
   nsmoothsup = nsmooths
   nsmoothsdown = nsmooths
   ncoarsesolveits = bot_min_sz*bot_min_sz
-  MSG_RESTRICT_TAG = 90 ! this goes slower than the exchange
-  MSG_XCH_XLOW_TAG=100
-  MSG_XCH_XHI_TAG=200
-  MSG_XCH_YLOW_TAG=300
-  MSG_XCH_YHI_TAG=400
-  MSG_XCH_ZLOW_TAG=500
-  MSG_XCH_ZHI_TAG=600
   ! get ijk pes
-  t1 = npes
+  t1 = mpisize
 #ifdef TWO_D
-  npez = 1
-  nz = 1
-  nzlocal = 1
-  if (npex == -1) then
+  npe%k = 1
+  nglob%k = 1
+  nloc%k = 1
+  if (npe%i == -1) then
      if( abs(dsqrt(t1) - floor(dsqrt(t1))) > 0.d0 ) then
         if(abs(dsqrt(t1/2.d0)-floor(dsqrt(t1/2.d0)))>0.d0)then
            if(abs(dsqrt(t1/4.d0)-floor(dsqrt(t1/4.d0)))>0.d0)then
@@ -392,86 +396,86 @@ subroutine get_params(npes, npex, npey, npez, &
      else
         fact=1
      endif
-     npex=fact*floor(dsqrt(t1/fact))
-     npey=t1/npex
-     if (npes .ne. npez*npex*npey) then
-        write(6,*) 'INCORRECT NP:', NPES,'npex=',npex,&
-             'npey=',npey,'npez=',npez,'npes=',npes
+     npe%i=fact*floor(dsqrt(t1/fact))
+     npe%j=t1/npe%i
+     if (mpisize .ne. npe%k*npe%i*npe%j) then
+        write(6,*) 'INCORRECT NP:', NPES,'npe%i=',npe%i,&
+             'npe%j=',npe%j,'npe%k=',npe%k,'npes=',mpisize
         stop
      endif
-  else (npey == -1) then
-     npey=t1/npex
-     if(npey<1)stop'too many npex???'
-     fact = npex/npey
+  else (npe%j == -1) then
+     npe%j=t1/npe%i
+     if(npe%j<1)stop'too many npe%i???'
+     fact = npe%i/npe%j
      if( fact < 1 ) then
-        write(6,*) 'npex must be greater than npey', NPES,&
-       'npex=',npex,&
-       'npey=',npey,'npez=',npez,'npes=',npes
+        write(6,*) 'npe%i must be greater than npe%j', NPES,&
+       'npe%i=',npe%i,&
+       'npe%j=',npe%j,'npe%k=',npe%k,'npes=',mpisize
         stop
      endif
   endif
 #else
-  if (npex == -1) then
-     t1 = npes
-     if(npes==1) then ! one pe
-        npex = 1; npey = 1; npez = 1;
-     elseif(nx==ny .and. ny==nz)then ! square
-        npex = floor(t1**.3333333334d0)
-        npey = npex
-        npez = npes/(npex*npey)
-     elseif(nz==ny)then ! z==y
-        t1 = ny*npes; t2 = nx; t1 = t1/t2 
-        npey = floor(t1**.333333334d0)
-        npez = npey
-        npex = npes/(npey*npez) 
-     elseif(nz==nx)then
-        t1 = nz*npes; t2 = ny; t1 = t1/t2 
-        npex = floor(t1**.333333334d0)
-        npez = npex
-        npey = npes/(npex*npez) 
-     elseif(nx==ny)then
-        t1 = ny*npes; t2 = nz; t1 = t1/t2 
-        npey = floor(t1**.333333334d0)
-        npex = npey
-        npez = npes/(npey*npex) 
+  if (npe%i == -1) then
+     t1 = mpisize
+     if(mpisize==1) then ! one pe
+        npe%i = 1; npe%j = 1; npe%k = 1;
+     elseif(nglob%i==nglob%j .and. nglob%j==nglob%k)then ! square
+        npe%i = floor(t1**.3333333334d0)
+        npe%j = npe%i
+        npe%k = mpisize/(npe%i*npe%j)
+     elseif(nglob%k==nglob%j)then ! z==y
+        t1 = nglob%j*mpisize; t2 = nglob%i; t1 = t1/t2 
+        npe%j = floor(t1**.333333334d0)
+        npe%k = npe%j
+        npe%i = mpisize/(npe%j*npe%k) 
+     elseif(nglob%k==nglob%i)then
+        t1 = nglob%k*mpisize; t2 = nglob%j; t1 = t1/t2 
+        npe%i = floor(t1**.333333334d0)
+        npe%k = npe%i
+        npe%j = mpisize/(npe%i*npe%k) 
+     elseif(nglob%i==nglob%j)then
+        t1 = nglob%j*mpisize; t2 = nglob%k; t1 = t1/t2 
+        npe%j = floor(t1**.333333334d0)
+        npe%i = npe%j
+        npe%k = mpisize/(npe%j*npe%i) 
      else
         stop 'need to specify x/y/z pe'
      endif
   endif
 #endif     
-  if (npes .ne. npez*npex*npey) then
-     write(6,*) 'INCORRECT NP: npex=',npex, &
-          'npey=',npey,'npez=',npez,'npes=',npes
+  if (mpisize .ne. npe%k*npe%i*npe%j) then
+     write(6,*) 'INCORRECT NP: npe%i=',npe%i, &
+          'npe%j=',npe%j,'npe%k=',npe%k,'npes=',mpisize
      stop
   endif
   ! x
-  if (nxlocal.eq.-1 .and. nx.eq.-1) nxlocal = 64        ! default
-  if (nxlocal.eq.-1 .and. nx.ne.-1) nxlocal = nx/npex 
-  if (nxlocal.ne.-1 .and. nx.eq.-1) nx = nxlocal*npex 
-  if (nx .ne. nxlocal*npex) stop 'nx .ne. nxlocal*npex'
+  if (nloc%i.eq.-1 .and. nglob%i.eq.-1) nloc%i = 64        ! default
+  if (nloc%i.eq.-1 .and. nglob%i.ne.-1) nloc%i = nglob%i/npe%i 
+  if (nloc%i.ne.-1 .and. nglob%i.eq.-1) nglob%i = nloc%i*npe%i 
+  if (nglob%i .ne. nloc%i*npe%i) stop 'nx .ne. nloc%i*npe%i'
   ! y
-  if (nylocal.eq.-1 .and. ny.eq.-1) nylocal = nxlocal   ! default square
-  if (nylocal.eq.-1 .and. ny.ne.-1) nylocal = ny/npey 
-  if (nylocal.ne.-1 .and. ny.eq.-1) ny = nylocal*npey 
-  if (ny .ne. nylocal*npey) stop 'ny .ne. nylocal*npey'
+  if (nloc%j.eq.-1 .and. nglob%j.eq.-1) nloc%j = nloc%i   ! default square
+  if (nloc%j.eq.-1 .and. nglob%j.ne.-1) nloc%j = nglob%j/npe%j 
+  if (nloc%j.ne.-1 .and. nglob%j.eq.-1) nglob%j = nloc%j*npe%j 
+  if (nglob%j .ne. nloc%j*npe%j) stop 'ny .ne. nylocal*npe%j'
   ! z
-  if (nzlocal.eq.-1 .and. nz.eq.-1) nzlocal = nxlocal   ! default square
-  if (nzlocal.eq.-1 .and. nz.ne.-1) nzlocal = nz/npez 
-  if (nzlocal.ne.-1 .and. nz.eq.-1) nz = nzlocal*npez 
-  if (nz .ne. nzlocal*npez) stop 'nz .ne. nzlocal*npez'
+  if (nloc%k.eq.-1 .and. nglob%k.eq.-1) nloc%k = nloc%i   ! default square
+  if (nloc%k.eq.-1 .and. nglob%k.ne.-1) nloc%k = nglob%k/npe%k 
+  if (nloc%k.ne.-1 .and. nglob%k.eq.-1) nglob%k = nloc%k*npe%k 
+  if (nglob%k .ne. nloc%k*npe%k) stop 'nz .ne. nloc%k*npe%k'
   ! print topology
   if(mype==0 .and. verbose .gt. 3) then
-     write(6,*) '[',mype,'] nx =',nx,     ',ny= ',ny     ,',nz= ',nz
-     write(6,*) '[',mype,'] npx=',npex, ',npy=',npey, ',npz=',npez
-     write(6,*) '[',mype,'] nxl=',nxlocal,',nyl=',nylocal,',nzl=',nzlocal
+     write(6,*) '[',mype,'] nx =',nglob%i,',ny= ',nglob%j,',nz= ',nglob%k
+     write(6,*) '[',mype,'] npx=',npe%i,  ',npy=',npe%j,  ',npz=',npe%k
+     write(6,*) '[',mype,'] nxl=',nloc%i, ',nyl=',nloc%j, ',nzl=',nloc%k
   endif
 end subroutine get_params
 
 !-----------------------------------------------------------------
-subroutine SetupDomain()
+subroutine SetupDomain(problemType)
   use domain
-  use pms, only:problemType
   implicit none
+  integer::problemType
   !
   !     Problem type 
   !     0: (x^4-x^2)
@@ -516,7 +520,7 @@ subroutine InitIO()
   return
 end subroutine InitIO
 !-----------------------------------------------------------------------
-subroutine FinalizeIO()
+subroutine finalizeio()
   use iounits
   use mpistuff, only:mype
   implicit none
@@ -526,4 +530,440 @@ subroutine FinalizeIO()
      close(iconv)
   endif
   return
-end subroutine FinalizeIO
+end subroutine finalizeio
+!-----------------------------------------------------------------
+subroutine destroy_grids_private(cg,gsr)
+  use grid_module
+  use mpistuff
+  use pms, only:pe_min_sz,dom_max_sr_grids,dom_max_grids,nsr,ncgrids
+  implicit none
+  type(crs_patcht),intent(out):: cg(0:dom_max_grids-1)
+  type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
+  ! 
+  integer :: n
+  
+  do n=1,ncgrids
+     if (&
+          (cg(n-1)%p%max%hi%i-cg(n-1)%p%max%lo%i+1) > pe_min_sz .and. &
+          (cg(n-1)%p%max%hi%j-cg(n-1)%p%max%lo%j+1) > pe_min_sz &
+#ifdef TWO_D
+          ) then
+#else
+        .and. (cg(n-1)%p%max%hi%k-cg(n-1)%p%max%lo%k+1) > pe_min_sz ) then
+#endif
+        ! normal reduction, no split yet -- nothing to destroy
+     else 
+        ! split & not same comms as last
+        if (cg(n)%t%npe%i .ne. cg(n-1)%t%npe%i ) then
+           call MPI_COMM_free(cg(n)%t%comm,ierr)
+           call MPI_COMM_free(cg(n)%t%loc_comm,ierr) 
+           call MPI_comm_free(cg(n)%t%comm3d, ierr)
+        else
+           exit
+        end if
+     end if
+  enddo
+  return
+end subroutine destroy_grids_private
+!-----------------------------------------------------------------
+subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
+  use grid_module
+  use mpistuff
+  use pms
+  use domain
+  use discretization, only:nsg
+  implicit none
+  type(ipoint)::nloc
+  integer,intent(in):: comm3d
+  integer,intent(in):: NPeAxis(3),iPeAxis(3)
+  type(crs_patcht),intent(out)::cg(0:dom_max_grids-1)
+  type(sr_patcht),intent(out)::gsr(-dom_max_sr_grids:0)
+  ! 
+  integer::n,ndims,ii,jj,kk,srbf,pe_id,rank,npes(3)
+
+  ndims = 3
+
+  cg(0)%p%dx%i=(xr-xl)/(nloc%i*NPeAxis(1))
+  cg(0)%p%dx%j=(yr-yl)/(nloc%j*NPeAxis(2))
+  cg(0)%p%dx%k=(zr-zl)/(nloc%k*NPeAxis(3))
+
+  cg(0)%t%comm3d = comm3d
+  cg(0)%t%comm = comm3d
+  cg(0)%t%loc_comm = mpi_comm_null 
+  !     left, ...
+  call MPI_Cart_Shift(comm3D,0,1,cg(0)%t%left,cg(0)%t%right,ierr)
+  call MPI_Cart_Shift(comm3D,1,1,cg(0)%t%bottom,cg(0)%t%top,ierr)
+  call MPI_cart_Shift(comm3D,2,1,cg(0)%t%behind,cg(0)%t%forward,ierr)
+  if(mype==0.and.verbose.gt.4) write(6,*)'[',mype,'] l,r,t,b=',&
+       cg(0)%t%left,cg(0)%t%right,cg(0)%t%top,&
+       cg(0)%t%bottom,cg(0)%t%behind,cg(0)%t%forward
+  !       ipex ...	
+  cg(0)%t%ipe%i = iPeAxis(1)
+  cg(0)%t%ipe%j = iPeAxis(2)
+  cg(0)%t%ipe%k = iPeAxis(3)
+  
+  cg(0)%t%npe%i = NPeAxis(1) 
+  cg(0)%t%npe%j = NPeAxis(2) 
+  cg(0)%t%npe%k = NPeAxis(3) 
+  ! 
+  cg(0)%p%max%hi%i=nloc%i
+  cg(0)%p%max%hi%j=nloc%j
+  cg(0)%p%max%lo%i=1
+  cg(0)%p%max%lo%j=1
+#ifdef TWO_D
+  cg(0)%p%max%hi%k=1 
+  cg(0)%p%max%lo%k=1
+#else 
+  cg(0)%p%max%hi%k=nloc%k
+  cg(0)%p%max%lo%k=1
+#endif
+  ! do coarse grids (non-sr). start at 1 as 0 was just done
+  ncgrids = 1
+  do n=1,dom_max_grids-1
+     cg(n)%p%dx%i = cg(n-1)%p%dx%i*mg_ref_ratio
+     cg(n)%p%dx%j = cg(n-1)%p%dx%j*mg_ref_ratio
+#ifdef TWO_D
+     cg(n)%p%dx%k = 0.d0
+#else 
+     cg(n)%p%dx%k = cg(n-1)%p%dx%k*mg_ref_ratio
+#endif
+     ! take care of reductions
+     if( is_top(cg(n-1)) ) then
+        ! all done - clear rest of grids
+        do ii=n,dom_max_grids-1
+           cg(ii)%t%npe%i = 0 
+           cg(ii)%t%npe%j = 0 
+           cg(ii)%t%npe%k = 0 
+           cg(ii)%p%max%hi%i = 0 ! zero size 
+           cg(ii)%p%max%hi%j = 0 
+           cg(ii)%p%max%hi%k = 0 
+           cg(ii)%p%max%lo%i = 1 
+           cg(ii)%p%max%lo%j = 1 
+           cg(ii)%p%max%lo%k = 1 
+           ! malloc of next grid in MGV, etc
+           cg(ii)%p%all%lo%i=1 ! zero size 
+           cg(ii)%p%all%hi%i=0
+           cg(ii)%p%all%lo%j=1
+           cg(ii)%p%all%hi%j=0
+           cg(ii)%p%all%lo%k=1
+           cg(ii)%p%all%hi%k=0
+           
+           cg(ii)%t%loc_comm = mpi_comm_null
+           cg(ii)%t%comm3d = mpi_comm_null
+           cg(ii)%t%comm = mpi_comm_null
+        end do
+        exit
+     else if (&
+          (cg(n-1)%p%max%hi%i-cg(n-1)%p%max%lo%i+1)>pe_min_sz .and. &
+          (cg(n-1)%p%max%hi%j-cg(n-1)%p%max%lo%j+1)>pe_min_sz &
+#ifndef TWO_D
+          .and.&
+          (cg(n-1)%p%max%hi%k-cg(n-1)%p%max%lo%k+1)>pe_min_sz &
+#endif
+          ) then
+        !     normal reduction, no split yet	      
+        cg(n)%p%max%hi%i=cg(n-1)%p%max%hi%i/mg_ref_ratio
+        cg(n)%p%max%hi%j=cg(n-1)%p%max%hi%j/mg_ref_ratio
+        cg(n)%p%max%lo%i=1
+        cg(n)%p%max%lo%j=1
+        cg(n)%p%max%lo%k=1
+#ifndef TWO_D
+        cg(n)%p%max%hi%k=cg(n-1)%p%max%hi%k/mg_ref_ratio
+#else
+        cg(n)%p%max%hi%k=1
+#endif
+        cg(n)%t%comm3d = comm3d
+        cg(n)%t%comm = MPI_COMM_WORLD
+        cg(n)%t%loc_comm = mpi_comm_null
+        cg(n)%t%ipe%i = cg(n-1)%t%ipe%i
+        cg(n)%t%ipe%j = cg(n-1)%t%ipe%j
+        cg(n)%t%ipe%k = cg(n-1)%t%ipe%k
+        cg(n)%t%npe%i = cg(n-1)%t%npe%i
+        cg(n)%t%npe%j = cg(n-1)%t%npe%j
+        cg(n)%t%npe%k = cg(n-1)%t%npe%k
+        
+        cg(n)%t%left = cg(n-1)%t%left
+        cg(n)%t%right = cg(n-1)%t%right
+        cg(n)%t%top = cg(n-1)%t%top
+        cg(n)%t%bottom = cg(n-1)%t%bottom
+        cg(n)%t%forward = cg(n-1)%t%forward
+        cg(n)%t%behind = cg(n-1)%t%behind
+        
+     else if(cg(n-1)%t%npe%k==1 .or. cg(n-1)%t%npe%j==1 &
+#ifndef TWO_D
+          .or. cg(n-1)%t%npe%i==1 ) then ! one pe reduction, copy comm stuff
+#else
+        ) then
+#endif
+        cg(n)%t%npe%i = cg(n-1)%t%npe%i
+        cg(n)%t%npe%j = cg(n-1)%t%npe%j
+        cg(n)%t%ipe%i = cg(n-1)%t%ipe%i
+        cg(n)%t%ipe%j = cg(n-1)%t%ipe%j
+        cg(n)%t%npe%k = cg(n-1)%t%npe%k
+        cg(n)%t%ipe%k = cg(n-1)%t%ipe%k
+        
+        cg(n)%p%max%hi%i=cg(n-1)%p%max%hi%i/mg_ref_ratio
+        cg(n)%p%max%hi%j=cg(n-1)%p%max%hi%j/mg_ref_ratio
+        cg(n)%p%max%lo%i=1
+        cg(n)%p%max%lo%j=1
+        cg(n)%p%max%lo%k=1
+#ifndef TWO_D
+        cg(n)%p%max%hi%k=cg(n-1)%p%max%hi%k/mg_ref_ratio
+#else
+        cg(n)%p%max%hi%k=1
+#endif
+        ! use old comms
+        cg(n)%t%comm3d = cg(n-1)%t%comm3d
+        cg(n)%t%comm = cg(n-1)%t%comm
+        cg(n)%t%loc_comm = cg(n-1)%t%loc_comm
+        
+        cg(n)%t%left = cg(n-1)%t%left
+        cg(n)%t%right = cg(n-1)%t%right
+        cg(n)%t%top = cg(n-1)%t%top
+        cg(n)%t%bottom = cg(n-1)%t%bottom
+        cg(n)%t%forward = cg(n-1)%t%forward
+        cg(n)%t%behind = cg(n-1)%t%behind
+        if (mype==0.and.verbose.gt.4)then
+           write(0,*) '[',mype, '] one pe reduction'
+           write(0,*) '[',mype, '] X:',cg(n)%t%ipe%i
+           write(0,*) '[',mype, '] Y:',cg(n)%t%ipe%j
+           write(0,*) '[',mype, '] Z:',cg(n)%t%ipe%k
+           write(0,*) '[',mype, '] nx', cg(n)%t%npe%i
+           write(0,*) '[',mype, '] ny', cg(n)%t%npe%j
+           write(0,*) '[',mype, '] nz', cg(n)%t%npe%k
+        endif
+     else ! normal split
+        cg(n)%t%npe%i = cg(n-1)%t%npe%i/mg_ref_ratio
+        cg(n)%t%npe%j = cg(n-1)%t%npe%j/mg_ref_ratio
+        cg(n)%t%ipe%i = (cg(n-1)%t%ipe%i-1)/mg_ref_ratio + 1
+        cg(n)%t%ipe%j = (cg(n-1)%t%ipe%j-1)/mg_ref_ratio + 1
+#ifdef TWO_D
+        cg(n)%t%npe%k = cg(n-1)%t%npe%k
+        cg(n)%t%ipe%k = cg(n-1)%t%ipe%k
+#else
+        cg(n)%t%npe%k = cg(n-1)%t%npe%k/mg_ref_ratio
+        cg(n)%t%ipe%k = (cg(n-1)%t%ipe%k-1)/mg_ref_ratio + 1
+#endif
+        ! zero based pe ID, k,j,i
+        pe_id = (cg(n)%t%ipe%i-1)*cg(n)%t%npe%j*cg(n)%t%npe%k &
+             + (cg(n)%t%ipe%j-1)*cg(n)%t%npe%k + (cg(n)%t%ipe%k-1)
+        ii = mod(cg(n-1)%t%ipe%i-1,2)
+        jj = mod(cg(n-1)%t%ipe%j-1,2)
+        kk = mod(cg(n-1)%t%ipe%k-1,2)
+#ifdef TWO_D
+        ii = jj + 2*ii           ! local zero based ID
+#else 
+        ii = kk + 2*jj + 4*ii    ! local zero based ID
+#endif
+        call MPI_COMM_SPLIT(cg(n-1)%t%comm,ii,pe_id,cg(n)%t%comm,ierr)
+        call MPI_COMM_SPLIT(cg(n-1)%t%comm,pe_id,ii,cg(n)%t%loc_comm,ierr)
+        
+        npes(1) = cg(n)%t%npe%i
+        npes(2) = cg(n)%t%npe%j
+        npes(3) = cg(n)%t%npe%k
+        
+        call MPI_cart_create(cg(n)%t%comm,ndims,npes,&
+             periodic, .false., cg(n)%t%comm3D, ierr)
+        
+        ! debug              
+        call MPI_comm_rank(cg(n)%t%comm3D,ii,ierr)
+        call MPI_Cart_Coords(cg(n)%t%comm3D,ii,ndims,npes,ierr)
+        if(cg(n)%t%ipe%i.ne.npes(1)+1) stop '%t%ipe%i'
+        if(cg(n)%t%ipe%j.ne.npes(2)+1) stop '%t%ipe%j'
+        if(cg(n)%t%ipe%k.ne.npes(3)+1) stop '%t%ipe%k'
+        if (mype==mpisize/2.and.verbose.gt.4)then
+           write(0,*) '[',mype, '] cart rank',ii
+           write(0,*) '[',mype, '] X:',cg(n)%t%ipe%i,npes(1)+1
+           write(0,*) '[',mype, '] Y:',cg(n)%t%ipe%j,npes(2)+1
+           write(0,*) '[',mype, '] Z:',cg(n)%t%ipe%k,npes(3)+1
+           write(0,*) '[',mype, '] npx', cg(n)%t%npe%i
+           write(0,*) '[',mype, '] npy', cg(n)%t%npe%j
+           write(0,*) '[',mype, '] npz', cg(n)%t%npe%k
+        endif
+
+        ! do a box -- todo
+        call MPI_Cart_Shift(cg(n)%t%comm3D,0,1,cg(n)%t%left,cg(n)%t%right,ierr)! Neighbors
+        call MPI_Cart_Shift(cg(n)%t%comm3D,1,1,cg(n)%t%bottom,cg(n)%t%top,ierr)
+        call MPI_cart_Shift(cg(n)%t%comm3D,2,1,cg(n)%t%behind,cg(n)%t%forward,ierr)
+        !     logical size of grid stays the same, npe is reduced
+        cg(n)%p%max%hi%i=cg(n-1)%p%max%hi%i
+        cg(n)%p%max%hi%j=cg(n-1)%p%max%hi%j
+        cg(n)%p%max%hi%k=cg(n-1)%p%max%hi%k
+        cg(n)%p%max%lo%i=1
+        cg(n)%p%max%lo%j=1
+        cg(n)%p%max%lo%k=1
+     endif
+     ! print topology
+     if(mype==0.and.verbose.gt.1) then
+        write(6,*) '[',mype,'] level ',n,', nxl=',cg(n)%p%max%hi%i,'npx=',cg(n)%t%npe%i
+        if (mype==-1) then
+           write(6,*) '[',mype,'] ipx=',cg(n)%t%ipe%i, ',ipy=',cg(n)%t%ipe%j,',ipz= ',cg(n)%t%ipe%k
+           write(6,*) '[',mype,'] npx=',cg(n)%t%npe%i, ',npy=',cg(n)%t%npe%j,',npz=',cg(n)%t%npe%k
+           write(6,*) '[',mype,'] nxl=',&
+                cg(n)%p%max%hi%i-cg(n)%p%max%lo%i+1,',nyl=',&
+                cg(n)%p%max%hi%j-cg(n)%p%max%lo%j+1,  ',nzl=',&
+                cg(n)%p%max%hi%k-cg(n)%p%max%lo%k+1
+        endif
+     end if
+     ncgrids = ncgrids + 1 ! keep track for ease
+  enddo ! non-finest coarse grid construction
+  
+  ! derived quantities for coarse grids
+  do n=0,ncgrids-1
+     cg(n)%p%all%lo%i=1-nsg
+     cg(n)%p%all%lo%j=1-nsg
+     cg(n)%p%all%hi%i=cg(n)%p%max%hi%i+nsg
+     cg(n)%p%all%hi%j=cg(n)%p%max%hi%j+nsg
+#ifndef TWO_D
+     cg(n)%p%all%lo%k=1-nsg
+     cg(n)%p%all%hi%k=cg(n)%p%max%hi%k+nsg
+#else
+     cg(n)%p%all%lo%k=1
+     cg(n)%p%all%hi%k=1
+#endif 
+  end do
+
+  ! SR stuff, from coarse to fine
+  nsr = 0 ! global var set here
+  do n=0,-dom_max_sr_grids,-1     
+     ! size of grid, use 'nloc' to keep track of real size
+     nloc%i = nloc%i*mg_ref_ratio 
+     nloc%j = nloc%j*mg_ref_ratio
+     nloc%k = nloc%k*mg_ref_ratio
+     gsr(n)%t%loc_comm = mpi_comm_null
+     gsr(n)%t%comm = comm3d          ! for norms
+     gsr(n)%t%comm3d = mpi_comm_null ! flag in BC
+     gsr(n)%t%npe%i=NPeAxis(1)       ! for BCs
+     gsr(n)%t%npe%j=NPeAxis(2)
+     gsr(n)%t%npe%k=NPeAxis(3)
+     gsr(n)%t%ipe%i=iPeAxis(1)
+     gsr(n)%t%ipe%j=iPeAxis(2)
+     gsr(n)%t%ipe%k=iPeAxis(3)
+
+     ! are we going to make an SR grid?
+     if (nloc%i.le.sr_max_loc_sz .or. nloc%j.le.sr_max_loc_sz &
+#ifdef TWO_D
+          ) then
+#else 
+        .or. nloc%k.le.sr_max_loc_sz) then
+#endif
+        nsr = nsr + 1 ! have sr
+        ! dx
+        gsr(n)%p%dx%i = gsr(n-1)%p%dx%i*mg_ref_ratio
+        gsr(n)%p%dx%j = gsr(n-1)%p%dx%j*mg_ref_ratio
+#ifdef TWO_D
+        gsr(n)%p%dx%k  = 0.d0
+#else 
+        gsr(n)%p%dx%k = gsr(n-1)%p%dx%k*mg_ref_ratio
+#endif
+        ! new valide size, needs to be grown later
+        gsr(n)%p%max%hi%i=nloc%i
+        gsr(n)%p%max%hi%j=nloc%j
+#ifdef TWO_D
+        gsr(n)%p%max%hi%k=1
+#else 
+        gsr(n)%p%max%hi%k=nloc%k
+#endif
+        gsr(n)%t%ipe%i=cg(0)%t%ipe%i
+        gsr(n)%t%ipe%j=cg(0)%t%ipe%j
+        gsr(n)%t%ipe%k=cg(0)%t%ipe%k
+        
+        gsr(n)%t%comm=cg(0)%t%comm3D ! used for norms
+     else
+        gsr(n)%p%max%hi%i=0
+        gsr(n)%p%max%hi%j=0
+        gsr(n)%p%max%hi%k=0
+        !exit
+     end if
+  end do
+
+  ! add buffer/ghosts, set size, from fine to coarse
+  srbf = sr_base_bufsz-sr_bufsz_inc ! the buffer schedual
+  do n=-nsr,0,1
+     if (gsr(n)%p%max%hi%i==0) exit ! no SR
+     srbf = srbf+sr_bufsz_inc ! number of buffer cells
+
+     ! offset to line up with finer grid for R & P: c.bfsz - f.bfsz/2 = c.bfsz/2 + inc/2
+     gsr(n)%cfoffset%i = srbf - (srbf-sr_bufsz_inc)/2 
+     gsr(n)%cfoffset%j = srbf - (srbf-sr_bufsz_inc)/2
+     gsr(n)%cfoffset%k = srbf - (srbf-sr_bufsz_inc)/2
+
+     if (srbf.gt.gsr(n)%p%max%hi%i) stop 'nbuff > patch size.  Could do BCs multiple times (not done)'
+     ! remove buffers at BCs
+     ii = srbf
+     jj = srbf
+#ifndef XPERIODIC
+     if (iPeAxis(1)==1) then
+        ii = 0
+        gsr(n)%cfoffset%i = 0
+     endif
+     if (iPeAxis(1)==NPeAxis(1)) then
+        jj = 0
+     endif
+#endif
+     ! val: valid region inside normal grid
+     gsr(n)%val%lo%i=ii+1
+     gsr(n)%val%hi%i=gsr(n)%p%max%hi%i+ii      ! size of valid + low buffer size
+     gsr(n)%p%max%hi%i=gsr(n)%p%max%hi%i+ii+jj ! new comp area
+     ii = srbf
+     jj = srbf
+#ifndef YPERIODIC
+     if (iPeAxis(2)==1) then
+        ii = 0
+        gsr(n)%cfoffset%j = 0
+     endif
+     if (iPeAxis(2)==NPeAxis(2)) then
+        jj = 0
+     endif
+#endif
+     gsr(n)%val%lo%j=ii+1
+     gsr(n)%val%hi%j=gsr(n)%p%max%hi%j+ii
+     gsr(n)%p%max%hi%j=gsr(n)%p%max%hi%j+ii+jj ! new comp area
+#ifdef TWO_D
+     gsr(n)%p%max%hi%k=1
+     gsr(n)%val%lo%k=1
+     gsr(n)%val%hi%k=1
+#else
+     ii = srbf
+     jj = srbf
+#ifndef ZPERIODIC
+     if (iPeAxis(3)==1) then
+        ii = 0
+        gsr(n)%cfoffset%k = 0
+     endif
+     if (iPeAxis(3)==NPeAxis(3)) then
+        jj = 0
+     endif
+#endif
+     gsr(n)%val%lo%k=ii+1
+     gsr(n)%val%hi%k=gsr(n)%p%max%hi%k+ii
+     gsr(n)%p%max%hi%k=gsr(n)%p%max%hi%k+ii+jj
+#endif 
+     ! data size
+     gsr(n)%p%all%lo%i=-nsg+1
+     gsr(n)%p%all%hi%i= gsr(n)%p%max%hi%i+nsg
+     gsr(n)%p%all%lo%j=-nsg+1
+     gsr(n)%p%all%hi%j=gsr(n)%p%max%hi%j+nsg
+#ifdef TWO_D
+     gsr(n)%p%all%lo%k=1
+     gsr(n)%p%all%hi%k=1
+#else 
+     gsr(n)%p%all%lo%k=-nsg+1
+     gsr(n)%p%all%hi%k=gsr(n)%p%max%hi%k+nsg
+#endif
+     if (verbose.gt.0) then
+        if (mype==0) write (6,'(A,I2,A,I2,I2,I2,A,I4,I4,I4,A,I4,I4,I4,A,I3,A,I2)'),&
+             'new_grids:',n,') valid lo:',gsr(n)%val%lo%i,gsr(n)%val%lo%j,gsr(n)%val%lo%k&
+             ,' valid hi:',gsr(n)%val%hi%i,gsr(n)%val%hi%j,gsr(n)%val%hi%k&
+             ,' max:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j,gsr(n)%p%max%hi%k,' sr nbuf',ii,&
+             ', coarse R/P offset=',gsr(n)%cfoffset%i,gsr(n)%cfoffset%j,gsr(n)%cfoffset%k
+     end if
+  end do
+  ! we don't need ghosts on the coarse SR grid, just used for real buffer
+  gsr(0)%p%all%lo%i=gsr(0)%p%max%lo%i
+  gsr(0)%p%all%lo%j=gsr(0)%p%max%lo%j
+  gsr(0)%p%all%lo%k=gsr(0)%p%max%lo%k
+  gsr(0)%p%all%hi%i=gsr(0)%p%max%hi%i
+  gsr(0)%p%all%hi%j=gsr(0)%p%max%hi%j
+  gsr(0)%p%all%hi%k=gsr(0)%p%max%hi%k
+end subroutine new_grids_private

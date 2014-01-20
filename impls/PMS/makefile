@@ -1,6 +1,6 @@
 all:pms
 #
-OBJ= modules.o main.o kernels_simple.o bdryexchange.o mg.o
+OBJ= modules.o main.o mg.o kernels_simple.o bdryexchange.o
 # f2kcli.o
 #
 include ${PETSC_DIR}/conf/variables
@@ -28,19 +28,20 @@ realclean:
 	rm -f *.o *.mod *.history
 
 run1:
-	-@./pms.${PETSC_ARCH}.ex -problem 0 -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1 -verbose 1
+	-@./pms.${PETSC_ARCH}.ex -problem 0 -nxloc 8 -nyloc 8 -nzloc 8 -nvcycles 0 -nfcycles 1 -verbose 3 -pe_min_sz 4
 
 debug:
 	-@/usr/bin/gdb --args ./pms.${PETSC_ARCH}.ex -nxloc 64 -nyloc 64 -nzloc 64 -nvcycles 0 -nfcycles 1 -verbose 4
 
 val:
-	-@${MPIEXEC} -n 1 valgrind --dsymutil=yes --leak-check=yes --gen-suppressions=yes --num-callers=20 ./pms.${PETSC_ARCH}.ex -nxloc 16 -nyloc 16 -nzloc 16 -sr_max_loc_sz 32 
+	-@${MPIEXEC} -n 64 ~/Codes/valgrind-3.9.0/bin/bin/valgrind --dsymutil=yes --leak-check=no --gen-suppressions=no --num-callers=20 ./pms.${PETSC_ARCH}.ex -nxloc 4 -nyloc 4 -nzloc 4 -verbose 1 -pe_min_sz 4
+#-sr_max_loc_sz 32 
 
 run:
-	-@${MPIEXEC} -n 64 ./pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 16 -nyloc 16 -nzloc 16
+	-@${MPIEXEC} -n 64 ./pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 64 -nyloc 64 -nzloc 64 -verbose 1
 
 runsr:
-	-@${MPIEXEC} -n 64 ./pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 16 -nyloc 16 -nzloc 16 -sr_max_loc_sz 32
+	-@${MPIEXEC} -n 1 ./pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 16 -nyloc 16 -nzloc 16 -sr_max_loc_sz 32 
 
 runv:
 	-@${MPIEXEC} -n 8 ./pms.${PETSC_ARCH}.ex -verbose 1 -nxloc 16 -nyloc 16 -nzloc 16 -nvcycles 10 -nfcycles 0 

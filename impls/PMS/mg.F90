@@ -2,34 +2,53 @@
 !     Ravi Samtaney & Mark Adams
 !     Copyright 2014
 !-----------------------------------------------------------------
-subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
-  use GridModule
+subroutine solve(cg,gsr,Apply1,Apply2,Relax,Res0,errors,nViters)
+  use pe_patch_data_module
   use pms, only:dom_max_grids,nvcycles,nfcycles,rtol,verbose,dom_max_sr_grids,nsr,ncgrids
   use mpistuff
   use error_data_module
+  use discretization, only:nvar
   implicit none
   !
-  type(pe_patch),intent(in)::g(-dom_max_sr_grids:dom_max_grids-1)
+  type(crs_patcht),intent(in):: cg(0:dom_max_grids-1)
+  type(sr_patcht),intent(in):: gsr(-dom_max_sr_grids:0)
   type(error_data),intent(out)::errors(-nsr:ncgrids-1+nvcycles)
-  external Apply1, Apply2, Relax1
+  external Apply1, Apply2, Relax
   double precision,intent(out)::Res0
   integer,intent(out):: nViters
   !     Local Vars
-  integer:: iter
+  integer:: iter,lev
   double precision:: Res,Reslast
-  double precision,dimension(&
-       g(0)%ilo:g(0)%ihi, g(0)%jlo:g(0)%jhi,&
-       g(0)%klo:g(0)%khi, nvar) :: L2u_f,rhs,ux
+  double precision,target,dimension(& ! alloc fine grid data here
+       cg(0)%p%all%lo%i:cg(0)%p%all%hi%i,&
+       cg(0)%p%all%lo%j:cg(0)%p%all%hi%j,&
+       cg(0)%p%all%lo%k:cg(0)%p%all%hi%k,nvar)::L2u_f,rhs,ux
   double precision norm
+  type(data_ptr),dimension(-nsr:0)::sr_ux,sr_rhs,sr_aux
+  interface
+     subroutine SRFin(gsr,cg,fl,sr_ux,sr_rhs,sr_aux,Apply1,Apply2,Relax,Res0,errors)
+       use pe_patch_data_module
+       use pms, only:nvcycles,verbose,nsr,ncgrids,dom_max_sr_grids,dom_max_grids
+       use error_data_module
+       use mpistuff,only:mype
+       implicit none
+       type(sr_patcht),intent(in)::gsr(-dom_max_sr_grids:0)
+       type(crs_patcht),intent(in)::cg(0:dom_max_grids-1)
+       type(data_ptr),dimension(-nsr:0)::sr_ux,sr_rhs,sr_aux
+       type(error_data),intent(out)::errors(-nsr:ncgrids-1+nvcycles)
+       integer,intent(in)::fl
+       double precision,intent(out)::Res0
+       external Apply1, Apply2, Relax
+     end subroutine SRFin
+  end interface
 
-  !call Apply2(L2u_f,ux,g(0)) ! ux==0 
-  call formRHS(rhs,g(0))
-  Res0 = norm(rhs,g(0),2)
+  call formRHS(rhs,cg(0)%p,cg(0)%p%max,cg(0)%t%ipe)
+  Res0 = norm(rhs,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
   if(verbose.gt.1) then
-     call formExactU(L2u_f,g(0))
-     Reslast = norm(L2u_f,g(0),2) 
+     call formExactU(L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%t%ipe,cg(0)%p%dx)
+     Reslast = norm(L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2) 
      if(mype==0) write(6,'(A,E14.6,A,E14.6,A,I5)') '0) solve: |f|_2=',&
-          Res0,', |u_exact|_2=',Reslast,', nx=',g(0)%imax*g(0)%npex
+          Res0,', |u_exact|_2=',Reslast,', nx=',(cg(0)%p%max%hi%i-cg(0)%p%max%lo%i+1)*cg(0)%t%npe%i
   end if
   Reslast = Res0
   ! FMG (SR coarse grid) solve
@@ -37,114 +56,155 @@ subroutine solve(g,Apply1,Apply2,Relax1,Res0,errors,nViters)
   err_lev = 0
   if (nfcycles .ne. 0) then
      iter = iter + 1
-     call MGF(ux,rhs,g,0,Apply1,Apply2,Relax1,errors)
-     call Apply2(L2u_f,ux,g(0))
-     Res = norm(rhs-L2u_f,g(0),2)
+     ! SR start of FMG
+     call MGF(ux,rhs,cg,0,Apply1,Apply2,Relax,errors)
+     ! diagnostics
+     call Apply2(L2u_f,ux,cg(0)%p,cg(0)%t)
+     Res = norm(rhs-L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
      if(mype==0.and.verbose.gt.0)write(6,'(I2,A,E14.6,A,F10.6)') &
-          iter,') solve: |f-Au|_2=',Res,', rate=',Res/Reslast
+          iter,') solve: FMG done |f-Au|_2=',Res,', rate=',Res/Reslast
      Reslast=Res
+     ! SR 
+     if (nsr.gt.0) then
+        sr_ux(0)%p => ux
+        sr_rhs(0)%p => rhs
+        sr_aux(0)%p => L2u_f
+        do lev=-1,-nsr+1,-1
+print *,'do mid SR for ',lev,lev+1
+           NULLIFY(sr_ux(lev)%p,sr_ux(lev)%p,sr_aux(lev)%p)
+           !call SRMid()
+        end do
+        lev = -nsr
+print *,'do Final SR for',lev,lev+1        
+        NULLIFY(sr_ux(lev)%p,sr_ux(lev)%p,sr_aux(lev)%p)
+        call SRFin(gsr,cg,lev,sr_ux,sr_rhs,sr_aux,Apply1,Apply2,Relax,Res0,errors)
+     end if
   else
      ! initailize what is done in FMG
-     call formRHS(rhs,g(0)) ! form RHS explicity on fine grid for vycycles
+     call formRHS(rhs,cg(0)%p,cg(0)%p%max,cg(0)%t%ipe) ! form RHS explicity on fine grid for vycycles
      Res = Res0
      ux=0.d0
+     if (nsr.ne.0) stop 'SR but no F-cycle'
   end if
  
   ! finish with V-cycle - no V with SR
   nViters = 0
   do while(Res/Res0 > rtol .and. iter < nvcycles .and. nsr==0)
-     !call Apply1(L1u,ux,g(0))
-     !L2u_f = rhs - L2u_f + L1u ! defect correction
-     !call MGV(ux,L2u_f,g,0,Apply1,Relax1)
-     call MGV(ux,rhs,g,0,Apply1,Relax1)
+     call MGV(ux,rhs,cg,0,Apply1,Relax)
      iter=iter+1 ! 2 for FMG and 1 for V 
      ! residual
-     call Apply2(L2u_f,ux,g(0))            
-     Res = norm(rhs-L2u_f,g(0),2)
+     call Apply2(L2u_f,ux,cg(0)%p,cg(0)%t)            
+     Res = norm(rhs-L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
      if(mype==0.and.verbose.gt.0)write(6,'(I2,A,E14.6,A,F10.6)') &
-          iter,') solve: |f-Au|_2=',Res,', rate=',Res/Reslast
-     
+          iter,') solve: |f-Au|_2=',Res,', rate=',Res/Reslast     
      ! form errors & convergance measure
      errors(err_lev)%resid = Res
-     call formExactU(L2u_f,g(0))
-     errors(err_lev)%uerror = norm(L2u_f-ux,g(0),error_norm)
-     call formGradError(L2u_f,ux,g(0),errors(err_lev)%graduerr,error_norm)
+     call formExactU(L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%t%ipe,cg(0)%p%dx)
+     errors(err_lev)%uerror = norm(L2u_f-ux,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,error_norm)
      err_lev = err_lev + 1
-
      Reslast=Res
      nViters = nViters + 1
   enddo
+
+  ! output
+  if (verbose.gt.10) then
+     call formExactU(L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%t%ipe,cg(0)%p%dx)
+     call WriteAVSFile(cg(0),ux,rhs,ux-L2u_f,1000)
+  end if
+  
+  do lev=-nsr,-1,1
+     DEALLOCATE(sr_ux(lev)%p,sr_rhs(lev)%p,sr_aux(lev)%p)
+  end do
   return
 end subroutine solve
 !-----------------------------------------------------------------------
 ! MGF: recursive F-cycle with data on stack
 !-----------------------------------------------------------------------
-recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
-  use GridModule
-  use mpistuff,only:mype
+recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax,errors)
+  use grid_module
+  use mpistuff
   use error_data_module
-  use pms, only:dom_max_grids,nfmgvcycles,ncoarsesolveits,verbose,nvcycles,dom_max_sr_grids,nsr,ncgrids
+  use pms
+  use discretization, only:nvar
   implicit none
   integer,intent(in) :: lev
-  type(pe_patch),intent(in)::g(-dom_max_sr_grids:dom_max_grids-1)
+  type(crs_patcht),intent(in):: g(0:dom_max_grids-1)
   type(error_data),intent(out)::errors(-nsr:ncgrids-1+nvcycles)
   double precision,intent(in),dimension(&
-       g(lev)%ilo:g(lev)%ihi, g(lev)%jlo:g(lev)%jhi,& 
-       g(lev)%klo:g(lev)%khi, nvar) :: rhs
+       g(lev)%p%all%lo%i:g(lev)%p%all%hi%i,& 
+       g(lev)%p%all%lo%j:g(lev)%p%all%hi%j,& 
+       g(lev)%p%all%lo%k:g(lev)%p%all%hi%k, nvar) :: rhs
   double precision,intent(out),dimension(&
-       g(lev)%ilo:g(lev)%ihi, g(lev)%jlo:g(lev)%jhi,& 
-       g(lev)%klo:g(lev)%khi, nvar) :: ux
-  external Apply1, Apply2, Relax1
-  ! Local Vars - Coarse. This is new data on the stack
-  integer :: ii,jj,kk
+       g(lev)%p%all%lo%i:g(lev)%p%all%hi%i,&
+       g(lev)%p%all%lo%j:g(lev)%p%all%hi%j,& 
+       g(lev)%p%all%lo%k:g(lev)%p%all%hi%k, nvar) :: ux
+  external Apply1, Apply2, Relax
+  ! Local Vars
+  integer :: ii,jj,kk,ist,jst,kst
   double precision :: norm,tt
+  double precision,dimension(&
+       g(lev)%p%all%lo%i:g(lev)%p%all%hi%i,&
+       g(lev)%p%all%lo%j:g(lev)%p%all%hi%j,&
+       g(lev)%p%all%lo%k:g(lev)%p%all%hi%k,nvar)::tmpF
   ! Coarse data. This is new data on the stack
-  double precision,dimension(g(lev+1)%ilo:g(lev+1)%ihi,g(lev+1)%jlo:g(lev+1)%jhi,&
-       g(lev+1)%klo:g(lev+1)%khi, nvar):: uxC,FC
-  double precision,dimension(g(lev)%ilo:g(lev)%ihi,g(lev)%jlo:g(lev)%jhi,&
-       g(lev)%klo:g(lev)%khi, nvar)::tmp
+  double precision,dimension(&
+       g(lev+1)%p%all%lo%i:g(lev+1)%p%all%hi%i,&
+       g(lev+1)%p%all%lo%j:g(lev+1)%p%all%hi%j,&
+       g(lev+1)%p%all%lo%k:g(lev+1)%p%all%hi%k, nvar):: uxC,FC
+  type(ipoint)::cfoffset
+
+  cfoffset%i = 0;   cfoffset%j = 0;   cfoffset%k = 0; 
 
   ux=0.d0 ! everthing uses initial solution except FMG
   if( is_top(g(lev)) ) then
      ! the real start of FMG - coarse grid solve
      if (lev.gt.0 .and. is_top(g(lev-1))) stop 'MGF: not coarsest grid'
-     if(mype==0.and.verbose.gt.4)write(6,'(I2,A,I2,A,E14.6)') '[ 0]MGF: bot solve lev=',lev
-     !call MGV(ux,rhs,g,lev,Apply1,Relax1)
-     call Relax1(ux,rhs,g(lev),ncoarsesolveits)  ! coar grid solve
+     if(mype==0.and.verbose.gt.2)write(6,'(A,I2)') '[ 0]MGF: bot solve lev=',lev
+     call Relax(ux,rhs,g(lev)%p,g(lev)%t,ncoarsesolveits)  ! coar grid solve
      if (verbose.gt.1) then
-        tt = norm(ux,g(lev),2)
+        tt = norm(ux,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,2)
         if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') MGF bot |u_1|=',tt
      end if
   else
      ! go "down" the V, allating data (on stack), forming RHS, zero out u
-     call formRHS(FC,g(lev+1)) ! form RHS explicity on fine grid
-     call MGF(uxC,FC,g,lev+1,Apply1,Apply2,Relax1,errors) 
-     ! prolongate and correct
-     call Prolong_2(ux,uxC,g(lev),g(lev+1))
-     if (verbose.gt.1) then
-        tt = norm(ux,g(lev),2)
-        if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') MGF |u_1|=',tt
+     ! form RHS explicity on fine grid
+     call formRHS(FC,g(lev+1)%p,g(lev+1)%p%max,g(lev+1)%t%ipe) 
+     if (verbose.gt.2) then
+        tt = norm(FC,g(lev+1)%p%all,g(lev+1)%p%max,g(lev+1)%p%dx,g(lev+1)%t%comm,2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') FMG: |f|=',tt
      end if
+     call MGF(uxC,FC,g,lev+1,Apply1,Apply2,Relax,errors) 
+     if(mype==0.and.verbose.gt.2)write(6,'(A,I2)') '[ 0] MGF: start lev=',lev
+     ! prolongate and correct
+     call Prolong(ux,uxC,g(lev)%t,g(lev+1)%t,cfoffset,g(lev),g(lev+1))
+     if (verbose.gt.2) then
+        tt = norm(uxC,g(lev+1)%p%all,g(lev+1)%p%max,g(lev+1)%p%dx,g(lev+1)%t%comm,2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev+1,') MGF prol src |u|=',tt
+        tt = norm(ux,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') MGF prol dest |u|=',tt
+     end if
+
      ! start of multiple v-cycle
-     jj = nfmgvcycles !; if(lev==0) jj=10
+     jj = nfmgvcycles !; if(lev==0) jj=10 ! accurate coarse solve
      do ii=1,jj
-        call MGV(ux,rhs,g,lev,Apply1,Relax1)
+        call MGV(ux,rhs,g,lev,Apply1,Relax)
      enddo
   end if
 
   ! form errors & convergance measure, recursive so goes from coarse to fine (good)
-  call formExactU(tmp,g(lev))
-  errors(err_lev)%uerror = norm(tmp-ux,g(lev),error_norm)
-  call formGradError(tmp,ux,g(lev),errors(err_lev)%graduerr,error_norm)
-  call Apply2(tmp,ux,g(lev))
-  errors(err_lev)%resid = norm(tmp-rhs,g(lev),2)
- 
+  call formExactU(tmpF,g(lev)%p%all,g(lev)%p%max,g(lev)%t%ipe,g(lev)%p%dx)
+  errors(err_lev)%uerror = norm(tmpF-ux,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,error_norm)
+  call Apply2(tmpF,ux,g(lev)%p,g(lev)%t)
+  errors(err_lev)%resid = norm(tmpF-rhs,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,2)
+
   if (verbose.gt.0) then
      if(mype==0)write(6,'(A,I2,A,E14.6,A,E14.6,A,I8,I8,I8,A,I4,I4,I4)') &
           '     lev=',lev,') MGF |res|_2=',errors(err_lev)%resid,&
           ', |error|=',errors(err_lev)%uerror,&
-          ', n=',g(lev)%imax*g(lev)%npex,g(lev)%jmax*g(lev)%npey,g(lev)%kmax*g(lev)%npez,&
-          ', npe=',g(lev)%npex,g(lev)%npey,g(lev)%npez
+          ', n=',(g(lev)%p%max%hi%i-g(lev)%p%max%lo%i+1)*g(lev)%t%npe%i,&
+                 (g(lev)%p%max%hi%j-g(lev)%p%max%lo%j+1)*g(lev)%t%npe%j,&
+                 (g(lev)%p%max%hi%k-g(lev)%p%max%lo%k+1)*g(lev)%t%npe%k,&
+          ', npe=',g(lev)%t%npe%i,g(lev)%t%npe%j,g(lev)%t%npe%k
   end if
   
   err_lev = err_lev + 1
@@ -152,63 +212,70 @@ recursive subroutine MGF(ux,rhs,g,lev,Apply1,Apply2,Relax1,errors)
 end subroutine MGF
 !-----------------------------------------------------------------------
 recursive subroutine MGV(ux,rhs,g,lev,Apply,Relax)
-  use GridModule
-  use mpistuff, only:mype
-  use pms, only:dom_max_grids,verbose,ncoarsesolveits,ncycles,nsmoothsdown,&
-       nsmoothsup,pe_min_sz,dom_max_sr_grids
+  use grid_module
+  use mpistuff
+  use pms
+  use discretization
   implicit none
-  integer,intent(in):: lev
-  type(pe_patch),intent(in)::g(-dom_max_sr_grids:dom_max_grids-1)
+  integer,intent(in)::lev
+  type(crs_patcht),intent(in)::g(0:dom_max_grids-1)
   double precision,dimension(&
-       g(lev)%ilo:g(lev)%ihi, g(lev)%jlo:g(lev)%jhi, &
-       g(lev)%klo:g(lev)%khi, nvar) :: ux, rhs
+       g(lev)%p%all%lo%i:g(lev)%p%all%hi%i, g(lev)%p%all%lo%j:g(lev)%p%all%hi%j, &
+       g(lev)%p%all%lo%k:g(lev)%p%all%hi%k,nvar) :: ux, rhs
   external Apply,Relax
   !
+  type(ipoint)::cfoffset
   double precision norm,tt
   integer:: ii,jj
   !     Coarse, here is the allocation on stack
   double precision,dimension(&
-       g(lev+1)%ilo:g(lev+1)%ihi, g(lev+1)%jlo:g(lev+1)%jhi, &
-       g(lev+1)%klo:g(lev+1)%khi,nvar) :: uxC, tmpC, FC, ResC
+       g(lev+1)%p%all%lo%i:g(lev+1)%p%all%hi%i,&
+       g(lev+1)%p%all%lo%j:g(lev+1)%p%all%hi%j, &
+       g(lev+1)%p%all%lo%k:g(lev+1)%p%all%hi%k,nvar) :: uxC, tmpC, FC, ResC
   ! This level
   double precision,dimension(&
-       g(lev)%ilo:g(lev)%ihi, g(lev)%jlo:g(lev)%jhi,& 
-       g(lev)%klo:g(lev)%khi, nvar) :: Res
+       g(lev)%p%all%lo%i:g(lev)%p%all%hi%i,&
+       g(lev)%p%all%lo%j:g(lev)%p%all%hi%j,& 
+       g(lev)%p%all%lo%k:g(lev)%p%all%hi%k, nvar) :: Res
   
+  cfoffset%i = 0;   cfoffset%j = 0;   cfoffset%k = 0; 
+
   if (verbose.gt.1) then  
-     tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: u_0=',tt
-     tt = norm(rhs,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: f_0=',tt
+     tt = norm( ux,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,2)
+     if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: u_0=',tt
+     tt = norm(rhs,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,2)
+     if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: f_0=',tt
   end if
   if( is_top(g(lev)) ) then
-     call Relax(ux,rhs,g(lev),ncoarsesolveits)
-     if (verbose.gt.2) then
-        tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: coarse u_1=',tt
-     end if
+     call Relax(ux,rhs,g(lev)%p,g(lev)%t,ncoarsesolveits)
   else
      !     pre smoothing
-     call Relax(ux,rhs,g(lev),nsmoothsdown)
-     if (verbose.gt.2) then
-        tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: u_1=',tt
-     end if
+     call Relax(ux,rhs,g(lev)%p,g(lev)%t,nsmoothsdown)
+    if (verbose.gt.2) then
+       tt = norm(ux,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,2)
+       if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') VMG: after pre |u|=',tt
+    end if
      !     restrict residual
-     call Apply(Res,ux,g(lev))
+     call Apply(Res,ux,g(lev)%p,g(lev)%t)
      Res = rhs - Res
-     if (verbose.gt.2) then
-        tt = norm(Res,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: res^f=',tt
-     end if
-     call RestrictFuse(g(lev+1),g(lev),FC,uxC,Res,ux,uxC)
-     !call Restrict(g(lev+1),g(lev),FC,Res)
-     !     restrict solution
-     !call Restrict(g(lev+1),g(lev),uxC,ux)
-     if (verbose.gt.2) then
-        tt = norm(FC,g(lev+1),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: res^c_0=',tt
-     end if
-
+    if (verbose.gt.2) then
+       tt = norm(Res,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,2)
+       if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') VMG: after pre |r|=',tt
+    end if
+     !     restrict solution & RHS
+     call RestrictFuse(g(lev+1),g(lev),g(lev+1)%t,cfoffset,FC,uxC,Res,ux,uxC)
      !     rhs = residual + Ac(Uc)
-     call Apply(tmpC,uxC,g(lev+1))
+     if (verbose.gt.2) then
+        tt = norm(FC,g(lev+1)%p%all,g(lev+1)%p%max,g(lev+1)%p%dx,g(lev+1)%t%comm,2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') VMG: after R |f|=',tt
+        tt = norm(uxC,g(lev+1)%p%all,g(lev+1)%p%max,g(lev+1)%p%dx,g(lev+1)%t%comm,2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') VMG: after R |u|=',tt
+     end if
+     call Apply(tmpC,uxC,g(lev+1)%p,g(lev+1)%t)
      FC = FC + tmpC
      if (verbose.gt.2) then
-        tt = norm(FC,g(lev+1),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: res^c_1=',tt
+        tt = norm(FC,g(lev+1)%p%all,g(lev+1)%p%max,g(lev+1)%p%dx,g(lev+1)%t%comm,2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') VMG: coarse |r|=',tt
      end if
      !     Temporarily store uxC into tmpC
      tmpC = uxC
@@ -217,381 +284,226 @@ recursive subroutine MGV(ux,rhs,g,lev,Apply,Relax)
      do ii=1,jj
         call MGV(uxC,FC,g,lev+1,Apply,Relax)
      enddo
+      if (verbose.gt.2) then
+        tt = norm(uxC,g(lev+1)%p%all,g(lev+1)%p%max,g(lev+1)%p%dx,g(lev+1)%t%comm,2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') VMG: after MGV() |u|=',tt
+     end if
      !     subtract off old Uc
      uxC = uxC - tmpC
      ! prolongate and correct
-     call Prolong_2(ux,uxC,g(lev),g(lev+1))
+     call Prolong(ux,uxC,g(lev)%t,g(lev+1)%t,cfoffset,g(lev),g(lev+1))
      if (verbose.gt.2) then
-        tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: u_2=',tt
+        tt = norm(ux,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') VMG: after prol |u|=',tt
      end if
      ! end of v cycle, post smoothing
-     call Relax(ux,rhs,g(lev),nsmoothsup)
+     call Relax(ux,rhs,g(lev)%p,g(lev)%t,nsmoothsup)
      if (verbose.gt.2) then
-        tt = norm(ux,g(lev),2); if(mype==0)write(6,'(A,I2,A,E14.6)')'       lev=',lev,') V: u_3=',tt
+        tt = norm(ux,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') VMG: after post smooth |u|=',tt
      end if
   end if
   return
 end subroutine MGV
-!-----------------------------------------------------------------
-subroutine destroy_grids_private(gg)
-  use GridModule
-  use mpistuff
-  use pms, only:pe_min_sz,dom_max_sr_grids,dom_max_grids,nsr
-  implicit none
-  type(pe_patch):: gg(-dom_max_sr_grids:dom_max_grids-1)
-  ! 
-  integer :: n
 
-  do n=-nsr,dom_max_grids-1,1
-     if (n.le.0) then
-        ! nothing to delete for SR and grid 0
-     else if (gg(n)%imax==0) then
-        exit ! past top
-     else if (gg(n-1)%imax > pe_min_sz .and. gg(n-1)%jmax > pe_min_sz &
-#ifdef TWO_D
-          ) then
-#else
-        .and. gg(n-1)%kmax > pe_min_sz ) then
-#endif
-        ! normal reduction, no split yet -- nothing to destroy
-     else 
-        ! reduce number of pes on grid by 2
-        if (gg(n)%npex .ne. gg(n-1)%npex ) then
-           call MPI_COMM_free(gg(n)%comm,ierr)
-           call MPI_COMM_free(gg(n)%loc_comm,ierr) 
-           call MPI_comm_free(gg(n)%comm3d, ierr)
-        end if
-     end if
-     !
-  enddo
-  return
-  end subroutine destroy_grids_private
-!-----------------------------------------------------------------
-subroutine new_grids_private(gg,NPeAxis,iPeAxis,nx,ny,nz,&
-     nxlocal,nylocal,nzlocal,comm3d)
-  use GridModule
-  use mpistuff
+!-----------------------------------------------------------------------
+! SR: SRFin - last leg of SR, collect functional, evanescent data
+!-----------------------------------------------------------------------
+subroutine SRFin(gsr,cg,lev,sr_ux,sr_rhs,sr_aux,Apply1,Apply2,Relax,Res0,errors)
+  use pe_patch_data_module
+  use pms
+  use error_data_module
+  use mpistuff,only:mype
+  use discretization, only:nvar
+  implicit none
+  type(sr_patcht),intent(in)::gsr(-dom_max_sr_grids:0)
+  type(crs_patcht),intent(in)::cg(0:dom_max_grids-1)
+  type(data_ptr), dimension(-nsr:0)::sr_ux,sr_rhs,sr_aux
+  type(error_data),intent(out)::errors(-nsr:ncgrids-1+nvcycles)
+  integer,intent(in)::lev
+  double precision,intent(out)::Res0
+  external Apply1, Apply2, Relax
+  ! 
+  double precision,pointer,DIMENSION(:,:,:,:) :: uxF,rhsF,auxF,uxC,rhsC,auxC
+  type(data_ptr),dimension(lev+1:0)::tmpC
+  integer:: cl,iflv
+  double precision:: norm,tt
+
+  cl=lev+1
+  print *,'SRFin: ASSOCIATED(uxF)=',ASSOCIATED(uxF)
+  ALLOCATE(uxF(&
+       gsr(lev)%p%all%lo%i:gsr(lev)%p%all%hi%i,&
+       gsr(lev)%p%all%lo%j:gsr(lev)%p%all%hi%j,&
+       gsr(lev)%p%all%lo%k:gsr(lev)%p%all%hi%k,nvar),rhsF(&
+       gsr(lev)%p%all%lo%i:gsr(lev)%p%all%hi%i,&
+       gsr(lev)%p%all%lo%j:gsr(lev)%p%all%hi%j,&
+       gsr(lev)%p%all%lo%k:gsr(lev)%p%all%hi%k,nvar),auxF(&
+       gsr(lev)%p%all%lo%i:gsr(lev)%p%all%hi%i,&
+       gsr(lev)%p%all%lo%j:gsr(lev)%p%all%hi%j,&
+       gsr(lev)%p%all%lo%k:gsr(lev)%p%all%hi%k,nvar))
+  print *,'SRFin: rhsC=',rhsC(1,1,1,1)
+  print *,'SRFin: fine grid:',&
+       gsr(lev)%p%all%lo%i,gsr(lev)%p%all%hi%i,&
+       gsr(lev)%p%all%lo%j,gsr(lev)%p%all%hi%j,&
+       gsr(lev)%p%all%lo%k,gsr(lev)%p%all%hi%k,nvar
+  ! 
+  sr_ux(lev)%p  = uxF 
+  sr_rhs(lev)%p = rhsF
+  sr_aux(lev)%p = auxF
+  uxC  =  sr_ux(cl)%p
+  rhsC = sr_rhs(cl)%p
+  auxC = sr_aux(cl)%p
+
+  ! SR1 = Prol + SR2
+  call formRHS(rhsF,gsr(lev)%p,gsr(lev)%p%max,gsr(lev)%t%ipe)
+  uxF = 0.d0
+  call Prolong(uxF,uxC,gsr(lev)%t,gsr(cl)%t,gsr(cl)%cfoffset,gsr(lev),gsr(cl))
+
+  ! SR2 = smooth restrict
+  print *,'SRFin: SR2 cl=',cl
+  do iflv=lev,-1,1
+     print *,'SRFin: SR2 with ',iflv,iflv+1     
+     uxF  =  sr_ux(iflv)%p
+     rhsF = sr_rhs(iflv)%p
+     auxF = sr_aux(iflv)%p
+     uxC  = sr_ux(iflv+1)%p
+     rhsC = sr_rhs(iflv+1)%p
+     auxC = sr_aux(iflv+1)%p
+     ! SR2:    pre smoothing
+     call Relax(uxF,rhsF,gsr(iflv)%p,gsr(iflv)%t,nsmoothsdown)
+     !     restrict residual
+     call Apply2(auxF,uxF,gsr(iflv)%p,gsr(iflv)%t)
+     auxF = rhsF - auxF
+     !     restrict solution & RHS
+     call RestrictFuse(gsr(iflv+1),gsr(iflv),gsr(iflv+1)%t,gsr(iflv+1)%cfoffset,auxC,uxC,auxF,uxF,uxC)
+     !     rhs = residual + Ac(Uc)
+     ALLOCATE(tmpC(iflv+1)%p(&
+          gsr(iflv+1)%p%all%lo%i:gsr(iflv+1)%p%all%hi%i,&
+          gsr(iflv+1)%p%all%lo%j:gsr(iflv+1)%p%all%hi%j,&
+          gsr(iflv+1)%p%all%lo%k:gsr(iflv+1)%p%all%hi%k,nvar))
+     call Apply2(tmpC(iflv+1)%p,uxC,gsr(iflv+1)%p,gsr(iflv+1)%t)
+     auxC = auxC + tmpC(iflv+1)%p
+     !     Temporarily store uxC into tmpC
+     tmpC(iflv+1)%p = uxC
+  end do
+
+  ! coarse grid solve
+  call MGV(sr_ux(0)%p,sr_rhs(0)%p,cg,0,Apply1,Relax)
+
+  ! SR3: prlongate, update, smooth 
+  print *,'SRFin: SR3 cl=',cl
+  do iflv=0,cl,-1
+     print *,'SRFin: SR3 with ',iflv,iflv+1
+     uxF  =  sr_ux(iflv)%p
+     rhsF = sr_rhs(iflv)%p
+     auxF = sr_aux(iflv)%p
+     uxC = sr_ux(iflv+1)%p
+     rhsC = sr_rhs(iflv+1)%p
+     auxC = sr_aux(iflv+1)%p
+     !     subtract off old Uc
+     uxC = uxC - tmpC(iflv+1)%p
+     DEALLOCATE(tmpC(iflv+1)%p)
+     ! prolongate and correct
+     call Prolong(uxF,uxC,gsr(iflv)%t,gsr(iflv+1)%t,gsr(iflv+1)%cfoffset,gsr(iflv),gsr(iflv+1))
+     ! end of v cycle, post smoothing
+     call Relax(uxF,rhsF,gsr(iflv)%p,gsr(iflv)%t,nsmoothsup)
+  end do
+  ! form errors & convergance measure, recursive so goes from coarse to fine (good)
+  uxF  =  sr_ux(lev)%p
+  rhsF = sr_rhs(lev)%p
+  auxF = sr_aux(lev)%p
+  call formExactU(auxF,gsr(lev)%p%all,gsr(lev)%val,gsr(lev)%t%ipe,gsr(lev)%p%dx)
+  errors(err_lev)%uerror=norm(auxF-uxF,gsr(lev)%p%all,gsr(lev)%val,gsr(lev)%p%dx,gsr(lev)%t%comm,error_norm)
+  call Apply2(auxF,uxF,gsr(lev)%p,gsr(lev)%t)
+  errors(err_lev)%resid= norm(auxF-uxF,gsr(lev)%p%all,gsr(lev)%val,gsr(lev)%p%dx,gsr(lev)%t%comm,2)
+
+  if (verbose.gt.0) then
+     if(mype==0)write(6,'(A,I2,A,E14.6,A,E14.6,A,I8,I8,I8,A,I4,I4,I4)') &
+          '     lev=',lev,') SR |res|_2=',errors(err_lev)%resid,&
+          ', |error|=',errors(err_lev)%uerror,', n loc =',&
+          (gsr(lev)%p%max%hi%i-gsr(lev)%p%max%lo%i+1),&
+          (gsr(lev)%p%max%hi%j-gsr(lev)%p%max%lo%j+1),&
+          (gsr(lev)%p%max%hi%k-gsr(lev)%p%max%lo%k+1)
+  end if  
+  err_lev = err_lev + 1
+
+end subroutine SRFin
+!----------------------------------------------------------------
+!
+!-----------------------------------------------------------------------
+subroutine WriteAVSFile(g,ux,rhs,error,index)
+  use grid_module
   use pms
   use domain
+  use mpistuff
+  use iounits
+  !use discretization
   implicit none
-  integer:: nx,ny,nz,nxlocal,nylocal,nzlocal,comm3d
-  integer:: NPeAxis(3),iPeAxis(3)
-  type(pe_patch),intent(out):: gg(-dom_max_sr_grids:dom_max_grids-1)
-  integer :: n,ndims,ii,jj,kk,pe_id,rank
-  ndims = 3
+  type(crs_patcht),intent(in):: g
+  !type(patcht)::p
+  !type(box),intent(in)::val
+  !type(ipoint),intent(in)::ip
+  double precision,intent(in),dimension(&
+       g%p%all%lo%i:g%p%all%hi%i,&
+       g%p%all%lo%j:g%p%all%hi%j,&
+       g%p%all%lo%k:g%p%all%hi%k,1)::ux,rhs,error
+  integer,intent(in)::index
+  !
+  real,dimension(g%p%max%hi%i,g%p%max%hi%j,g%p%max%hi%k)::xn,yn,zn
+  integer:: ii,jj,kk
+  integer:: ig,jg,kg
+  integer:: nbytes,offset,itmp,nelements
+  character*50 outfile,fldfile
+  integer,parameter::ifld=91
+  double precision::coord(3)
 
-  gg(0)%dxg=(xr-xl)/nx
-  gg(0)%dyg=(yr-yl)/ny
-  gg(0)%dzg=(zr-zl)/nz
-
-  gg(0)%comm3d = comm3d
-  gg(0)%comm = MPI_COMM_WORLD
-  gg(0)%loc_comm = mpi_comm_null 
-  !     left, ...
-  call MPI_Cart_Shift(comm3D,0,1,gg(0)%left,gg(0)%right,ierr)
-  call MPI_Cart_Shift(comm3D,1,1,gg(0)%bottom,gg(0)%top,ierr)
-  call MPI_cart_Shift(comm3D,2,1,gg(0)%behind,gg(0)%forward,ierr)
-  if(mype==0.and.verbose.gt.4) write(6,*)'[',mype,'] l,r,t,b=',&
-       gg(0)%left,gg(0)%right,gg(0)%top,&
-       gg(0)%bottom,gg(0)%behind,gg(0)%forward
-  !       ipex ...	
-  gg(0)%ipex = iPeAxis(1)
-  gg(0)%ipey = iPeAxis(2)
-  gg(0)%ipez = iPeAxis(3)
-  
-  gg(0)%npex = NPeAxis(1) 
-  gg(0)%npey = NPeAxis(2) 
-  gg(0)%npez = NPeAxis(3) 
-  ! 
-  gg(0)%imax=nxlocal
-  gg(0)%jmax=nylocal
-#ifdef TWO_D
-  gg(0)%kmax=1
-#else 
-  gg(0)%kmax=nzlocal
+  ig = getIglobalx(g%p%max,g%t%ipe)
+  jg = getIglobaly(g%p%max,g%t%ipe)
+  kg = getIglobalz(g%p%max,g%t%ipe)
+  do kk=1,g%p%max%hi%i
+     do jj=1,g%p%max%hi%j
+        do ii=1,g%p%max%hi%k
+           xn(ii,jj,kk) = real(xl+(ig+ii-1)*g%p%dx%i-0.5*g%p%dx%i)
+           yn(ii,jj,kk) = real(yl+(jg+jj-1)*g%p%dx%j-0.5*g%p%dx%j)
+#ifndef TWO_D
+           zn(ii,jj,kk) = real(zl+(kg+kk-1)*g%p%dx%k-0.5*g%p%dx%k)
 #endif
-  ! start at 1 as 0 was just done
-  ncgrids = 1
-  do n=1,dom_max_grids-1
-     gg(n)%dxg = gg(n-1)%dxg*mg_ref_ratio
-     gg(n)%dyg = gg(n-1)%dyg*mg_ref_ratio
-#ifdef TWO_D
-     gg(n)%kmax = 1
-     gg(n)%dzg  = gg(n-1)%dzg
-#else 
-     gg(n)%dzg = gg(n-1)%dzg*mg_ref_ratio
-#endif
-     ! take care of reductions
-     if( is_top(gg(n-1)) ) then
-        ! all done - clear rest of grids
-        do ii=n,dom_max_grids-1
-           gg(ii)%npex = 0 
-           gg(ii)%npey = 0 
-           gg(ii)%npez = 0 
-           gg(ii)%imax = 0 
-           gg(ii)%jmax = 0 
-           gg(ii)%kmax = 0 
-           ! malloc of next grid in MGV, etc. put some dummy
-           gg(ii)%ilo=0
-           gg(ii)%ihi=1
-           gg(ii)%jlo=0
-           gg(ii)%jhi=1
-           gg(ii)%klo=0
-           gg(ii)%khi=1
         end do
-        exit
-     else if (gg(n-1)%imax>pe_min_sz .and. gg(n-1)%jmax>pe_min_sz &
-#ifndef TWO_D
-          .and. gg(n-1)%kmax>pe_min_sz &
-#endif
-          ) then
-        !     normal reduction, no split yet	      
-        gg(n)%imax=gg(n-1)%imax/mg_ref_ratio
-        gg(n)%jmax=gg(n-1)%jmax/mg_ref_ratio
-#ifndef TWO_D
-        gg(n)%kmax=gg(n-1)%kmax/mg_ref_ratio
-#else
-        gg(n)%kmax=gg(n-1)%kmax ! 1
-#endif
-        gg(n)%comm3d = comm3d
-        gg(n)%comm = MPI_COMM_WORLD
-        gg(n)%ipex = gg(n-1)%ipex
-        gg(n)%ipey = gg(n-1)%ipey
-        gg(n)%ipez = gg(n-1)%ipez
-        gg(n)%npex = gg(n-1)%npex
-        gg(n)%npey = gg(n-1)%npey
-        gg(n)%npez = gg(n-1)%npez
-        
-        gg(n)%left = gg(n-1)%left
-        gg(n)%right = gg(n-1)%right
-        gg(n)%top = gg(n-1)%top
-        gg(n)%bottom = gg(n-1)%bottom
-        gg(n)%forward = gg(n-1)%forward
-        gg(n)%behind = gg(n-1)%behind
-        gg(n)%loc_comm = mpi_comm_null
-     else  ! gg(n-1)%imax == min_psize ...
-        !     reduce number of pes on grid by mg_ref_ratio
-        if(gg(n-1)%npez==1 .or. gg(n-1)%npey==1 &
-#ifndef TWO_D
-             .or. gg(n-1)%npex==1 ) then ! one pe reduction, copy comm stuff
-#else
-           ) then
-#endif
-           gg(n)%npex = gg(n-1)%npex
-           gg(n)%npey = gg(n-1)%npey
-           gg(n)%ipex = gg(n-1)%ipex
-           gg(n)%ipey = gg(n-1)%ipey
-           gg(n)%npez = gg(n-1)%npez
-           gg(n)%ipez = gg(n-1)%ipez
-           
-           gg(n)%imax=gg(n-1)%imax/mg_ref_ratio
-           gg(n)%jmax=gg(n-1)%jmax/mg_ref_ratio
-#ifndef TWO_D
-           gg(n)%kmax=gg(n-1)%kmax/mg_ref_ratio
-#else
-           gg(n)%kmax=1
-#endif
-           ! use old comms, really just comm_self
-           gg(n)%comm3d = gg(n-1)%comm3d
-           gg(n)%comm = gg(n-1)%comm
-           gg(n)%loc_comm = gg(n-1)%loc_comm
-
-           gg(n)%left = gg(n-1)%left
-           gg(n)%right = gg(n-1)%right
-           gg(n)%top = gg(n-1)%top
-           gg(n)%bottom = gg(n-1)%bottom
-           gg(n)%forward = gg(n-1)%forward
-           gg(n)%behind = gg(n-1)%behind
-           if (mype==0.and.verbose.gt.4)then
-              write(0,*) '[',mype, '] one pe reduction'
-              write(0,*) '[',mype, '] X:',gg(n)%ipex
-              write(0,*) '[',mype, '] Y:',gg(n)%ipey
-              write(0,*) '[',mype, '] Z:',gg(n)%ipez
-              write(0,*) '[',mype, '] nx', gg(n)%npex
-              write(0,*) '[',mype, '] ny', gg(n)%npey
-              write(0,*) '[',mype, '] nz', gg(n)%npez
-           endif
-        else ! normal split
-           gg(n)%npex = gg(n-1)%npex/mg_ref_ratio
-           gg(n)%npey = gg(n-1)%npey/mg_ref_ratio
-           gg(n)%ipex = (gg(n-1)%ipex-1)/mg_ref_ratio + 1
-           gg(n)%ipey = (gg(n-1)%ipey-1)/mg_ref_ratio + 1
-#ifdef TWO_D
-           gg(n)%npez = gg(n-1)%npez
-           gg(n)%ipez = gg(n-1)%ipez
-#else
-           gg(n)%npez = gg(n-1)%npez/mg_ref_ratio
-           gg(n)%ipez = (gg(n-1)%ipez-1)/mg_ref_ratio + 1
-#endif
-           ! zero based pe ID
-           pe_id = (gg(n)%ipex-1)*gg(n)%npey*gg(n)%npez &
-                + (gg(n)%ipey-1)*gg(n)%npez + (gg(n)%ipez-1)
-           ii = mod(gg(n-1)%ipex-1,2)
-           jj = mod(gg(n-1)%ipey-1,2)
-           kk = mod(gg(n-1)%ipez-1,2)
-#ifdef TWO_D
-           ii = jj + 2*ii           ! local zero based ID
-#else 
-           ii = kk + 2*jj + 4*ii    ! local zero based ID
-#endif
-           call MPI_COMM_SPLIT(gg(n-1)%comm,ii,pe_id,gg(n)%comm,ierr)
-           call MPI_COMM_SPLIT(gg(n-1)%comm,pe_id,ii,gg(n)%loc_comm,ierr)
-
-           NPeAxis(1) = gg(n)%npex
-           NPeAxis(2) = gg(n)%npey
-           NPeAxis(3) = gg(n)%npez
-           
-           call MPI_cart_create( gg(n)%comm, ndims, NPeAxis, &
-                periodic, .false., gg(n)%comm3D, ierr)
-           
-           ! debug              
-           call MPI_comm_rank(gg(n)%comm3D,ii,ierr)
-           call MPI_Cart_Coords(gg(n)%comm3D,ii,ndims,NPeAxis,ierr)
-           if(gg(n)%ipex.ne.NPeAxis(1)+1) stop '%ipex'
-           if(gg(n)%ipey.ne.NPeAxis(2)+1) stop '%ipey'
-           if(gg(n)%ipez.ne.NPeAxis(3)+1) stop '%ipez'
-           if (mype==npe/2.and.verbose.gt.4)then
-              write(0,*) '[',mype, '] cart rank',ii
-              write(0,*) '[',mype, '] X:',gg(n)%ipex,NPeAxis(1)+1
-              write(0,*) '[',mype, '] Y:',gg(n)%ipey,NPeAxis(2)+1
-              write(0,*) '[',mype, '] Z:',gg(n)%ipez,NPeAxis(3)+1
-              ii = mod(gg(n-1)%ipex-1,2)
-              jj = mod(gg(n-1)%ipey-1,2)
-              write(0,*) '[',mype,'] ii=',ii,'jj=',jj,'pe_id=',pe_id
-              write(0,*) '[',mype, '] nx', gg(n)%npex
-              write(0,*) '[',mype, '] ny', gg(n)%npey
-              write(0,*) '[',mype, '] nz', gg(n)%npez
-           endif
-           
-           call MPI_Cart_Shift(gg(n)%comm3D,0,1,gg(n)%left,gg(n)%right,ierr)! Neighbors
-           call MPI_Cart_Shift(gg(n)%comm3D,1,1,gg(n)%bottom,gg(n)%top,ierr)
-           call MPI_cart_Shift(gg(n)%comm3D,2,1,gg(n)%behind,gg(n)%forward,ierr)
-           !     logical size of grid stays the same
-           gg(n)%imax=gg(n-1)%imax
-           gg(n)%jmax=gg(n-1)%jmax
-#ifndef TWO_D
-           gg(n)%kmax=gg(n-1)%kmax
-#endif
-        endif
-     end if
-     if(gg(n)%npez==0 .or. gg(n)%npey==0 .or. &
-          gg(n)%npex==0 ) then
-        gg(n)%npez=0; gg(n)%npey=0; gg(n)%npex=0
-        if(mype==0) write(6,*)'[',mype,'] domain is too thin',gg(n)%npex==0,gg(n)%npey==0,gg(n)%npez==0
-        stop 'domain is too thin' ! domain is too thin
-     endif
-     
-     ! print topology
-     if(mype==0.and.verbose.gt.1) then
-        write(6,*) '[',mype,'] level ',n,', nxl=',gg(n)%imax,'npx=',gg(n)%npex
-        if (mype==-1) then
-           write(6,*) '[',mype,'] ipx=',gg(n)%ipex, ',ipy=',gg(n)%ipey,',ipz= ',gg(n)%ipez
-           write(6,*) '[',mype,'] npx=',gg(n)%npex, ',npy=',gg(n)%npey,',npz=',gg(n)%npez
-           write(6,*) '[',mype,'] nxl=',gg(n)%imax,   ',nyl=',gg(n)%jmax,  ',nzl=',gg(n)%kmax
-        endif
-     end if
-     ncgrids = ncgrids + 1 ! keep track for ease
-  enddo ! non- finest grid construction
-
-  ! SR stuff, from coarse to fine
-  nsr = 0 ! global var set here
-  do n=-1,-dom_max_sr_grids,-1     
-     ! set everthing
-     gg(n)%loc_comm = mpi_comm_null
-     gg(n)%comm3d = mpi_comm_null
-     gg(n)%comm = mpi_comm_null
-     gg(n)%ipex = 0
-     gg(n)%ipey = 0
-     gg(n)%ipez = 0
-     gg(n)%npex = 0
-     gg(n)%npey = 0
-     gg(n)%npez = 0
-     
-     gg(n)%imax=0 ! used as flag
-
-     ! size of grid
-     nxlocal = nxlocal*mg_ref_ratio 
-     nylocal = nylocal*mg_ref_ratio
-     nzlocal = nzlocal*mg_ref_ratio
-
-     ! are we going to make an SR grid?
-     if ( nxlocal .le. sr_max_loc_sz .or. nylocal .le. sr_max_loc_sz &
-#ifdef TWO_D
-          ) then
-#else 
-        .or. nzlocal .le. sr_max_loc_sz) then
-#endif
-        nsr = nsr + 1 ! have sr
-        ! dx
-        gg(n)%dxg = gg(n-1)%dxg*mg_ref_ratio
-        gg(n)%dyg = gg(n-1)%dyg*mg_ref_ratio
-#ifdef TWO_D
-        gg(n)%kmax = 1
-        gg(n)%dzg  = gg(n-1)%dzg
-#else 
-        gg(n)%dzg = gg(n-1)%dzg*mg_ref_ratio
-#endif
-        ! new (valid) size
-        gg(n)%imax=nxlocal
-        gg(n)%jmax=nylocal
-#ifdef TWO_D
-        gg(n)%kmax=1
-#else 
-        gg(n)%kmax=nzlocal
-#endif
-     else
-        exit
-     end if
+     end do
   end do
 
-  ! add buffer/ghosts, the size
-  ii = sr_base_bufsz - sr_bufsz_inc ! the buffer schedual
-  do n=-nsr,ncgrids-1,1
-     if (n.lt.0) then
-        ii = ii + sr_bufsz_inc ! number of buffer cells
-        gg(n)%ivallo= ii+1
-        gg(n)%jvallo=ii+1
-        gg(n)%ivalhi=gg(n)%imax+ii
-        gg(n)%jvalhi=gg(n)%jmax+ii
-        gg(n)%imax=gg(n)%imax+2*ii ! new comp area
-        gg(n)%jmax=gg(n)%jmax+2*ii
-#ifndef TWO_D
-        gg(n)%kvallo=ii+1
-        gg(n)%kvalhi=gg(n)%kmax+ii
-        gg(n)%kmax=gg(n)%kmax+2*ii
-#else
-        gg(n)%kmax=1
-        gg(n)%kvallo=1
-        gg(n)%kvalhi=1
-#endif 
-     else ! normal grid valid region
-        gg(n)%ivallo=1
-        Gg(n)%jvallo=1
-        gg(n)%kvallo=1
-        gg(n)%ivalhi=gg(n)%imax
-        Gg(n)%jvalhi=gg(n)%jmax
-        gg(n)%kvalhi=gg(n)%kmax
-        ii = 0 ! no more SR buffs (for print)
-     end if
-     ! data size
-     gg(n)%ilo=-nsg+1
-     gg(n)%ihi= gg(n)%imax+nsg
-     gg(n)%jlo=-nsg+1
-     gg(n)%jhi=gg(n)%jmax+nsg
-#ifdef TWO_D
-     gg(n)%klo=1
-     gg(n)%khi=1
-#else 
-     gg(n)%klo=-nsg+1
-     gg(n)%khi=gg(n)%kmax+nsg
-#endif
-     if (verbose.gt.0) then
-        if (mype==0) write (6,'(A,I2,A,I2,I2,I2,A,I4,I4,I4,A,I4,I4,I4,A,I3)'),&
-             'new_grids:',n,') valid lo:',gg(n)%ivallo,gg(n)%jvallo,gg(n)%kvallo&
-             ,' valid hi:',gg(n)%ivalhi,gg(n)%jvalhi,gg(n)%kvalhi&
-             ,' max:',gg(n)%imax,gg(n)%jmax,gg(n)%kmax,' sr nbuf',ii
-     end if
-  end do
+  !     File name for data 
+  write(outfile,1000) float(mype)/1000.0 !,float(index)/1000000.0
+1000 format('u_rhs_error',f4.3,'.dat') !,f7.6)
+  !     Write out fld file
+  if(g%t%ipe%i.eq.1.and.g%t%ipe%j.eq.1.and.g%t%ipe%k.eq.1) then
+     write(fldfile,2000) float(index)/1000000.0
+2000 format('fbov',f7.6,'.bov')
+     open(ifld,file=fldfile,form='formatted')
+     write(ifld,*) 'TIME: 0.0'
+     write(ifld,*) 'DATA_FILE: u_rhs_error.%3d.dat'
+     write(ifld,*) 'DATA_SIZE: ',g%p%max%hi%i*g%t%npe%i+1,g%p%max%hi%j*g%t%npe%j+1,g%p%max%hi%k*g%t%npe%k+1
+     write(ifld,*) 'DATA_FORMAT: DOUBLE'
+     write(ifld,*) 'VARIABLE: u,rhs,error'
+     !     How to detect little vs. big endian automatically in Fortran?
+     write(ifld,*) 'DATA_ENDIAN: LITTLE'
+     write(ifld,*) 'CENTERING: zonal'
+     write(ifld,*) 'BYTE_OFFSET: 4'
+     write(ifld,*) 'BRICK_ORIGIN: 0.0 0.0 0.0'
+     write(ifld,*) 'BRICK_SIZE: 1.0 1.0 1.0'
+     close (ifld)
+  endif
 
-end subroutine new_grids_private
-   
+  open(itecoutput,file=outfile,form='unformatted')  
+  do ii=1,g%p%max%hi%i
+     do jj=1,g%p%max%hi%j
+        do kk=1,g%p%max%hi%k
+           write(itecoutput) ux(ii,jj,kk,1)
+           write(itecoutput) rhs(ii,jj,kk,1)
+           write(itecoutput) error(ii,jj,kk,1)
+        end do
+     end do
+  end do
+  close(itecoutput)
+
+end subroutine WriteAVSFile
