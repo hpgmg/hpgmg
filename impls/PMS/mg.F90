@@ -14,7 +14,7 @@ subroutine solve(cg,gsr,Apply1,Apply2,Relax,Res0,errors,nViters)
   type(sr_patcht),intent(in):: gsr(-dom_max_sr_grids:0)
   type(error_data),intent(out)::errors(-nsr:ncgrids-1+nvcycles)
   external Apply1, Apply2, Relax
-  double precision,intent(out)::Res0
+  double precision,intent(out)::Res0 ! |f| on finest grid
   integer,intent(out):: nViters
   !     Local Vars
   integer:: iter,lev
@@ -79,7 +79,6 @@ subroutine solve(cg,gsr,Apply1,Apply2,Relax,Res0,errors,nViters)
      end if
   else
      ! initailize what is done in FMG
-     call formRHS(rhs,cg(0)%p,cg(0)%p%max,cg(0)%t%ipe) ! form RHS explicity on fine grid for vycycles
      Res = Res0
      ux=0.d0
      if (nsr.ne.0) stop 'SR but no F-cycle'
@@ -450,10 +449,10 @@ subroutine MGSR(gsr,cg,lev,sr_ux,sr_rhs,sr_aux,uxC0,auxC0,Apply1,Apply2,Relax,Re
 !!$       cg(0)%p%all%lo%k:cg(0)%p%all%hi%k,nvar)::uxC0,resC0 ! buffers for coarse grid V-cycle
   type(error_data),intent(out)::errors(-nsr:ncgrids-1+nvcycles)
   integer,intent(in)::lev ! negative index into gsr(lev)
-  double precision,intent(out)::Res0
+  double precision,intent(out)::Res0 ! residual norm on finest grid
   external Apply1, Apply2, Relax
   ! 
-  double precision,pointer,DIMENSION(:,:,:,:)::uxF,rhsF,auxF,uxC,auxC
+  double precision,pointer,DIMENSION(:,:,:,:)::uxF,rhsF,auxF,uxC,auxC,rhsC
   type(data_ptr),dimension(lev+1:0)::tmpSRC
   integer::iflv,AllocateStatus
   double precision:: norm,tt,t2
@@ -503,8 +502,12 @@ subroutine MGSR(gsr,cg,lev,sr_ux,sr_rhs,sr_aux,uxC0,auxC0,Apply1,Apply2,Relax,Re
   IF (AllocateStatus /= 0) STOP "*** Not enough memory ***"
 
   ! SR1 = Prol + SR2
-  rhsF => sr_rhs(lev)%ptr
+  rhsF => sr_rhs(lev)%ptr ! form F on new level and use for first relax
   call formRHS(rhsF,gsr(lev)%p,gsr(lev)%p%max,gsr(lev)%t%ipe)
+  Res0 = norm(rhsF,gsr(lev)%p%all,gsr(lev)%val,gsr(lev)%p%dx,gsr(lev)%t%comm,2) ! out
+  if (verbose.gt.1) then
+     if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') SR FMG |f|=',Res0
+  end if
   uxC => sr_ux(lev+1)%ptr 
   uxF => sr_ux(lev)%ptr 
   uxF = 0.d0
@@ -516,13 +519,13 @@ subroutine MGSR(gsr,cg,lev,sr_ux,sr_rhs,sr_aux,uxC0,auxC0,Apply1,Apply2,Relax,Re
      if(mype==0)write(6,'(A,I2,A,E14.6)')'lev=',lev,') SR FMG prol dest |u|=',tt
   end if
   
-  ! SR2 = smooth restrict
+  ! SR2 = smooth restrict down to coarse grid 0 (lev+1)
   do iflv=lev,-1,1
      uxF  => sr_ux (iflv)%ptr
      rhsF => sr_rhs(iflv)%ptr
      auxF => sr_aux(iflv)%ptr
      uxC  => sr_ux (iflv+1)%ptr 
-     !rhsC => sr_rhs(iflv+1)%ptr
+     rhsC => sr_rhs(iflv+1)%ptr
      auxC => sr_aux(iflv+1)%ptr
      ! SR2:    pre smoothing
 print *,'MGSR: call relax ',iflv
@@ -539,55 +542,48 @@ print *,'MGSR: call relax DONE',iflv
         tt = norm(auxF,gsr(iflv)%p%all,gsr(iflv)%val,gsr(iflv)%p%dx,gsr(iflv)%t%comm,2)
         if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') SR: after pre |r|=',tt
      end if
-     !     restrict solution & RHS
+     !     restrict solution & residual
      call RestrictFuse(gsr(iflv+1),gsr(iflv),gsr(iflv+1)%t,gsr(iflv+1)%cfoffset,auxC,uxC,auxF,uxF)
      if (verbose.gt.2) then
-        tt = norm(auxF,gsr(iflv+1)%p%all,gsr(iflv+1)%val,gsr(iflv+1)%p%dx,gsr(iflv+1)%t%comm,2)
+        tt = norm(auxC,gsr(iflv+1)%p%all,gsr(iflv+1)%val,gsr(iflv+1)%p%dx,gsr(iflv+1)%t%comm,2)
         if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') SR: after R |f|=',tt
         tt = norm(uxC,gsr(iflv+1)%p%all,gsr(iflv+1)%val,gsr(iflv+1)%p%dx,gsr(iflv+1)%t%comm,2)
         if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') SR: after R |u|=',tt
      end if
-     !     rhs = residual + Ac(Uc)
+     !     rhs = residual + Ac(Uc) = Fc + Ac*R(Uf) - R(Af*Uf) = Fc + tau_c
      ALLOCATE(tmpSRC(iflv+1)%ptr(&
           gsr(iflv+1)%p%all%lo%i:gsr(iflv+1)%p%all%hi%i,&
           gsr(iflv+1)%p%all%lo%j:gsr(iflv+1)%p%all%hi%j,&
           gsr(iflv+1)%p%all%lo%k:gsr(iflv+1)%p%all%hi%k,nvar),STAT=AllocateStatus)
      IF (AllocateStatus /= 0) STOP "*** Not enough memory ***"
      call Apply2(tmpSRC(iflv+1)%ptr,uxC,gsr(iflv+1)%p,gsr(iflv+1)%t)
-     auxC = auxC + tmpSRC(iflv+1)%ptr ! FC in MGV
+     rhsC = auxC + tmpSRC(iflv+1)%ptr ! FC in MGV
      if (verbose.gt.2) then
-        tt = norm(auxC,gsr(iflv+1)%p%all,gsr(iflv+1)%val,gsr(iflv+1)%p%dx,gsr(iflv+1)%t%comm,2)
-        if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') SR: coarse |r|=',tt
+        tt = norm(rhsC,gsr(iflv+1)%p%all,gsr(iflv+1)%val,gsr(iflv+1)%p%dx,gsr(iflv+1)%t%comm,2)
+        if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') SR: coarse |f+tau|=',tt
      end if
-     !     Temporarily store uxC into tmpSRC
-     tmpSRC(iflv+1)%ptr = uxC ! level 0 at end
+     !     Temporarily copy uxC into tmpSRC
+     tmpSRC(iflv+1)%ptr = uxC 
   end do
 
-  ! copy U & F from
-  print *,'1) auxC(1111)',auxC(1,1,1,1)
-  auxC => sr_aux(0)%ptr ! FC in MGV
-  print *,'2) auxC(1111)',auxC(1,1,1,1)
-  print *,'1) uxC(1111)',uxC(1,1,1,1)
-  uxC => tmpSRC(0)%ptr
-  print *,'2) uxC(1111)',uxC(1,1,1,1)
-  
+  ! get U & F from (these are already set)
+  rhsC => sr_rhs(0)%ptr ! FC in MGV
+  uxC  => sr_ux (0)%ptr 
 
-  tt = norm(auxC,gsr(0)%p%all,gsr(0)%val,gsr(0)%p%dx,gsr(0)%t%comm,2)
+  tt = norm(rhsC,gsr(0)%p%all,gsr(0)%val,gsr(0)%p%dx,gsr(0)%t%comm,2)
   if(mype==0)write(6,'(A,I2,A,E14.6)')'***1    lev=',lev,') SR: 0 |r|=',tt
-  
 
-  call copy_sr_crs2(uxC0,auxC0,uxC,auxC,cg(0),gsr(0))
+  call copy_sr_crs2(uxC0,auxC0,uxC,rhsC,cg(0),gsr(0))
 
   tt = norm(auxC0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
   if(mype==0)write(6,'(A,I2,A,E14.6)')'***2    lev=',lev,') SR: 0 |r|=',tt
-  
 
   ! coarse grid solve - these pointers are coarse data types, no SR buffers
   call MGV(uxC0,auxC0,cg,0,Apply1,Relax)
   ! copy coarse grid do SR coarse grid (cg.0-->sr.0)  
 
   if (verbose.gt.2) then
-     tt = norm(uxC,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
+     tt = norm(uxC0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
      if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') SR: after MGV() |u_0_crs|=',tt
   end if
 
@@ -598,7 +594,6 @@ print *,'MGSR: call relax DONE',iflv
      tt = norm(uxC,gsr(0)%p%all,gsr(0)%val,gsr(0)%p%dx,gsr(0)%t%comm,2)
      if(mype==0)write(6,'(A,I2,A,E14.6)')'    lev=',lev,') SR: after MGV() |u_0_sr|=',tt
   end if
-
 
   ! SR3: prlongate, update, smooth 
   print *,'MGSR: SR3 cl=',lev+1

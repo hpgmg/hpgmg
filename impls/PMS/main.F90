@@ -541,9 +541,9 @@ subroutine destroy_grids_private(cg,gsr)
   use mpistuff
   use pms, only:pe_min_sz,dom_max_sr_grids,dom_max_grids,nsr,ncgrids
   implicit none
-  type(crs_patcht),intent(out):: cg(0:dom_max_grids-1)
-  type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
-  ! 
+  type(crs_patcht)::cg(0:dom_max_grids-1)
+  type(sr_patcht)::gsr(-dom_max_sr_grids:0)
+ 
   integer :: n
   
   do n=1,ncgrids
