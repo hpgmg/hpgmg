@@ -8,6 +8,7 @@ program main
   use pms, only:verbose,dom_max_grids,dom_max_sr_grids,problemType
   use mpistuff
   use tags
+  use discretization
   implicit none
   integer:: rank,comm3d,ndims
   integer:: NPeAxis(3),iPeAxis(3)
@@ -23,6 +24,9 @@ program main
   MSG_XCH_YHI_TAG=400
   MSG_XCH_ZLOW_TAG=500
   MSG_XCH_ZHI_TAG=600
+  nsg%i=1
+  nsg%j=1
+  nsg%k=1
 
   ! MPI init - globals
   call MPI_init(ierr)
@@ -129,7 +133,7 @@ subroutine driver(gc,gsr)
   integer,parameter:: cache_flusher_size=1 !1024*1024 ! cache flush array size
   double precision:: cache_flusher(cache_flusher_size),res0,rateu,rategrad
   type(error_data)::errors(-nsr:ncgrids-1+nvcycles)
-  external Apply_const_Lap,GSRB_const_Lap,Jacobi_const_Lap
+  external Apply_const_Lap,GS_RB_const_Lap,Jacobi_const_Lap
   double precision,parameter:: log2r = 1.d0/log(2.d0);
 #ifdef HAVE_PETSC
   call PetscInitialize(PETSC_NULL_CHARACTER,ierr)
@@ -154,7 +158,7 @@ subroutine driver(gc,gsr)
 #endif
         select case (problemType)
         case(0)
-           call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,GSRB_const_Lap,res0,errors,nViters)
+           call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,GS_RB_const_Lap,res0,errors,nViters)
         case(1)
            if(mype==0) write(6,*) 'problemType 1 not implemented -- todo'
         end select
@@ -544,12 +548,12 @@ subroutine destroy_grids_private(cg,gsr)
   
   do n=1,ncgrids
      if (&
-          (cg(n-1)%p%max%hi%i-cg(n-1)%p%max%lo%i+1) > pe_min_sz .and. &
-          (cg(n-1)%p%max%hi%j-cg(n-1)%p%max%lo%j+1) > pe_min_sz &
+          (cg(n-1)%p%max%hi%i) > pe_min_sz .and. &
+          (cg(n-1)%p%max%hi%j) > pe_min_sz &
 #ifdef TWO_D
           ) then
 #else
-        .and. (cg(n-1)%p%max%hi%k-cg(n-1)%p%max%lo%k+1) > pe_min_sz ) then
+        .and. (cg(n-1)%p%max%hi%k) > pe_min_sz ) then
 #endif
         ! normal reduction, no split yet -- nothing to destroy
      else 
@@ -571,7 +575,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
   use mpistuff
   use pms
   use domain
-  use discretization, only:nsg
+  use discretization,only:nsg
   implicit none
   type(ipoint)::nloc
   integer,intent(in):: comm3d
@@ -582,7 +586,8 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
   integer::n,ndims,ii,jj,kk,srbf,pe_id,rank,npes(3)
 
   ndims = 3
-
+  !----------------------------------------------------------------------
+  ! set up finest (coarse) grid
   cg(0)%p%dx%i=(xr-xl)/(nloc%i*NPeAxis(1))
   cg(0)%p%dx%j=(yr-yl)/(nloc%j*NPeAxis(2))
   cg(0)%p%dx%k=(zr-zl)/(nloc%k*NPeAxis(3))
@@ -617,6 +622,10 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
   cg(0)%p%max%hi%k=nloc%k
   cg(0)%p%max%lo%k=1
 #endif
+  if(mype==0.and.verbose.gt.1) then
+     write(6,*) '[',mype,'] level ',0,', nxl=',cg(0)%p%max%hi%i,'npx=',cg(0)%t%npe%i
+  end if
+  !----------------------------------------------------------------------
   ! do coarse grids (non-sr). start at 1 as 0 was just done
   ncgrids = 1
   do n=1,dom_max_grids-1
@@ -654,11 +663,11 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         end do
         exit
      else if (&
-          (cg(n-1)%p%max%hi%i-cg(n-1)%p%max%lo%i+1)>pe_min_sz .and. &
-          (cg(n-1)%p%max%hi%j-cg(n-1)%p%max%lo%j+1)>pe_min_sz &
+          (cg(n-1)%p%max%hi%i)>pe_min_sz .and. &
+          (cg(n-1)%p%max%hi%j)>pe_min_sz &
 #ifndef TWO_D
           .and.&
-          (cg(n-1)%p%max%hi%k-cg(n-1)%p%max%lo%k+1)>pe_min_sz &
+          (cg(n-1)%p%max%hi%k)>pe_min_sz &
 #endif
           ) then
         !     normal reduction, no split yet	      
@@ -800,32 +809,79 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
            write(6,*) '[',mype,'] ipx=',cg(n)%t%ipe%i, ',ipy=',cg(n)%t%ipe%j,',ipz= ',cg(n)%t%ipe%k
            write(6,*) '[',mype,'] npx=',cg(n)%t%npe%i, ',npy=',cg(n)%t%npe%j,',npz=',cg(n)%t%npe%k
            write(6,*) '[',mype,'] nxl=',&
-                cg(n)%p%max%hi%i-cg(n)%p%max%lo%i+1,',nyl=',&
-                cg(n)%p%max%hi%j-cg(n)%p%max%lo%j+1,  ',nzl=',&
-                cg(n)%p%max%hi%k-cg(n)%p%max%lo%k+1
+                cg(n)%p%max%hi%i,',nyl=',&
+                cg(n)%p%max%hi%j,  ',nzl=',&
+                cg(n)%p%max%hi%k
         endif
      end if
      ncgrids = ncgrids + 1 ! keep track for ease
   enddo ! non-finest coarse grid construction
-  
+  !----------------------------------------------------------------------
   ! derived quantities for coarse grids
-  do n=0,ncgrids-1
-     cg(n)%p%all%lo%i=1-nsg
-     cg(n)%p%all%lo%j=1-nsg
-     cg(n)%p%all%hi%i=cg(n)%p%max%hi%i+nsg
-     cg(n)%p%all%hi%j=cg(n)%p%max%hi%j+nsg
+  do n=ncgrids-1,0,-1
+     cg(n)%p%all%lo%i=1-nsg%i
+     cg(n)%p%all%lo%j=1-nsg%j
+     cg(n)%p%all%hi%i=cg(n)%p%max%hi%i+nsg%i
+     cg(n)%p%all%hi%j=cg(n)%p%max%hi%j+nsg%j
 #ifndef TWO_D
-     cg(n)%p%all%lo%k=1-nsg
-     cg(n)%p%all%hi%k=cg(n)%p%max%hi%k+nsg
+     cg(n)%p%all%lo%k=1-nsg%k
+     cg(n)%p%all%hi%k=cg(n)%p%max%hi%k+nsg%k
 #else
      cg(n)%p%all%lo%k=1
      cg(n)%p%all%hi%k=1
 #endif 
+     if (verbose.gt.1 .and.mype==0) write (6,'(A,I2,A,I2,I2,I2,A,I4,I4,I4,A,I4,I4,I4)'),&
+          'new level:',n,&
+          ') allocated lo:',cg(n)%p%all%lo%i,cg(n)%p%all%lo%j,cg(n)%p%all%lo%k&
+          ,' allocated hi:',cg(n)%p%all%hi%i,cg(n)%p%all%hi%j,cg(n)%p%all%hi%k&
+          ,' max:',cg(n)%p%max%hi%i,cg(n)%p%max%hi%j,cg(n)%p%max%hi%k
   end do
-
-  ! SR stuff, from coarse to fine
+  !----------------------------------------------------------------------
+  ! setup SR 0 if we have SR
+  if (nloc%i*mg_ref_ratio.le.sr_max_loc_sz .and. nloc%j*mg_ref_ratio.le.sr_max_loc_sz &
+#ifdef TWO_D
+       ) then
+#else 
+     .and. nloc%k*mg_ref_ratio.le.sr_max_loc_sz) then
+#endif
+     if(mype==0.and.verbose.gt.2) then
+        write(6,*) '[',mype,'] setup SR grid 0, loc n:',nloc%i,nloc%j,nloc%k
+     end if
+     n=0
+     gsr(n)%t%loc_comm = mpi_comm_null
+     gsr(n)%t%comm = comm3d          ! for norms
+     gsr(n)%t%comm3d = mpi_comm_null ! flag in BC
+     gsr(n)%t%npe%i=NPeAxis(1)       ! for BCs
+     gsr(n)%t%npe%j=NPeAxis(2)
+     gsr(n)%t%npe%k=NPeAxis(3)
+     gsr(n)%t%ipe%i=iPeAxis(1)
+     gsr(n)%t%ipe%j=iPeAxis(2)
+     gsr(n)%t%ipe%k=iPeAxis(3)
+     ! dx
+     gsr(n)%p%dx%i = cg(0)%p%dx%i
+     gsr(n)%p%dx%j = cg(0)%p%dx%j
+#ifdef TWO_D
+     gsr(n)%p%dx%k  = 0.d0
+#else 
+     gsr(n)%p%dx%k = cg(0)%p%dx%k
+#endif
+     ! new valide size, needs to be grown later
+     gsr(n)%p%max%hi%i=nloc%i
+     gsr(n)%p%max%hi%j=nloc%j
+#ifdef TWO_D
+     gsr(n)%p%max%hi%k=1
+#else 
+     gsr(n)%p%max%hi%k=nloc%k
+#endif     
+  else
+     gsr(0)%p%max%hi%i=0 ! flag for empty
+     gsr(0)%p%max%hi%j=0
+     gsr(0)%p%max%hi%k=0     
+  end if
+  !----------------------------------------------------------------------
+  ! make real SR levels, from coarse to fine
   nsr = 0 ! global var set here
-  do n=0,-dom_max_sr_grids,-1     
+  do n=-1,-dom_max_sr_grids,-1
      ! size of grid, use 'nloc' to keep track of real size
      nloc%i = nloc%i*mg_ref_ratio 
      nloc%j = nloc%j*mg_ref_ratio
@@ -840,21 +896,21 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
      gsr(n)%t%ipe%j=iPeAxis(2)
      gsr(n)%t%ipe%k=iPeAxis(3)
 
-     ! are we going to make an SR grid?
-     if (nloc%i.le.sr_max_loc_sz .or. nloc%j.le.sr_max_loc_sz &
+     ! are we going to make an SR level?
+     if (nloc%i.le.sr_max_loc_sz .and. nloc%j.le.sr_max_loc_sz &
 #ifdef TWO_D
           ) then
 #else 
-        .or. nloc%k.le.sr_max_loc_sz) then
+        .and. nloc%k.le.sr_max_loc_sz) then
 #endif
         nsr = nsr + 1 ! have sr
         ! dx
-        gsr(n)%p%dx%i = gsr(n-1)%p%dx%i*mg_ref_ratio
-        gsr(n)%p%dx%j = gsr(n-1)%p%dx%j*mg_ref_ratio
+        gsr(n)%p%dx%i = gsr(n+1)%p%dx%i/mg_ref_ratio
+        gsr(n)%p%dx%j = gsr(n+1)%p%dx%j/mg_ref_ratio
 #ifdef TWO_D
         gsr(n)%p%dx%k  = 0.d0
 #else 
-        gsr(n)%p%dx%k = gsr(n-1)%p%dx%k*mg_ref_ratio
+        gsr(n)%p%dx%k = gsr(n+1)%p%dx%k/mg_ref_ratio
 #endif
         ! new valide size, needs to be grown later
         gsr(n)%p%max%hi%i=nloc%i
@@ -864,32 +920,32 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
 #else 
         gsr(n)%p%max%hi%k=nloc%k
 #endif
-        gsr(n)%t%ipe%i=cg(0)%t%ipe%i
-        gsr(n)%t%ipe%j=cg(0)%t%ipe%j
-        gsr(n)%t%ipe%k=cg(0)%t%ipe%k
-        
-        gsr(n)%t%comm=cg(0)%t%comm3D ! used for norms
      else
-        gsr(n)%p%max%hi%i=0
+        gsr(n)%p%max%hi%i=0 
         gsr(n)%p%max%hi%j=0
         gsr(n)%p%max%hi%k=0
-        !exit
      end if
   end do
-
+  if(mype==0.and.verbose.gt.2) then
+     write(6,*) '[',mype,'] setup ',nsr,' SR levels, buffer schedual:',sr_base_bufsz,sr_bufsz_inc
+  end if
+  !----------------------------------------------------------------------
   ! add buffer/ghosts, set size, from fine to coarse
   srbf = sr_base_bufsz-sr_bufsz_inc ! the buffer schedual
   do n=-nsr,0,1
      if (gsr(n)%p%max%hi%i==0) exit ! no SR
      srbf = srbf+sr_bufsz_inc ! number of buffer cells
-
+     if (srbf.gt.gsr(n)%p%max%hi%i.or.srbf.gt.gsr(n)%p%max%hi%j&
+#ifndef TWO_D
+          .or.srbf.gt.gsr(n)%p%max%hi%k)&
+#endif
+          stop 'SR buffer larger than grid'
      ! offset to line up with finer grid for R & P: c.bfsz - f.bfsz/2 = c.bfsz/2 + inc/2
      gsr(n)%cfoffset%i = srbf - (srbf-sr_bufsz_inc)/2 
      gsr(n)%cfoffset%j = srbf - (srbf-sr_bufsz_inc)/2
      gsr(n)%cfoffset%k = srbf - (srbf-sr_bufsz_inc)/2
 
-     if (srbf.gt.gsr(n)%p%max%hi%i) stop 'nbuff > patch size.  Could do BCs multiple times (not done)'
-     ! remove buffers at BCs
+     ! clip buffers at BCs
      ii = srbf
      jj = srbf
 #ifndef XPERIODIC
@@ -940,30 +996,23 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
      gsr(n)%p%max%hi%k=gsr(n)%p%max%hi%k+ii+jj
 #endif 
      ! data size
-     gsr(n)%p%all%lo%i=-nsg+1
-     gsr(n)%p%all%hi%i= gsr(n)%p%max%hi%i+nsg
-     gsr(n)%p%all%lo%j=-nsg+1
-     gsr(n)%p%all%hi%j=gsr(n)%p%max%hi%j+nsg
+     gsr(n)%p%all%lo%i=-nsg%i+1
+     gsr(n)%p%all%hi%i= gsr(n)%p%max%hi%i+nsg%i
+     gsr(n)%p%all%lo%j=-nsg%j+1
+     gsr(n)%p%all%hi%j= gsr(n)%p%max%hi%j+nsg%j
 #ifdef TWO_D
      gsr(n)%p%all%lo%k=1
      gsr(n)%p%all%hi%k=1
 #else 
-     gsr(n)%p%all%lo%k=-nsg+1
-     gsr(n)%p%all%hi%k=gsr(n)%p%max%hi%k+nsg
+     gsr(n)%p%all%lo%k=-nsg%k+1
+     gsr(n)%p%all%hi%k=gsr(n)%p%max%hi%k+nsg%k
 #endif
-     if (verbose.gt.0) then
-        if (mype==0) write (6,'(A,I2,A,I2,I2,I2,A,I4,I4,I4,A,I4,I4,I4,A,I3,A,I2)'),&
-             'new_grids:',n,') valid lo:',gsr(n)%val%lo%i,gsr(n)%val%lo%j,gsr(n)%val%lo%k&
-             ,' valid hi:',gsr(n)%val%hi%i,gsr(n)%val%hi%j,gsr(n)%val%hi%k&
-             ,' max:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j,gsr(n)%p%max%hi%k,' sr nbuf',ii,&
-             ', coarse R/P offset=',gsr(n)%cfoffset%i,gsr(n)%cfoffset%j,gsr(n)%cfoffset%k
-     end if
+     if (verbose.gt.1 .and.mype==0) write (6,'(A,I2,A,I2,I2,I2,A,I4,I4,I4,A,I4,I4,I4,A,I2,I2,I2)'),&
+          'new SR level:',n,') valid lo:',gsr(n)%val%lo%i,gsr(n)%val%lo%j,gsr(n)%val%lo%k&
+          ,' valid hi:',gsr(n)%val%hi%i,gsr(n)%val%hi%j,gsr(n)%val%hi%k&
+          ,' max:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j,gsr(n)%p%max%hi%k,&
+          ', coarse R/P offset=',gsr(n)%cfoffset%i,gsr(n)%cfoffset%j,gsr(n)%cfoffset%k
   end do
-  ! we don't need ghosts on the coarse SR grid, just used for real buffer
-  gsr(0)%p%all%lo%i=gsr(0)%p%max%lo%i
-  gsr(0)%p%all%lo%j=gsr(0)%p%max%lo%j
-  gsr(0)%p%all%lo%k=gsr(0)%p%max%lo%k
-  gsr(0)%p%all%hi%i=gsr(0)%p%max%hi%i
-  gsr(0)%p%all%hi%j=gsr(0)%p%max%hi%j
-  gsr(0)%p%all%hi%k=gsr(0)%p%max%hi%k
+
+  return
 end subroutine new_grids_private

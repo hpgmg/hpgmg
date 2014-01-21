@@ -363,8 +363,8 @@ subroutine RestrictFuse(gc,gf,tc,cOffset,uC,uC2,ux,ux2)
   return
 end subroutine RestrictFuse
 !-----------------------------------------------------------------------
-subroutine Prolong(ux,uxC,tf,tc,cOffset,gf,gc)
-  !  ux = ux + P * uxC
+subroutine Prolong(uxF,uxC,tf,tc,cOffset,gf,gc)
+  !  uxF = uxF + P * uxC
   use pe_patch_data_module
   use mpistuff
   use pms,only:mg_ref_ratio
@@ -375,7 +375,7 @@ subroutine Prolong(ux,uxC,tf,tc,cOffset,gf,gc)
        gc%all%lo%i:gc%all%hi%i,&
        gc%all%lo%j:gc%all%hi%j,&
        gc%all%lo%k:gc%all%hi%k,nvar)
-  double precision,intent(out)::ux(&
+  double precision,intent(out)::uxF(&
        gf%all%lo%i:gf%all%hi%i,&
        gf%all%lo%j:gf%all%hi%j,&
        gf%all%lo%k:gf%all%hi%k,nvar)
@@ -460,140 +460,140 @@ subroutine Prolong(ux,uxC,tf,tc,cOffset,gf,gc)
            kc = kc+1
 
            vv = a11*uxC(ic,jc,kc,:);
-           ux(ii,jj,kk,:)=ux(ii,jj,kk,:) + vv
-           ux(ii+1,jj,kk,:)=ux(ii+1,jj,kk,:) + vv
-           ux(ii+1,jj+1,kk,:)=ux(ii+1,jj+1,kk,:) + vv
-           ux(ii,jj+1,kk,:)=ux(ii,jj+1,kk,:) + vv
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
            
            vv = a22*uxC(ic,jc-1,kc,:);
-           ux(ii,jj,kk,:)=ux(ii,jj,kk,:) + vv
-           ux(ii+1,jj,kk,:)=ux(ii+1,jj,kk,:) + vv
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
            
            vv = a22*uxC(ic,jc+1,kc,:);
-           ux(ii,jj+1,kk,:)=ux(ii,jj+1,kk,:) + vv
-           ux(ii+1,jj+1,kk,:)=ux(ii+1,jj+1,kk,:) + vv
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
            
            vv = a22*uxC(ic+1,jc,kc,:);
-           ux(ii+1,jj,kk,:)=ux(ii+1,jj,kk,:) + vv
-           ux(ii+1,jj+1,kk,:)=ux(ii+1,jj+1,kk,:) + vv
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
            
            vv = a22*uxC(ic-1,jc,kc,:);            
-           ux(ii,jj,kk,:)=ux(ii,jj,kk,:) + vv
-           ux(ii,jj+1,kk,:)=ux(ii,jj+1,kk,:) + vv
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
            
            vv = a33*uxC(ic-1,jc-1,kc,:);
-           ux(ii,jj,kk,:)=ux(ii,jj,kk,:) + vv
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
            
            vv = a33*uxC(ic-1,jc+1,kc,:);            
-           ux(ii,jj+1,kk,:)=ux(ii,jj+1,kk,:) + vv
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
            
            vv = a33*uxC(ic+1,jc-1,kc,:);            
-           ux(ii+1,jj,kk,:)=ux(ii+1,jj,kk,:) + vv
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
            
            vv = a33*uxC(ic+1,jc+1,kc,:);            
-           ux(ii+1,jj+1,kk,:)=ux(ii+1,jj+1,kk,:) + vv
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
 #ifndef TWO_D
            vv = a11*uxC(ic,jc,kc,:);
-           ux(ii,jj,kk+1,:)=ux(ii,jj,kk+1,:) + vv
-           ux(ii+1,jj,kk+1,:)=ux(ii+1,jj,kk+1,:) + vv
-           ux(ii+1,jj+1,kk+1,:)=ux(ii+1,jj+1,kk+1,:) + vv
-           ux(ii,jj+1,kk+1,:)=ux(ii,jj+1,kk+1,:) + vv
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
            
            vv = a22*uxC(ic,jc-1,kc,:);
-           ux(ii,jj,kk+1,:)=ux(ii,jj,kk+1,:) + vv
-           ux(ii+1,jj,kk+1,:)=ux(ii+1,jj,kk+1,:) + vv
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
            
            vv = a22*uxC(ic,jc+1,kc,:);
-           ux(ii,jj+1,kk+1,:)=ux(ii,jj+1,kk+1,:) + vv
-           ux(ii+1,jj+1,kk+1,:)=ux(ii+1,jj+1,kk+1,:) + vv
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
            
            vv = a22*uxC(ic+1,jc,kc,:);
-           ux(ii+1,jj,kk+1,:)=ux(ii+1,jj,kk+1,:) + vv
-           ux(ii+1,jj+1,kk+1,:)=ux(ii+1,jj+1,kk+1,:) + vv
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
            
            vv = a22*uxC(ic-1,jc,kc,:);            
-           ux(ii,jj,kk+1,:)=ux(ii,jj,kk+1,:) + vv
-           ux(ii,jj+1,kk+1,:)=ux(ii,jj+1,kk+1,:) + vv
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
            
            vv = a33*uxC(ic-1,jc-1,kc,:);
-           ux(ii,jj,kk+1,:)=ux(ii,jj,kk+1,:) + vv
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
            
            vv = a33*uxC(ic-1,jc+1,kc,:);            
-           ux(ii,jj+1,kk+1,:)=ux(ii,jj+1,kk+1,:) + vv
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
            
            vv = a33*uxC(ic+1,jc-1,kc,:);            
-           ux(ii+1,jj,kk+1,:)=ux(ii+1,jj,kk+1,:) + vv
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
            
            vv = a33*uxC(ic+1,jc+1,kc,:);            
-           ux(ii+1,jj+1,kk+1,:)=ux(ii+1,jj+1,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
                 
            vv = a22*uxC(ic,jc,kc-1,:);
-           ux(ii,jj,kk,:)=ux(ii,jj,kk,:) + vv
-           ux(ii+1,jj,kk,:)=ux(ii+1,jj,kk,:) + vv
-           ux(ii,jj+1,kk,:)=ux(ii,jj+1,kk,:) + vv
-           ux(ii+1,jj+1,kk,:)=ux(ii+1,jj+1,kk,:) + vv
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
            
            vv = a22*uxC(ic,jc,kc+1,:);
-           ux(ii,jj,kk+1,:)=ux(ii,jj,kk+1,:) + vv
-           ux(ii+1,jj,kk+1,:)=ux(ii+1,jj,kk+1,:) + vv
-           ux(ii,jj+1,kk+1,:)=ux(ii,jj+1,kk+1,:) + vv
-           ux(ii+1,jj+1,kk+1,:)=ux(ii+1,jj+1,kk+1,:) + vv
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
            
            vv = a33*uxC(ic-1,jc,kc-1,:);
-           ux(ii,jj,kk,:)=ux(ii,jj,kk,:) + vv
-           ux(ii,jj+1,kk,:)=ux(ii,jj+1,kk,:) + vv
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
            
            vv = a33*uxC(ic-1,jc,kc+1,:);
-           ux(ii,jj,kk+1,:)=ux(ii,jj,kk+1,:) + vv
-           ux(ii,jj+1,kk+1,:)=ux(ii,jj+1,kk+1,:) + vv
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
            
            vv = a33*uxC(ic,jc-1,kc-1,:);
-           ux(ii,jj,kk,:)=ux(ii,jj,kk,:) + vv
-           ux(ii+1,jj,kk,:)=ux(ii+1,jj,kk,:) + vv
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
            
            vv = a33*uxC(ic,jc-1,kc+1,:);
-           ux(ii,jj,kk+1,:)=ux(ii,jj,kk+1,:) + vv
-           ux(ii+1,jj,kk+1,:)=ux(ii+1,jj,kk+1,:) + vv
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
            
            vv = a33*uxC(ic+1,jc,kc-1,:);
-           ux(ii+1,jj,kk,:)=ux(ii+1,jj,kk,:) + vv
-           ux(ii+1,jj+1,kk,:)=ux(ii+1,jj+1,kk,:) + vv
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
            
            vv = a33*uxC(ic+1,jc,kc+1,:);
-           ux(ii+1,jj,kk+1,:)=ux(ii+1,jj,kk+1,:) + vv
-           ux(ii+1,jj+1,kk+1,:)=ux(ii+1,jj+1,kk+1,:) + vv
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
            
            vv = a33*uxC(ic,jc+1,kc-1,:);
-           ux(ii,jj+1,kk,:)=ux(ii,jj+1,kk,:) + vv
-           ux(ii+1,jj+1,kk,:)=ux(ii+1,jj+1,kk,:) + vv
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
            
            vv = a33*uxC(ic,jc+1,kc+1,:);
-           ux(ii,jj+1,kk+1,:)=ux(ii,jj+1,kk+1,:) + vv
-           ux(ii+1,jj+1,kk+1,:)=ux(ii+1,jj+1,kk+1,:) + vv
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
                 
            vv = a44*uxC(ic-1,jc-1,kc-1,:);
-           ux(ii,jj,kk,:)=ux(ii,jj,kk,:) + vv
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
            
            vv = a44*uxC(ic+1,jc-1,kc-1,:);
-           ux(ii+1,jj,kk,:)=ux(ii+1,jj,kk,:) + vv
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
            
            vv = a44*uxC(ic-1,jc+1,kc-1,:);
-           ux(ii,jj+1,kk,:)=ux(ii,jj+1,kk,:) + vv
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
            
            vv = a44*uxC(ic-1,jc-1,kc+1,:);
-           ux(ii,jj,kk+1,:)=ux(ii,jj,kk+1,:) + vv
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
            
            vv = a44*uxC(ic+1,jc+1,kc-1,:);
-           ux(ii+1,jj+1,kk,:)=ux(ii+1,jj+1,kk,:) + vv
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
            
            vv = a44*uxC(ic-1,jc+1,kc+1,:);
-           ux(ii,jj+1,kk+1,:)=ux(ii,jj+1,kk+1,:) + vv
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
            
            vv = a44*uxC(ic+1,jc-1,kc+1,:);
-           ux(ii+1,jj,kk+1,:)=ux(ii+1,jj,kk+1,:) + vv
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
 
            vv = a44*uxC(ic+1,jc+1,kc+1,:);
-           ux(ii+1,jj+1,kk+1,:)=ux(ii+1,jj+1,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
 #endif
         enddo
      enddo
@@ -601,12 +601,12 @@ subroutine Prolong(ux,uxC,tf,tc,cOffset,gf,gc)
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(5),ierr)
 #endif
-  call SetBCs(ux,gf,tf)
+  call SetBCs(uxF,gf,tf)
   return
 end subroutine Prolong
 
 !-----------------------------------------------------------------------
-subroutine GSRB_const_Lap(phi,rhs,g,t,nits)
+subroutine GS_RB_const_Lap(phi,rhs,g,t,nits)
   use pe_patch_data_module 
   use mpistuff
   use discretization, only:nvar
@@ -649,10 +649,10 @@ subroutine GSRB_const_Lap(phi,rhs,g,t,nits)
         call PetscLogEventBegin(events(2),ierr)
         call PetscLogFlops(flops,ierr)
 #endif 
-        do kk=1,g%max%hi%k
+        do ii=1,g%max%hi%i
            do jj=1,g%max%hi%j
-              offi = mod(ig+jj+jg+kk+kg-1+rbi,2)+1
-              do ii=offi,g%max%hi%i,2
+              offi = mod(ig+ii+jg+jj+kg-2+rbi,2)+1
+              do kk=offi,g%max%hi%k,2
                  ti = dxi2*(phi(ii+1,jj,kk,1)+phi(ii-1,jj,kk,1))
                  tj = dyi2*(phi(ii,jj+1,kk,1)+phi(ii,jj-1,kk,1))
                  !     set
@@ -673,7 +673,7 @@ subroutine GSRB_const_Lap(phi,rhs,g,t,nits)
         call SetBCs(phi,g,t)
      enddo                ! r/b i
   enddo                   ! iters
-end subroutine GSRB_const_Lap
+end subroutine GS_RB_const_Lap
 !-----------------------------------------------------------------------
 subroutine Jacobi_const_Lap(phi,rhs,g,t,nits)
   use pe_patch_data_module
@@ -872,9 +872,9 @@ subroutine FormRHS(rhs,p,val,ip)
   use domain
   use mpistuff
   implicit none
-  type(patcht)::p
-  type(box),intent(in)::val
-  type(ipoint),intent(in)::ip
+  type(patcht)::p             ! max, dx & allocated
+  type(box),intent(in)::val   ! needed to get correct coordinates with buffers in max (SR)
+  type(ipoint),intent(in)::ip ! global position for coordinates
   double precision,intent(out)::rhs(p%all%lo%i:p%all%hi%i,p%all%lo%j:p%all%hi%j,p%all%lo%k:p%all%hi%k,1)
 
   integer:: ii,jj,kk
@@ -900,9 +900,9 @@ subroutine FormRHS(rhs,p,val,ip)
      stop 'x^4 - x^2 ZPERIODIC not defined'
 #endif
      ! RHS = Lap(x^4-x^2)
-     do kk=p%max%lo%i,p%max%hi%i
-        do jj=p%max%lo%k,p%max%hi%j
-           do ii=p%max%lo%k,p%max%hi%k
+     do kk=1,p%max%hi%k
+        do jj=1,p%max%hi%j
+           do ii=1,p%max%hi%i
               coord(1) = xl+(ig+ii-1)*p%dx%i-0.5*p%dx%i
               coord(2) = yl+(jg+jj-1)*p%dx%j-0.5*p%dx%j
 #ifndef TWO_D
@@ -983,7 +983,6 @@ double precision function level_norm2(ux,all,val,dx,comm)
 #ifndef TWO_D
        * dx%k
 #endif
-
   t1 = sum(ux(val%lo%i:val%hi%i,val%lo%j:val%hi%j,val%lo%k:val%hi%k,1)**2)
   call MPI_Allreduce(t1,t2,1,MPI_DOUBLE_PRECISION,MPI_SUM,comm,ierr)
   level_norm2 = sqrt(t2*vol)

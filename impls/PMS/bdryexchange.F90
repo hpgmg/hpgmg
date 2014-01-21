@@ -18,7 +18,6 @@ subroutine SetBCs(ux,g,t)
   call PetscLogEventBegin(events(6),ierr)
 #endif
   if (t%comm3d==mpi_comm_null) then
-     print *, 'doing SR BCs'
      call SetXBC(ux,g,t)
      call SetYBC(ux,g,t)
 #ifndef TWO_D
@@ -53,8 +52,8 @@ subroutine XExchange(ux,g,t)
        g%all%lo%k:g%all%hi%k,nvar)
   type(topot),intent(in)::t
   !
-  double precision:: xbuffer_send(nsg,g%max%hi%j,g%max%hi%k,nvar)
-  double precision:: xbuffer_recv(nsg,g%max%hi%j,g%max%hi%k,nvar)
+  double precision:: xbuffer_send(nsg%i,g%max%hi%j,g%max%hi%k,nvar)
+  double precision:: xbuffer_recv(nsg%i,g%max%hi%j,g%max%hi%k,nvar)
   integer:: XBUFFSIZE
   integer:: jj,mm,kk,idest
   integer:: msg_id_send_x_low
@@ -80,7 +79,7 @@ subroutine XExchange(ux,g,t)
 #endif
      do kk=1,g%max%hi%k
         do jj=1,g%max%hi%j
-           do mm=1,nsg
+           do mm=1,nsg%i
               xbuffer_send(mm,jj,kk,:) = ux(g%max%hi%i+1-mm,jj,kk,:)
            enddo
         enddo
@@ -100,7 +99,7 @@ subroutine XExchange(ux,g,t)
      Call ErrorHandler(ierr,ERROR_WAIT)
      do kk=1,g%max%hi%k
         do jj=1,g%max%hi%j
-           do mm=1,nsg
+           do mm=1,nsg%i
               ux(1-mm,jj,kk,:) = xbuffer_recv(mm,jj,kk,:)
            enddo
         enddo
@@ -133,7 +132,7 @@ subroutine XExchange(ux,g,t)
 #endif
      do kk=1,g%max%hi%k
         do jj=1,g%max%hi%j
-           do mm=1,nsg
+           do mm=1,nsg%i
               xbuffer_send(mm,jj,kk,:) = ux(mm,jj,kk,:)
            enddo
         enddo
@@ -153,7 +152,7 @@ subroutine XExchange(ux,g,t)
      Call ErrorHandler(ierr,ERROR_WAIT)
      do kk=1,g%max%hi%k
         do jj=1,g%max%hi%j
-           do mm=1,nsg
+           do mm=1,nsg%i
               ux(g%max%hi%i+mm,jj,kk,:) = xbuffer_recv(mm,jj,kk,:)
            enddo
         enddo
@@ -189,8 +188,8 @@ subroutine YExchange(ux,g,t)
        g%all%lo%k:g%all%hi%k,nvar)
   type(topot),intent(in)::t
 
-  double precision:: ybuffer_send(g%all%lo%i:g%all%hi%i,nsg,g%max%hi%k,nvar)
-  double precision:: ybuffer_recv(g%all%lo%i:g%all%hi%i,nsg,g%max%hi%k,nvar)
+  double precision:: ybuffer_send(g%all%lo%i:g%all%hi%i,nsg%j,g%max%hi%k,nvar)
+  double precision:: ybuffer_recv(g%all%lo%i:g%all%hi%i,nsg%j,g%max%hi%k,nvar)
   integer:: YBUFFSIZE
   integer:: ii,mm,kk,idest
   integer:: msg_id_send_y_low
@@ -215,7 +214,7 @@ subroutine YExchange(ux,g,t)
 #endif  
      do kk=1,g%max%hi%k
         do ii=g%all%lo%i,g%all%hi%i
-           do mm=1,nsg
+           do mm=1,nsg%j
               ybuffer_send(ii,mm,kk,:) = ux(ii,g%max%hi%j+1-mm,kk,:)
            enddo
         enddo
@@ -235,7 +234,7 @@ subroutine YExchange(ux,g,t)
      Call ErrorHandler(ierr,ERROR_WAIT)     
      do kk=1,g%max%hi%k
         do ii=g%all%lo%i,g%all%hi%i
-           do mm=1,nsg
+           do mm=1,nsg%j
               ux(ii,1-mm,kk,:) = ybuffer_recv(ii,mm,kk,:)
            enddo
         enddo
@@ -268,7 +267,7 @@ subroutine YExchange(ux,g,t)
 #endif
      do kk=1,g%max%hi%k
         do ii=g%all%lo%i,g%all%hi%i
-           do mm=1,nsg
+           do mm=1,nsg%j
               ybuffer_send(ii,mm,kk,:) = ux(ii,mm,kk,:)
            enddo
         enddo
@@ -288,7 +287,7 @@ subroutine YExchange(ux,g,t)
      Call ErrorHandler(ierr,ERROR_WAIT)
      do kk=1,g%max%hi%k
         do ii=g%all%lo%i,g%all%hi%i
-           do mm=1,nsg
+           do mm=1,nsg%j
               ux(ii,g%max%hi%j+mm,kk,:) = ybuffer_recv(ii,mm,kk,:)
            enddo
         enddo
@@ -322,8 +321,8 @@ subroutine ZExchange(ux,g,t)
        g%all%lo%k:g%all%hi%k,nvar)
   type(topot),intent(in)::t
 
-  double precision:: zbuffer_send(g%all%lo%i:g%all%hi%i,g%all%lo%j:g%all%hi%j,nsg,nvar)
-  double precision:: zbuffer_recv(g%all%lo%i:g%all%hi%i,g%all%lo%j:g%all%hi%j,nsg,nvar)
+  double precision:: zbuffer_send(g%all%lo%i:g%all%hi%i,g%all%lo%j:g%all%hi%j,nsg%k,nvar)
+  double precision:: zbuffer_recv(g%all%lo%i:g%all%hi%i,g%all%lo%j:g%all%hi%j,nsg%k,nvar)
   integer:: ZBUFFSIZE
   integer:: ii,jj,mm,idest
   integer:: msg_id_send_z_low
@@ -347,7 +346,7 @@ subroutine ZExchange(ux,g,t)
 #ifndef ZPERIODIC
   if ( t%ipe%k < t%npe%k ) then
 #endif  
-     do mm=1,nsg
+     do mm=1,nsg%k
         do jj=g%all%lo%j,g%all%hi%j
            do ii=g%all%lo%i,g%all%hi%i
               zbuffer_send(ii,jj,mm,:) = ux(ii,jj,g%max%hi%k+1-mm,:)
@@ -367,7 +366,7 @@ subroutine ZExchange(ux,g,t)
 #endif  
      call MPI_Wait(msg_id_recv_z_hi, status, ierr)
      call ErrorHandler(ierr,ERROR_WAIT)
-     do mm=1,nsg
+     do mm=1,nsg%k
         do jj=g%all%lo%j,g%all%hi%j
            do ii=g%all%lo%i,g%all%hi%i
               ux(ii,jj,1-mm,:) = zbuffer_recv(ii,jj,mm,:)
@@ -400,7 +399,7 @@ subroutine ZExchange(ux,g,t)
 #ifndef ZPERIODIC
   if ( t%ipe%k > 1 ) then
 #endif  
-     do mm=1,nsg
+     do mm=1,nsg%k
         do jj=g%all%lo%j,g%all%hi%j
            do ii=g%all%lo%i,g%all%hi%i
               zbuffer_send(ii,jj,mm,:) = ux(ii,jj,1+mm-1,:)
@@ -420,7 +419,7 @@ subroutine ZExchange(ux,g,t)
 #endif  
      call MPI_Wait(msg_id_recv_z_low, status, ierr)
      call ErrorHandler(ierr,ERROR_WAIT)
-     do mm=1,nsg
+     do mm=1,nsg%k
         do jj=g%all%lo%j,g%all%hi%j
            do ii=g%all%lo%i,g%all%hi%i
               ux(ii,jj,g%max%hi%k+mm,:) = zbuffer_recv(ii,jj,mm,:)
@@ -461,48 +460,42 @@ subroutine SetXBC(u,g,t)
   
   xbdry_type = 1 ! 0: neumann; 1: diri -- could switch on type
 #ifndef XPERIODIC
-  if (t%ipe%i .eq. 1) then
-     ii=0
-     if(xbdry_type.eq.0) then !zero grad
-        do kk=1,g%max%hi%k,1
-           do jj=1,g%max%hi%j,1
-              do mm=0,nsg-1,1
+  do mm=0,nsg%i-1,1
+     if (t%ipe%i .eq. 1) then
+        ii=0
+        if(xbdry_type.eq.0) then !zero grad
+           do kk=1,g%max%hi%k,1
+              do jj=1,g%max%hi%j,1                 
                  u(ii-mm,jj,kk,:)=u(ii+mm+1,jj,kk,:)
               enddo
            enddo
-        enddo
-     else if(xbdry_type.eq.1) then ! diri
-        do kk=1,g%max%hi%k,1
-           do jj=1,g%max%hi%j,1
-              do mm=0,nsg-1,1
+        else if(xbdry_type.eq.1) then ! diri
+           do kk=1,g%max%hi%k,1
+              do jj=1,g%max%hi%j,1
                  u(ii-mm,jj,kk,:)=-u(ii+mm+1,jj,kk,:)
               enddo
            enddo
-        enddo
-     endif
-  endif  
-  !  If bdry_type then typeing boundary
-  if (t%ipe%i .eq. t%npe%i) then
-     ii=g%max%hi%i+1
-     if(xbdry_type.eq.0) then ! zero gradient
-        do kk=1,g%max%hi%k,1
-           do jj=1,g%max%hi%j,1
-              do mm=0,nsg-1,1
+        end if
+     end if
+     ! If bdry_type then typeing boundary
+     if (t%ipe%i .eq. t%npe%i) then
+        ii=g%max%hi%i+1
+        if(xbdry_type.eq.0) then ! zero gradient
+           do kk=1,g%max%hi%k,1
+              do jj=1,g%max%hi%j,1
                  u(ii+mm,jj,kk,:)=u(ii-mm-1,jj,kk,:)
               enddo
            enddo
-        enddo
-     else if(xbdry_type.eq.1) then ! Reflecting - perfect conductor      
-        do kk=1,g%max%hi%k,1
-           do jj=1,g%max%hi%j,1
-              do mm=0,nsg-1,1
+        else if(xbdry_type.eq.1) then ! Reflecting - perfect conductor      
+           do kk=1,g%max%hi%k,1
+              do jj=1,g%max%hi%j,1
                  u(ii+mm,jj,kk,:)=-u(ii-mm-1,jj,kk,:)
               enddo
            enddo
-        enddo
+        end if
      endif
-  endif
-#endif  
+  end do
+#endif
   return
 end subroutine SetXBC
 !-----------------------------------------------------------------
@@ -523,7 +516,7 @@ subroutine SetYBC(u,g,t)
   ybdry_type = 1
   !	yl Boundary: Typeing
 #ifndef YPERIODIC	
-  do mm=0,nsg-1,1
+  do mm=0,nsg%j-1,1
      if (t%ipe%j .eq. 1) then
         jj=0
         if(ybdry_type.eq.0) then
@@ -578,7 +571,7 @@ subroutine SetZBC(u,g,t)
   
   zbdry_type = 1
 #ifndef ZPERIODIC
-  do mm=0,nsg-1,1
+  do mm=0,nsg%k-1,1
      if (t%ipe%k .eq. 1) then
         kk=0
         if(zbdry_type.eq.0) then

@@ -136,13 +136,14 @@ module pe_patch_data_module
   end type sr_patcht
   ! array pointer for making arrays of array pointers
   type data_ptr
-     double precision,DIMENSION(:,:,:,:),pointer :: p
+     double precision,DIMENSION(:,:,:,:),POINTER::ptr
   end type data_ptr
 end module pe_patch_data_module
 !-----------------------------------------------------------------------
 module discretization
+  use pe_patch_data_module
   ! PDE, Disc
-  integer,parameter:: nsg=1  ! number of stencil ghosts     
+  type(ipoint)::nsg          ! number of stencil ghosts, need to hack for one SR exch.     
   integer,parameter:: nvar=1 ! num vars per cell
 end module discretization
 !-----------------------------------------------------------------------
