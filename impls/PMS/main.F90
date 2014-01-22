@@ -129,11 +129,11 @@ subroutine driver(gc,gsr)
   type(crs_patcht),intent(out):: gc(0:dom_max_grids-1)
   type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
   !
-  integer:: isolve,ii,coarsest_grid,nViters,kk
+  integer:: isolve,ii,nViters,kk
   integer,parameter:: cache_flusher_size=1 !1024*1024 ! cache flush array size
   double precision:: cache_flusher(cache_flusher_size),res0,rateu,rategrad
-  type(error_data)::errors(-nsr:ncgrids-1+nvcycles)
-  external Apply_const_Lap,GS_RB_const_Lap,Jacobi_const_Lap
+  type(error_data)::errors(0:ncgrids-1+nvcycles+dom_max_sr_grids)
+  !external Apply_const_Lap,GS_RB_const_Lap,Jacobi_const_Lap
   double precision,parameter:: log2r = 1.d0/log(2.d0);
 #ifdef HAVE_PETSC
   call PetscInitialize(PETSC_NULL_CHARACTER,ierr)
@@ -168,13 +168,10 @@ subroutine driver(gc,gsr)
         !if (kk==1) exit ! just do one solve to page everything in
         ! output run data and convergance data
         if(mype==0) then
-           coarsest_grid = 0
-           if (verbose .gt.1) write(6,*)'output: g(0).istop=',is_top(gc(0)),&
-                'nfcycles=',nfcycles
            if (nfcycles .ne. 0 .and. .not. is_top(gc(0)) ) then
               write(iconv,900) isolve,-1.d0,-1.d0,errors(0)%uerror,&
                    -1.0,errors(0)%resid
-              do ii=1,dom_max_grids-1
+              do ii=1,dom_max_grids-1+nsr
                  ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
                  rateu = errors(ii-1)%uerror/errors(ii)%uerror
                  rategrad = 1.0
@@ -184,24 +181,20 @@ subroutine driver(gc,gsr)
                  write(iconv,900) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(ii)%uerror,&
                       -1.0,errors(ii)%resid
 
-                 if( is_top(gc(ii)) ) then 
-                    coarsest_grid = ii
-                    exit ! grids and errors are in reverse order - this is just a counter
-                 end if
+                 if(ii.gt.nsr.and.is_top(gc(ii-nsr))) exit 
               end do
            end if
- 
            ! print V cycles
-           do ii=coarsest_grid,coarsest_grid+nViters-1 ! i is zero bases for 'errors'
+           do ii=ncgrids-1,ncgrids-1+nViters-1 ! i is zero bases for 'errors'
               if (verbose.gt.0) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: V cycle',&
                    ii, ': error=',errors(ii)%uerror,&
                    ': resid=',errors(ii)%resid
               write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,-1.0,&
                    errors(ii)%resid
            end do
-           
+
            ! general output
-           ii = nfcycles*(coarsest_grid+1) + nViters - 1
+           ii = ncgrids + nViters - 1 + nsr
            if (verbose.gt.1) write(6,888) 'solve ',isolve,' done |r|/|f|=',errors(ii)%resid/res0
            write(irun,700) isolve,errors(ii)%uerror,-1.0,errors(ii)%resid/res0
         endif
@@ -872,7 +865,10 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
      gsr(n)%p%max%hi%k=1
 #else 
      gsr(n)%p%max%hi%k=nloc%k
-#endif     
+#endif
+     gsr(n)%p%max%lo%i=1
+     gsr(n)%p%max%lo%j=1
+     gsr(n)%p%max%lo%k=1
   else
      gsr(0)%p%max%hi%i=0 ! flag for empty
      gsr(0)%p%max%hi%j=0
@@ -920,99 +916,104 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
 #else 
         gsr(n)%p%max%hi%k=nloc%k
 #endif
+        gsr(n)%p%max%lo%i=1
+        gsr(n)%p%max%lo%j=1
+        gsr(n)%p%max%lo%k=1
      else
         gsr(n)%p%max%hi%i=0 
         gsr(n)%p%max%hi%j=0
         gsr(n)%p%max%hi%k=0
      end if
   end do
-  if(mype==0.and.verbose.gt.2) then
+  if(mype==0.and.verbose.gt.3.and.nsr.gt.0) then
      write(6,*) '[',mype,'] setup ',nsr,' SR levels, buffer schedual:',sr_base_bufsz,sr_bufsz_inc
   end if
   !----------------------------------------------------------------------
   ! add buffer/ghosts, set size, from fine to coarse
-  srbf = sr_base_bufsz-sr_bufsz_inc ! the buffer schedual
-  do n=-nsr,0,1
-     if (gsr(n)%p%max%hi%i==0) exit ! no SR
-     srbf = srbf+sr_bufsz_inc ! number of buffer cells
-     if (srbf.gt.gsr(n)%p%max%hi%i.or.srbf.gt.gsr(n)%p%max%hi%j&
+  if (nsr.gt.0) then
+     srbf = sr_base_bufsz-sr_bufsz_inc ! the buffer schedual
+     do n=-nsr,0,1
+        srbf = srbf+sr_bufsz_inc ! number of buffer cells
+        if (srbf.gt.gsr(n)%p%max%hi%i.or.srbf.gt.gsr(n)%p%max%hi%j&
 #ifndef TWO_D
-          .or.srbf.gt.gsr(n)%p%max%hi%k)&
+             .or.srbf.gt.gsr(n)%p%max%hi%k)&
 #endif
-          stop 'SR buffer larger than grid'
-     ! offset to line up with finer grid for R & P: c.bfsz - f.bfsz/2 = c.bfsz/2 + inc/2
-     gsr(n)%cfoffset%i = srbf - (srbf-sr_bufsz_inc)/2 
-     gsr(n)%cfoffset%j = srbf - (srbf-sr_bufsz_inc)/2
-     gsr(n)%cfoffset%k = srbf - (srbf-sr_bufsz_inc)/2
-
-     ! clip buffers at BCs
-     ii = srbf
-     jj = srbf
+             stop 'SR buffer larger than grid'
+        ! offset to line up with finer grid for R & P: c.bfsz - f.bfsz/2 = c.bfsz/2 + inc/2
+        gsr(n)%cfoffset%i = srbf - (srbf-sr_bufsz_inc)/2 
+        gsr(n)%cfoffset%j = srbf - (srbf-sr_bufsz_inc)/2
+        gsr(n)%cfoffset%k = srbf - (srbf-sr_bufsz_inc)/2
+        
+        ! clip buffers at BCs
+        ii = srbf
+        jj = srbf
 #ifndef XPERIODIC
-     if (iPeAxis(1)==1) then
-        ii = 0
-        gsr(n)%cfoffset%i = 0
-     endif
-     if (iPeAxis(1)==NPeAxis(1)) then
-        jj = 0
-     endif
+        if (iPeAxis(1)==1) then
+           ii = 0
+           gsr(n)%cfoffset%i = 0
+        endif
+        if (iPeAxis(1)==NPeAxis(1)) then
+           jj = 0
+        endif
 #endif
-     ! val: valid region inside normal grid
-     gsr(n)%val%lo%i=ii+1
-     gsr(n)%val%hi%i=gsr(n)%p%max%hi%i+ii      ! size of valid + low buffer size
-     gsr(n)%p%max%hi%i=gsr(n)%p%max%hi%i+ii+jj ! new comp area
-     ii = srbf
-     jj = srbf
+        ! val: valid region inside normal grid
+        gsr(n)%val%lo%i=ii+1
+        gsr(n)%val%hi%i=gsr(n)%p%max%hi%i+ii      ! size of valid + low buffer size
+        gsr(n)%p%max%hi%i=gsr(n)%p%max%hi%i+ii+jj ! new comp area
+        ! Y
+        ii = srbf
+        jj = srbf
 #ifndef YPERIODIC
-     if (iPeAxis(2)==1) then
-        ii = 0
-        gsr(n)%cfoffset%j = 0
-     endif
-     if (iPeAxis(2)==NPeAxis(2)) then
-        jj = 0
-     endif
+        if (iPeAxis(2)==1) then
+           ii = 0
+           gsr(n)%cfoffset%j = 0
+        endif
+        if (iPeAxis(2)==NPeAxis(2)) then
+           jj = 0
+        endif
 #endif
-     gsr(n)%val%lo%j=ii+1
-     gsr(n)%val%hi%j=gsr(n)%p%max%hi%j+ii
-     gsr(n)%p%max%hi%j=gsr(n)%p%max%hi%j+ii+jj ! new comp area
+        gsr(n)%val%lo%j=ii+1
+        gsr(n)%val%hi%j=gsr(n)%p%max%hi%j+ii
+        gsr(n)%p%max%hi%j=gsr(n)%p%max%hi%j+ii+jj ! new comp area
+        ! Z
 #ifdef TWO_D
-     gsr(n)%p%max%hi%k=1
-     gsr(n)%val%lo%k=1
-     gsr(n)%val%hi%k=1
+        gsr(n)%p%max%hi%k=1
+        gsr(n)%val%lo%k=1
+        gsr(n)%val%hi%k=1
 #else
-     ii = srbf
-     jj = srbf
+        ii = srbf
+        jj = srbf
 #ifndef ZPERIODIC
-     if (iPeAxis(3)==1) then
-        ii = 0
-        gsr(n)%cfoffset%k = 0
-     endif
-     if (iPeAxis(3)==NPeAxis(3)) then
-        jj = 0
-     endif
+        if (iPeAxis(3)==1) then
+           ii = 0
+           gsr(n)%cfoffset%k = 0
+        endif
+        if (iPeAxis(3)==NPeAxis(3)) then
+           jj = 0
+        endif
 #endif
-     gsr(n)%val%lo%k=ii+1
-     gsr(n)%val%hi%k=gsr(n)%p%max%hi%k+ii
-     gsr(n)%p%max%hi%k=gsr(n)%p%max%hi%k+ii+jj
+        gsr(n)%val%lo%k=ii+1
+        gsr(n)%val%hi%k=gsr(n)%p%max%hi%k+ii
+        gsr(n)%p%max%hi%k=gsr(n)%p%max%hi%k+ii+jj
 #endif 
-     ! data size
-     gsr(n)%p%all%lo%i=-nsg%i+1
-     gsr(n)%p%all%hi%i= gsr(n)%p%max%hi%i+nsg%i
-     gsr(n)%p%all%lo%j=-nsg%j+1
-     gsr(n)%p%all%hi%j= gsr(n)%p%max%hi%j+nsg%j
+        ! data size
+        gsr(n)%p%all%lo%i=-nsg%i+1
+        gsr(n)%p%all%hi%i= gsr(n)%p%max%hi%i+nsg%i
+        gsr(n)%p%all%lo%j=-nsg%j+1
+        gsr(n)%p%all%hi%j= gsr(n)%p%max%hi%j+nsg%j
 #ifdef TWO_D
-     gsr(n)%p%all%lo%k=1
-     gsr(n)%p%all%hi%k=1
+        gsr(n)%p%all%lo%k=1
+        gsr(n)%p%all%hi%k=1
 #else 
-     gsr(n)%p%all%lo%k=-nsg%k+1
-     gsr(n)%p%all%hi%k=gsr(n)%p%max%hi%k+nsg%k
+        gsr(n)%p%all%lo%k=-nsg%k+1
+        gsr(n)%p%all%hi%k=gsr(n)%p%max%hi%k+nsg%k
 #endif
-     if (verbose.gt.1 .and.mype==0) write (6,'(A,I2,A,I2,I2,I2,A,I4,I4,I4,A,I4,I4,I4,A,I2,I2,I2)'),&
-          'new SR level:',n,') valid lo:',gsr(n)%val%lo%i,gsr(n)%val%lo%j,gsr(n)%val%lo%k&
-          ,' valid hi:',gsr(n)%val%hi%i,gsr(n)%val%hi%j,gsr(n)%val%hi%k&
-          ,' max:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j,gsr(n)%p%max%hi%k,&
-          ', coarse R/P offset=',gsr(n)%cfoffset%i,gsr(n)%cfoffset%j,gsr(n)%cfoffset%k
-  end do
-
+        if (verbose.gt.1 .and.mype==0) write (6,'(A,I2,A,I2,I2,I2,A,I4,I4,I4,A,I4,I4,I4,A,I2,I2,I2)'),&
+             'new SR level:',n,') valid lo:',gsr(n)%val%lo%i,gsr(n)%val%lo%j,gsr(n)%val%lo%k&
+             ,' valid hi:',gsr(n)%val%hi%i,gsr(n)%val%hi%j,gsr(n)%val%hi%k&
+             ,' max:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j,gsr(n)%p%max%hi%k,&
+             ', coarse R/P offset=',gsr(n)%cfoffset%i,gsr(n)%cfoffset%j,gsr(n)%cfoffset%k
+     end do
+  end if
   return
 end subroutine new_grids_private

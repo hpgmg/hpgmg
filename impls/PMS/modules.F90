@@ -138,34 +138,9 @@ module pe_patch_data_module
   type data_ptr
      double precision,DIMENSION(:,:,:,:),POINTER::ptr
   end type data_ptr
-end module pe_patch_data_module
-!-----------------------------------------------------------------------
-module discretization
-  use pe_patch_data_module
-  ! PDE, Disc
-  type(ipoint)::nsg          ! number of stencil ghosts, need to hack for one SR exch.     
-  integer,parameter:: nvar=1 ! num vars per cell
-end module discretization
-!-----------------------------------------------------------------------
-module grid_module
-  use pe_patch_data_module
 contains
   !-----------------------------------------------------------------
-  logical function is_top(g)
-    use pms, only:bot_min_sz
-    implicit none
-    type(crs_patcht):: g
-    is_top = ( &
-         ((g%p%max%hi%i-g%p%max%lo%i+1).le.bot_min_sz) .or. &
-         ((g%p%max%hi%j-g%p%max%lo%j+1).le.bot_min_sz) &
-#ifndef TWO_D
-         .or. ((g%p%max%hi%k-g%p%max%lo%k+1).le.bot_min_sz) &
-#endif
-         )
-  end function is_top
-  !-----------------------------------------------------------------
   integer function getIglobalx(val,ip)
-    use mpistuff, only:mype
     implicit none
     type(box),intent(in)::val
     type(ipoint),intent(in)::ip
@@ -185,6 +160,140 @@ contains
     type(ipoint),intent(in)::ip
     getiglobalz = (ip%k-1)*(val%hi%k-val%lo%k+1) + 1 
   end function getIglobalz
+end module pe_patch_data_module
+!-----------------------------------------------------------------------
+module discretization
+  use pe_patch_data_module
+  ! PDE, Disc
+  type(ipoint)::nsg          ! number of stencil ghosts, need to hack for one SR exch.     
+  integer,parameter:: nvar=1 ! num vars per cell
+end module discretization
+!-----------------------------------------------------------------------
+module grid_module
+  use pe_patch_data_module
+  ! interfaces - kernels
+  interface
+     ! prolongate
+     subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp)
+       !  uxF = uxF + P * uxC
+       use discretization
+       implicit none
+       type(patcht)::fp,cp
+       double precision,intent(in)::uxC(&
+            cp%all%lo%i:cp%all%hi%i,&
+            cp%all%lo%j:cp%all%hi%j,&
+            cp%all%lo%k:cp%all%hi%k,nvar)
+       double precision,intent(out)::uxF(&
+            fp%all%lo%i:fp%all%hi%i,&
+            fp%all%lo%j:fp%all%hi%j,&
+            fp%all%lo%k:fp%all%hi%k,nvar)
+       type(ipoint),intent(in)::cOffset
+       type(topot),intent(in)::tc,tf
+     end subroutine Prolong
+     ! restriction
+     subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
+       use discretization
+       implicit none
+       type(patcht),intent(in)::fp,cp
+       double precision,intent(in),dimension(&
+            fp%all%lo%i:fp%all%hi%i,&
+            fp%all%lo%j:fp%all%hi%j,&
+       fp%all%lo%k:fp%all%hi%k,nvar)::ux,ux2
+       double precision,intent(out),dimension(&
+       cp%all%lo%i:cp%all%hi%i,&
+       cp%all%lo%j:cp%all%hi%j,&
+       cp%all%lo%k:cp%all%hi%k,nvar)::uC,uC2
+       type(ipoint),intent(in)::cOffset
+       type(topot),intent(in)::tc
+     end subroutine RestrictFuse
+     !
+     subroutine Apply_const_Lap(uxo,ux,p,t)
+       use discretization
+       implicit none
+       type(patcht)::p
+       double precision,intent(out):: uxo(&
+            p%all%lo%i:p%all%hi%i,&
+            p%all%lo%j:p%all%hi%j,&
+            p%all%lo%k:p%all%hi%k,nvar)
+       double precision,intent(in)::ux(&
+            p%all%lo%i:p%all%hi%i,&
+            p%all%lo%j:p%all%hi%j,&
+            p%all%lo%k:p%all%hi%k,nvar)
+       type(topot),intent(in)::t
+     end subroutine Apply_const_Lap
+     !
+     subroutine GS_RB_const_Lap(phi,rhs,p,t,nits)
+       use discretization
+       use pms, only:verbose
+       implicit none
+       type(patcht)::p
+       double precision,dimension(&
+            p%all%lo%i:p%all%hi%i,&
+            p%all%lo%j:p%all%hi%j,&
+            p%all%lo%k:p%all%hi%k,nvar)::phi,rhs
+       type(topot),intent(in)::t
+       integer,intent(in):: nits
+     end subroutine GS_RB_const_Lap
+     !
+     subroutine formExactU(exact,all,val,ip,dx)
+       use pe_patch_data_module    
+       implicit none
+       type(box),intent(in)::val
+       type(ipoint),intent(in)::ip
+       type(box),intent(in)::all
+       type(dpoint),intent(in):: dx
+       double precision,intent(out)::exact(all%lo%i:all%hi%i,all%lo%j:all%hi%j,&
+            all%lo%k:all%hi%k,1)
+     end subroutine formExactU
+     subroutine FormRHS(rhs,p,val,ip)
+       use pe_patch_data_module
+       implicit none
+       type(patcht)::p             ! max, dx & allocated
+       type(box),intent(in)::val   ! needed to get correct coordinates with buffers in max (SR)
+       type(ipoint),intent(in)::ip ! global position for coordinates
+       double precision,intent(out)::rhs(p%all%lo%i:p%all%hi%i,p%all%lo%j:p%all%hi%j,&
+            p%all%lo%k:p%all%hi%k,1)
+     end subroutine FormRHS
+     !
+     double precision function norm(ux,all,val,dx,comm,type)
+       use pe_patch_data_module
+       use mpistuff
+       implicit none 
+       type(box),intent(in)::val
+       type(box),intent(in)::all
+       type(dpoint),intent(in):: dx
+       double precision,intent(in)::ux(all%lo%i:all%hi%i,all%lo%j:all%hi%j,&
+            all%lo%k:all%hi%k,1)
+       integer,intent(in) :: type
+       integer,intent(in)::comm
+     end function norm
+     !
+     subroutine SetBCs(ux,p,t)
+       use discretization
+       use mpistuff
+       implicit none
+       type(topot),intent(in)::t
+       type(patcht),intent(in)::p
+       double precision:: ux(&
+            p%all%lo%i:p%all%hi%i,&
+            p%all%lo%j:p%all%hi%j,&
+            p%all%lo%k:p%all%hi%k,nvar)
+     end subroutine SetBCs
+  end interface
+contains
+  !-----------------------------------------------------------------
+  logical function is_top(g)
+    use pms, only:bot_min_sz
+    implicit none
+    type(crs_patcht):: g
+    is_top = ( &
+         ((g%p%max%hi%i-g%p%max%lo%i+1).le.bot_min_sz) .or. &
+         ((g%p%max%hi%j-g%p%max%lo%j+1).le.bot_min_sz) &
+#ifndef TWO_D
+         .or. ((g%p%max%hi%k-g%p%max%lo%k+1).le.bot_min_sz) &
+#endif
+         )
+  end function is_top
   !-----------------------------------------------------------------
   subroutine new_grids(gc,gsr,NPeAxis,iPeAxis,nloc,comm3d)
     use pms,only:dom_max_sr_grids,dom_max_grids

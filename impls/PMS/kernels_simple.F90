@@ -4,32 +4,31 @@
 !-----------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-! RestrictFuse: fuse two restricts.  Only do BCs on 2nd!
+! RestrictFuse: fuse two restricts (u,f).  Only do BCs on 1st!
 !-----------------------------------------------------------------------
-subroutine RestrictFuse(gc,gf,tc,cOffset,uC,uC2,ux,ux2)
-  use pe_patch_data_module
+subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
+  use discretization
   use mpistuff
   use tags
   use pms, only:mg_ref_ratio
-  use discretization, only:nvar
   implicit none
-  type(patcht),intent(in):: gf,gc
+  type(patcht),intent(in)::fp,cp
   double precision,intent(in),dimension(&
-       gf%all%lo%i:gf%all%hi%i,&
-       gf%all%lo%j:gf%all%hi%j,&
-       gf%all%lo%k:gf%all%hi%k,nvar)::ux,ux2
+       fp%all%lo%i:fp%all%hi%i,&
+       fp%all%lo%j:fp%all%hi%j,&
+       fp%all%lo%k:fp%all%hi%k,nvar)::ux,ux2
   double precision,intent(out),dimension(&
-       gc%all%lo%i:gc%all%hi%i,&
-       gc%all%lo%j:gc%all%hi%j,&
-       gc%all%lo%k:gc%all%hi%k,nvar)::uC,uC2
+       cp%all%lo%i:cp%all%hi%i,&
+       cp%all%lo%j:cp%all%hi%j,&
+       cp%all%lo%k:cp%all%hi%k,nvar)::uC,uC2
   type(ipoint),intent(in)::cOffset
   type(topot),intent(in)::tc
   ! buffers are 1/2 of coarse
 #ifdef TWO_D
-  double precision,dimension(gf%max%hi%i/2,gf%max%hi%j/2,1,2*nvar)::&
+  double precision,dimension(fp%max%hi%i/2,fp%max%hi%j/2,1,2*nvar)::&
        sb,rb1,rb2,rb3,rb0
 #else
-  double precision,dimension(gf%max%hi%i/2,gf%max%hi%j/2,gf%max%hi%k/2,2*nvar)::&
+  double precision,dimension(fp%max%hi%i/2,fp%max%hi%j/2,fp%max%hi%k/2,2*nvar)::&
        sb,rb0,rb1,rb2,rb3,rb4,rb5,rb6,rb7
 #endif
   double precision :: a11,a22,a33,a44,tmp
@@ -42,12 +41,12 @@ subroutine RestrictFuse(gc,gf,tc,cOffset,uC,uC2,ux,ux2)
   if (mg_ref_ratio .ne. 2) stop 'Restrict2 not done for refratio != 2'
 
   ! size of coarse patch to set & end of buffer
-  csz%i = gf%max%hi%i/2
-  csz%j = gf%max%hi%j/2
-  csz%k = gf%max%hi%k/2
+  csz%i = fp%max%hi%i/2
+  csz%j = fp%max%hi%j/2
+  csz%k = fp%max%hi%k/2
 
 #ifdef HAVE_PETSC
-  flops = 2*2*gf%max%hi%i*gf%max%hi%j*gf%max%hi%k
+  flops = 2*2*fp%max%hi%i*fp%max%hi%j*fp%max%hi%k
   call PetscLogEventBegin(events(3),ierr)
   call PetscLogFlops(flops,ierr)
 #endif
@@ -63,8 +62,8 @@ subroutine RestrictFuse(gc,gf,tc,cOffset,uC,uC2,ux,ux2)
   a44 = 1.d0/64.d0/4.d0 ! not used
 #endif
   ! split grid
-  if(gf%max%hi%i==gc%max%hi%i) then ! could this happen on an SR grid?
-     if (gf%max%hi%j.ne.gc%max%hi%j .or. gf%max%hi%k.ne.gc%max%hi%k) stop 'RestrictFuse'
+  if(fp%max%hi%i==cp%max%hi%i) then ! could this happen on an SR grid?
+     if (fp%max%hi%j.ne.cp%max%hi%j .or. fp%max%hi%k.ne.cp%max%hi%k) stop 'RestrictFuse'
      ! start of 2nd half
      cstrt2%i = 1+csz%i
      cstrt2%j = 1+csz%j
@@ -316,7 +315,7 @@ subroutine RestrictFuse(gc,gf,tc,cOffset,uC,uC2,ux,ux2)
      enddo
   else ! normal grid (not split)
      ! c.max : |  offset  | | | | | offset |
-     if (gf%max%hi%i/2+2*cOffset%i.ne.gc%max%hi%i) stop 'gf%max%i/2+2*cOffset.ne.gc%max%i'
+     if (fp%max%hi%i/2+2*cOffset%i.ne.cp%max%hi%i) stop 'fp%max%i/2+2*cOffset.ne.cp%max%i'
      ! end of 1st half
      cend1%i = cOffset%i+csz%i
      cend1%j = cOffset%j+csz%j
@@ -355,30 +354,29 @@ subroutine RestrictFuse(gc,gf,tc,cOffset,uC,uC2,ux,ux2)
         enddo
      enddo
   endif
-  call SetBCs(uC,gc,tc) ! RHS does not need to be done!
-  call SetBCs(uC2,gc,tc)
+  call SetBCs(uC,cp,tc) 
+  !call SetBCs(uC2,cp,tc) ! RHS does not need to be done!
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(3),ierr)
 #endif
   return
 end subroutine RestrictFuse
 !-----------------------------------------------------------------------
-subroutine Prolong(uxF,uxC,tf,tc,cOffset,gf,gc)
+subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp)
   !  uxF = uxF + P * uxC
-  use pe_patch_data_module
+  use discretization
   use mpistuff
   use pms,only:mg_ref_ratio
-  use discretization, only:nvar
   implicit none
-  type(patcht)::gf,gc
+  type(patcht)::fp,cp
   double precision,intent(in)::uxC(&
-       gc%all%lo%i:gc%all%hi%i,&
-       gc%all%lo%j:gc%all%hi%j,&
-       gc%all%lo%k:gc%all%hi%k,nvar)
+       cp%all%lo%i:cp%all%hi%i,&
+       cp%all%lo%j:cp%all%hi%j,&
+       cp%all%lo%k:cp%all%hi%k,nvar)
   double precision,intent(out)::uxF(&
-       gf%all%lo%i:gf%all%hi%i,&
-       gf%all%lo%j:gf%all%hi%j,&
-       gf%all%lo%k:gf%all%hi%k,nvar)
+       fp%all%lo%i:fp%all%hi%i,&
+       fp%all%lo%j:fp%all%hi%j,&
+       fp%all%lo%k:fp%all%hi%k,nvar)
   type(ipoint),intent(in)::cOffset
   type(topot),intent(in)::tc,tf
   !     Local vars
@@ -386,7 +384,7 @@ subroutine Prolong(uxF,uxC,tf,tc,cOffset,gf,gc)
   double precision :: vv(nvar),a11,a22,a33,a44
 #ifndef TWO_D
 #ifdef HAVE_PETSC
-  flops = 106*gc%max%hi%i*gc%max%hi%j*gc%max%hi%k
+  flops = 106*cp%max%hi%i*cp%max%hi%j*cp%max%hi%k
   call PetscLogEventBegin(events(5),ierr)
   call PetscLogFlops(flops,ierr)
 #endif
@@ -397,40 +395,40 @@ subroutine Prolong(uxF,uxC,tf,tc,cOffset,gf,gc)
   cjst = cOffset%j+1
   ckst = cOffset%k+1
   lpe = -1
-  if(gf%max%hi%i == gc%max%hi%i) then ! split grid - chop it, not SR
+  if(fp%max%hi%i == cp%max%hi%i) then ! split grid - chop it, not SR
 
      call MPI_comm_rank(tc%loc_comm,lpe,ierr)
 
 #ifdef TWO_D
      if( lpe == 0 ) then       ! (1,1)
      else if ( lpe == 1 ) then ! (1,2)
-        cjst = cjst+gf%max%hi%j/2
+        cjst = cjst+fp%max%hi%j/2
      else 
-        cist = cist+gf%max%hi%i/2
+        cist = cist+fp%max%hi%i/2
         if ( lpe == 2 ) then ! (2,1)
         else if ( lpe == 3 ) then ! (2,2)
-           cjst = cjst+gf%max%hi%j/2
+           cjst = cjst+fp%max%hi%j/2
         end if
      end if
 #else
      if( lpe == 0 ) then       ! (1,1,1)
      else if ( lpe == 1 ) then ! (1,1,2)
-        ckst = ckst+gf%max%hi%k/2
+        ckst = ckst+fp%max%hi%k/2
      else if ( lpe == 2 ) then ! (1,2,1)
-        cjst = cjst+gf%max%hi%j/2
+        cjst = cjst+fp%max%hi%j/2
      else if ( lpe == 3 ) then ! (1,2,2)
-        cjst = cjst+gf%max%hi%j/2
-        ckst = ckst+gf%max%hi%k/2
+        cjst = cjst+fp%max%hi%j/2
+        ckst = ckst+fp%max%hi%k/2
      else
-        cist = cist+gf%max%hi%i/2
+        cist = cist+fp%max%hi%i/2
         if( lpe == 4 ) then  ! (2,1,1)
         else if ( lpe == 5 ) then ! (2,1,2)
-           ckst = ckst+gf%max%hi%k/2
+           ckst = ckst+fp%max%hi%k/2
         else if ( lpe == 6 ) then ! (2,2,1)
-           cjst = cjst+gf%max%hi%j/2
+           cjst = cjst+fp%max%hi%j/2
         else if ( lpe == 7 ) then ! (2,2,2)
-           cjst = cjst+gf%max%hi%j/2
-           ckst = ckst+gf%max%hi%k/2
+           cjst = cjst+fp%max%hi%j/2
+           ckst = ckst+fp%max%hi%k/2
         else
            stop 'should not be here 3): Prolong'
         endif
@@ -450,13 +448,13 @@ subroutine Prolong(uxF,uxC,tf,tc,cOffset,gf,gc)
   a44 = 1.d0/64.d0
 #endif
   ic = cist-1
-  do ii=1,gf%max%hi%i,2
+  do ii=1,fp%max%hi%i,2
      ic=ic+1
      jc = cjst-1
-     do jj=1,gf%max%hi%j,2
+     do jj=1,fp%max%hi%j,2
         jc = jc+1
         kc = ckst-1
-        do kk=1,gf%max%hi%k,2
+        do kk=1,fp%max%hi%k,2
            kc = kc+1
 
            vv = a11*uxC(ic,jc,kc,:);
@@ -601,44 +599,43 @@ subroutine Prolong(uxF,uxC,tf,tc,cOffset,gf,gc)
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(5),ierr)
 #endif
-  call SetBCs(uxF,gf,tf)
+  call SetBCs(uxF,fp,tf)
   return
 end subroutine Prolong
-
 !-----------------------------------------------------------------------
-subroutine GS_RB_const_Lap(phi,rhs,g,t,nits)
-  use pe_patch_data_module 
+subroutine GS_RB_const_Lap(phi,rhs,p,t,nits)
+  use discretization
   use mpistuff
-  use discretization, only:nvar
+  use pms, only:verbose
   implicit none
-  type(patcht):: g
+  type(patcht)::p
   double precision,dimension(&
-       g%all%lo%i:g%all%hi%i,&
-       g%all%lo%j:g%all%hi%j,&
-       g%all%lo%k:g%all%hi%k,nvar)::phi,rhs
+       p%all%lo%i:p%all%hi%i,&
+       p%all%lo%j:p%all%hi%j,&
+       p%all%lo%k:p%all%hi%k,nvar)::phi,rhs
   type(topot),intent(in)::t
   integer,intent(in):: nits
   !     Local vars
   integer:: m,ii,jj,j,kk,rbi,offi,ig,jg,kg
   double precision:: ti,tj,tk,dxi2,dyi2,numer,denoi
-  double precision norm
 #ifndef TWO_D
   double precision:: dzi2
 #endif
 
-  ig = 0 ! getIglobalx(b,t) ! these are always even so really not needed
-  jg = 0 ! getIglobaly(b,t)
-  kg = 0 ! getIglobalz(b,t)
+  ! these are always even for non-SR and in SR does not matter except for exact
+  ig = 0 ! getIglobalx(val,t) 
+  jg = 0 ! getIglobaly(val,t)
+  kg = 0 ! getIglobalz(val,t)
 #ifndef TWO_D
-  flops = 13*g%max%hi%i*g%max%hi%j*g%max%hi%k/2 ! R/B
+  flops = 13*p%max%hi%i*p%max%hi%j*p%max%hi%k/2 ! R/B
 #else
-  flops = 9*g%max%hi%i*g%max%hi%j*g%max%hi%k/2 ! R/B
+  flops = 9*p%max%hi%i*p%max%hi%j*p%max%hi%k/2 ! R/B
 #endif
-  dxi2=1.d0/g%dx%i**2
-  dyi2=1.d0/g%dx%j**2
+  dxi2=1.d0/p%dx%i**2
+  dyi2=1.d0/p%dx%j**2
   denoi = - 2.d0*(dxi2 + dyi2)  
 #ifndef TWO_D
-  dzi2=1.d0/g%dx%k**2
+  dzi2=1.d0/p%dx%k**2
   denoi = denoi - 2.d0*dzi2
 #endif
   denoi = 1.d0/denoi
@@ -649,10 +646,10 @@ subroutine GS_RB_const_Lap(phi,rhs,g,t,nits)
         call PetscLogEventBegin(events(2),ierr)
         call PetscLogFlops(flops,ierr)
 #endif 
-        do ii=1,g%max%hi%i
-           do jj=1,g%max%hi%j
+        do ii=1,p%max%hi%i
+           do jj=1,p%max%hi%j
               offi = mod(ig+ii+jg+jj+kg-2+rbi,2)+1
-              do kk=offi,g%max%hi%k,2
+              do kk=offi,p%max%hi%k,2
                  ti = dxi2*(phi(ii+1,jj,kk,1)+phi(ii-1,jj,kk,1))
                  tj = dyi2*(phi(ii,jj+1,kk,1)+phi(ii,jj-1,kk,1))
                  !     set
@@ -670,45 +667,44 @@ subroutine GS_RB_const_Lap(phi,rhs,g,t,nits)
 #ifdef HAVE_PETSC
         call PetscLogEventEnd(events(2),ierr)
 #endif
-        call SetBCs(phi,g,t)
+        call SetBCs(phi,p,t)
      enddo                ! r/b i
   enddo                   ! iters
 end subroutine GS_RB_const_Lap
 !-----------------------------------------------------------------------
-subroutine Jacobi_const_Lap(phi,rhs,g,t,nits)
-  use pe_patch_data_module
+subroutine Jacobi_const_Lap(phi,rhs,p,t,nits)
+  use discretization
   use mpistuff
-  use discretization, only:nvar
   implicit none
-  type(patcht):: g
+  type(patcht)::p
   double precision,dimension(&
-       g%all%lo%i:g%all%hi%i,&
-       g%all%lo%j:g%all%hi%j,&
-       g%all%lo%k:g%all%hi%k,nvar)::phi,rhs
+       p%all%lo%i:p%all%hi%i,&
+       p%all%lo%j:p%all%hi%j,&
+       p%all%lo%k:p%all%hi%k,nvar)::phi,rhs
   type(topot),intent(in)::t
   integer,intent(in):: nits
   !     Local vars
   double precision,dimension(&
-       g%all%lo%i:g%all%hi%i,&
-       g%all%lo%j:g%all%hi%j,&
-       g%all%lo%k:g%all%hi%k,nvar)::Res,Dk,Aux
+       p%all%lo%i:p%all%hi%i,&
+       p%all%lo%j:p%all%hi%j,&
+       p%all%lo%k:p%all%hi%k,nvar)::Res,Dk,Aux
   double precision:: diag,dxl,dyl,ti,tj,tk,dxi2,dyi2,dzi2,dzl
   double precision:: over,under,rhok,rhokp1,beta,alpha,delta,theta,s1,ct1,ct2,omega
   integer::k
 #ifndef TWO_D
 #ifdef HAVE_PETSC
-  flops = 13*g%max%hi%i*g%max%hi%j*g%max%hi%k
+  flops = 13*p%max%hi%i*p%max%hi%j*p%max%hi%k
   call PetscLogEventBegin(events(4),ierr)
   call PetscLogFlops(flops,ierr)
 #endif
 #endif
-  dxl=g%dx%i
-  dyl=g%dx%j
+  dxl=p%dx%i
+  dyl=p%dx%j
   dxi2=1.d0/dxl**2
   dyi2=1.d0/dyl**2
   diag = -2.d0*(dxi2+dyi2)
 #ifndef TWO_D
-  dzl=g%dx%k
+  dzl=p%dx%k
   dzi2=1.d0/dzl**2
   diag = -2.d0*(dxi2+dyi2+dzi2)
 #endif  
@@ -717,7 +713,7 @@ subroutine Jacobi_const_Lap(phi,rhs,g,t,nits)
   if (.true.) then
      omega = 4.d0/(3.d0*rhok*diag)
      do k=0,nits-1
-        call Apply_const_Lap(Aux,phi,g,t)
+        call Apply_const_Lap(Aux,phi,p,t)
         Aux = rhs - Aux
         phi = phi + omega*Aux
      enddo
@@ -731,7 +727,7 @@ subroutine Jacobi_const_Lap(phi,rhs,g,t,nits)
      s1 = theta / delta
      rhok = 1./s1
 
-     call Apply_const_Lap(Dk,phi,g,t)
+     call Apply_const_Lap(Dk,phi,p,t)
      Dk = rhs - Dk
      Dk = Dk / diag
      ct1 = 1.d0/theta
@@ -744,7 +740,7 @@ subroutine Jacobi_const_Lap(phi,rhs,g,t,nits)
         ct2 = 2.d0*rhokp1/delta
         rhok = rhokp1
 
-        call Apply_const_Lap(Aux,phi,g,t)
+        call Apply_const_Lap(Aux,phi,p,t)
         Aux = rhs - Aux
         Res = Aux / diag 
         
@@ -756,46 +752,46 @@ subroutine Jacobi_const_Lap(phi,rhs,g,t,nits)
 end subroutine Jacobi_const_Lap
 
 !-----------------------------------------------------------------------
-subroutine Apply_const_Lap(uxo,ux,g,t)
-  use pe_patch_data_module
+subroutine Apply_const_Lap(uxo,ux,p,t)
+  use discretization
   use mpistuff
-  use pms, only:verbose
-  use discretization, only:nvar
   implicit none
-  type(patcht):: g
-  double precision,intent(out):: uxo(&
-       g%all%lo%i:g%all%hi%i,&
-       g%all%lo%j:g%all%hi%j,&
-       g%all%lo%k:g%all%hi%k,nvar)
-  double precision,intent(in)::ux(&
-       g%all%lo%i:g%all%hi%i,&
-       g%all%lo%j:g%all%hi%j,&
-       g%all%lo%k:g%all%hi%k,nvar)
+  type(patcht)::p
   type(topot),intent(in)::t
+  double precision,intent(out):: uxo(&
+       p%all%lo%i:p%all%hi%i,&
+       p%all%lo%j:p%all%hi%j,&
+       p%all%lo%k:p%all%hi%k,nvar)
+  double precision,intent(in)::ux(&
+       p%all%lo%i:p%all%hi%i,&
+       p%all%lo%j:p%all%hi%j,&
+       p%all%lo%k:p%all%hi%k,nvar)
   !     Local vars
-  integer its
-  integer:: ii,jj,kk
-  double precision:: dxl,dyl,ti,tj,tk,dxi2,dyi2,dzi2,dzl
-  double precision norm
+  integer::its,ii,jj,kk
+  double precision::dxl,dyl,ti,tj,tk,dxi2,dyi2,dzi2,dzl
 #ifndef TWO_D
 #ifdef HAVE_PETSC
-  flops = 13*g%max%hi%i*g%max%hi%j*g%max%hi%k
+  flops = 13*p%max%hi%i*p%max%hi%j*p%max%hi%k
   call PetscLogEventBegin(events(4),ierr)
   call PetscLogFlops(flops,ierr)
 #endif
 #endif
-  dxl=g%dx%i
-  dyl=g%dx%j
+  dxl=p%dx%i
+  dyl=p%dx%j
   dxi2=1.d0/dxl**2
   dyi2=1.d0/dyl**2
 #ifndef TWO_D
-  dzl=g%dx%k
+  dzl=p%dx%k
   dzi2=1.d0/dzl**2
-#endif  
-
-  do kk=1,g%max%hi%k,1
-     do jj=1,g%max%hi%j,1
-        do ii=1,g%max%hi%i,1                    
+#endif
+!!$  write(6,'(A,E10.2,E10.2,E10.2,A,I3,I3,I3,A,I3,I3,I3,A,I3,I3,I3)') &
+!!$       'Apply_const_Lap:',dxi2,dyi2,dzi2,&
+!!$       ', max:',p%max%hi%i,p%max%hi%j,p%max%hi%k,&
+!!$       ', all%lo:',p%all%lo%i,p%all%lo%j,p%all%lo%k,&
+!!$       ', all%hi:',p%all%hi%i,p%all%hi%j,p%all%hi%k
+  do ii=1,p%max%hi%i,1                    
+        do jj=1,p%max%hi%j,1           
+           do kk=1,p%max%hi%k,1
            ti =   dxi2*(ux(ii+1,jj,kk,1)+ux(ii-1,jj,kk,1))&
                 + dyi2*(ux(ii,jj+1,kk,1)+ux(ii,jj-1,kk,1))&
                 - 2.d0*(dxi2+dyi2)*ux(ii,jj,kk,1)
@@ -803,6 +799,21 @@ subroutine Apply_const_Lap(uxo,ux,g,t)
            ti = ti + dzi2*(ux(ii,jj,kk+1,1)+ux(ii,jj,kk-1,1))&
                 - 2.d0*dzi2*ux(ii,jj,kk,1)
 #endif
+                 !if(ii==1.and.jj==1.and.kk==1) then
+!!$                    print *,'kk-1 index"',ii,jj,kk
+!!$                    print *,ux(ii-1,jj-1,kk-1,1),ux(ii,jj-1,kk-1,1),ux(ii-1,jj-1,kk-1,1)
+!!$                    print *,ux(ii-1,jj,kk-1,1),ux(ii,jj,kk-1,1),ux(ii-1,jj,kk-1,1)
+!!$                    print *,ux(ii-1,jj+1,kk-1,1),ux(ii,jj+1,kk-1,1),ux(ii-1,jj+1,kk-1,1)
+!!$                    print *,'kk'
+!!$                    print *,ux(ii-1,jj-1,kk,1),ux(ii,jj-1,kk,1),ux(ii-1,jj-1,kk,1)
+!!$                    print *,ux(ii-1,jj,kk,1),ux(ii,jj,kk,1),ux(ii-1,jj,kk,1)
+!!$                    print *,ux(ii-1,jj+1,kk,1),ux(ii,jj+1,kk,1),ux(ii-1,jj+1,kk,1)
+!!$                    print *,'kk+1'
+!!$                    print *,ux(ii-1,jj-1,kk+1,1),ux(ii,jj-1,kk+1,1),ux(ii-1,jj-1,kk+1,1)
+!!$                    print *,ux(ii-1,jj,kk+1,1),ux(ii,jj,kk+1,1),ux(ii-1,jj,kk+1,1)
+!!$                    print *,ux(ii-1,jj+1,kk+1,1),ux(ii,jj+1,kk+1,1),ux(ii-1,jj+1,kk+1,1)
+                 !end if
+
            uxo(ii,jj,kk,1) = ti               
         enddo               ! ii
      enddo                  ! jj
@@ -810,12 +821,12 @@ subroutine Apply_const_Lap(uxo,ux,g,t)
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(4),ierr)
 #endif
-  call SetBCs(uxo,g,t)
+  call SetBCs(uxo,p,t)
   return
 end subroutine Apply_const_Lap
 !-----------------------------------------------------------------------
 subroutine formExactU(exact,all,val,ip,dx)
-  use grid_module
+  use pe_patch_data_module
   use mpistuff
   use pms
   use domain
@@ -867,7 +878,7 @@ subroutine formExactU(exact,all,val,ip,dx)
 end subroutine formExactU
 !-----------------------------------------------------------------------
 subroutine FormRHS(rhs,p,val,ip)
-  use grid_module
+  use pe_patch_data_module
   use pms
   use domain
   use mpistuff
@@ -955,12 +966,14 @@ double precision function level_norm1(ux,all,val,dx,comm)
   double precision,intent(in)::ux(all%lo%i:all%hi%i,all%lo%j:all%hi%j,all%lo%k:all%hi%k,1)
   integer,intent(in)::comm
 
-  double precision::t1,t2,vol    
+  double precision::t1,t2,vol
   
-  vol = dx%i * dx%j &
 #ifndef TWO_D
-       * dx%k
+  vol = dx%i*dx%j*dx%k
+#else
+  vol = dx%i*dx%j
 #endif
+
   t1 = sum(abs(ux(val%lo%i:val%hi%i,val%lo%j:val%hi%j,val%lo%k:val%hi%k,1)))
   call MPI_Allreduce(t1,t2,1,MPI_DOUBLE_PRECISION,MPI_SUM,comm,ierr)
   level_norm1 = t2*vol
@@ -979,12 +992,14 @@ double precision function level_norm2(ux,all,val,dx,comm)
   double precision::t1,t2,vol  
   integer :: i,j,k
   
-  vol = dx%i * dx%j &
 #ifndef TWO_D
-       * dx%k
+  vol = dx%i*dx%j*dx%k
+#else
+  vol = dx%i*dx%j
 #endif
   t1 = sum(ux(val%lo%i:val%hi%i,val%lo%j:val%hi%j,val%lo%k:val%hi%k,1)**2)
   call MPI_Allreduce(t1,t2,1,MPI_DOUBLE_PRECISION,MPI_SUM,comm,ierr)
+  IF (ierr /= 0) STOP "*** level_norm2 all reduce error ***"
   level_norm2 = sqrt(t2*vol)
 
 end function level_norm2
@@ -1016,6 +1031,7 @@ double precision function norm(ux,all,val,dx,comm,type)
   double precision,intent(in)::ux(all%lo%i:all%hi%i,all%lo%j:all%hi%j,all%lo%k:all%hi%k,1)
   integer,intent(in) :: type
   integer,intent(in)::comm
+  !
   double precision:: level_norm1,level_norm2,level_norminf
   !     
   if (type==1) then
