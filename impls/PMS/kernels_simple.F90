@@ -4,10 +4,11 @@
 !-----------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-! RestrictFuse: fuse two restricts (u,f).  Only do BCs on 1st!
+! RestrictFuse: fuse two restricts (u,f).
 !-----------------------------------------------------------------------
-subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
-  use discretization
+subroutine RestrictFuse(cp,fp,ct,cOffset,uC,uC2,ux,ux2)
+  use discretization,only:nvar,nsg
+  use bc_module
   use mpistuff
   use tags
   use pms, only:mg_ref_ratio
@@ -22,7 +23,7 @@ subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
        cp%all%lo%j:cp%all%hi%j,&
        cp%all%lo%k:cp%all%hi%k,nvar)::uC,uC2
   type(ipoint),intent(in)::cOffset
-  type(topot),intent(in)::tc
+  type(topot),intent(in)::ct
   ! buffers are 1/2 of coarse
 #ifdef TWO_D
   double precision,dimension(fp%max%hi%i/2,fp%max%hi%j/2,1,2*nvar)::&
@@ -38,7 +39,7 @@ subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
   ! split: src(1,csz2); dest1(cOffset+1,csz2+cOffset), dest2(cstrt2,cend2)
   type(ipoint)::csz,cstrt2,cend2,cend1
 
-  if (mg_ref_ratio .ne. 2) stop 'Restrict2 not done for refratio != 2'
+  if (mg_ref_ratio .ne. 2) stop 'RestrictFuse: not done for refratio != 2'
 
   ! size of coarse patch to set & end of buffer
   csz%i = fp%max%hi%i/2
@@ -62,7 +63,7 @@ subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
   a44 = 1.d0/64.d0/4.d0 ! not used
 #endif
   ! split grid
-  if(fp%max%hi%i==cp%max%hi%i) then ! could this happen on an SR grid?
+  if (fp%max%hi%i==cp%max%hi%i) then ! could this happen on an SR grid?
      if (fp%max%hi%j.ne.cp%max%hi%j .or. fp%max%hi%k.ne.cp%max%hi%k) stop 'RestrictFuse'
      ! start of 2nd half
      cstrt2%i = 1+csz%i
@@ -85,22 +86,22 @@ subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
 #endif
      ! post recieves
      call MPI_Irecv(rb0,bufsz,MPI_DOUBLE_PRECISION,&
-          0,MSG_RESTRICT_TAG,tc%loc_comm,msg_id_recv(0),ierr)
+          0,MSG_RESTRICT_TAG,ct%loc_comm,msg_id_recv(0),ierr)
      call MPI_Irecv(rb1,bufsz,MPI_DOUBLE_PRECISION,&
-          1,MSG_RESTRICT_TAG,tc%loc_comm,msg_id_recv(1),ierr)
+          1,MSG_RESTRICT_TAG,ct%loc_comm,msg_id_recv(1),ierr)
      call MPI_Irecv(rb2,bufsz,MPI_DOUBLE_PRECISION,&
-          2,MSG_RESTRICT_TAG,tc%loc_comm,msg_id_recv(2),ierr)
+          2,MSG_RESTRICT_TAG,ct%loc_comm,msg_id_recv(2),ierr)
      call MPI_Irecv(rb3,bufsz,MPI_DOUBLE_PRECISION,&
-          3,MSG_RESTRICT_TAG,tc%loc_comm,msg_id_recv(3),ierr)
+          3,MSG_RESTRICT_TAG,ct%loc_comm,msg_id_recv(3),ierr)
 #ifndef TWO_D  
      call MPI_Irecv(rb4,bufsz,MPI_DOUBLE_PRECISION,&
-          4,MSG_RESTRICT_TAG,tc%loc_comm,msg_id_recv(4),ierr)
+          4,MSG_RESTRICT_TAG,ct%loc_comm,msg_id_recv(4),ierr)
      call MPI_Irecv(rb5,bufsz,MPI_DOUBLE_PRECISION,&
-          5,MSG_RESTRICT_TAG,tc%loc_comm,msg_id_recv(5),ierr)
+          5,MSG_RESTRICT_TAG,ct%loc_comm,msg_id_recv(5),ierr)
      call MPI_Irecv(rb6,bufsz,MPI_DOUBLE_PRECISION,&
-          6,MSG_RESTRICT_TAG,tc%loc_comm,msg_id_recv(6),ierr)
+          6,MSG_RESTRICT_TAG,ct%loc_comm,msg_id_recv(6),ierr)
      call MPI_Irecv(rb7,bufsz,MPI_DOUBLE_PRECISION,&
-          7,MSG_RESTRICT_TAG,tc%loc_comm,msg_id_recv(7),ierr)
+          7,MSG_RESTRICT_TAG,ct%loc_comm,msg_id_recv(7),ierr)
 #endif
 
      ! copy in restriction of fine patch into buffer
@@ -139,7 +140,7 @@ subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
      ! send to my cohort & me
      do pp=0,lnp-1            
         call MPI_Isend(sb,bufsz,MPI_DOUBLE_PRECISION,pp,&
-             MSG_RESTRICT_TAG,tc%loc_comm,msg_id_send(pp),ierr)
+             MSG_RESTRICT_TAG,ct%loc_comm,msg_id_send(pp),ierr)
      enddo
      MSG_RESTRICT_TAG = MSG_RESTRICT_TAG + 1
 
@@ -315,7 +316,10 @@ subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
      enddo
   else ! normal grid (not split)
      ! c.max : |  offset  | | | | | offset |
-     if (fp%max%hi%i/2+2*cOffset%i.ne.cp%max%hi%i) stop 'fp%max%i/2+2*cOffset.ne.cp%max%i'
+!!$     write(6,'(I4,A,I4,I4,I4,A,I4,I4,I4,A,I4,I4,I4)') mype,&
+!!$          '] fine max:',fp%max%hi%i,fp%max%hi%j,fp%max%hi%k,&
+!!$          ', coarse offset: ',cOffset%i,cOffset%j,cOffset%k,&
+!!$          ', coarse max:',cp%max%hi%i,cp%max%hi%j,cp%max%hi%k
      ! end of 1st half
      cend1%i = cOffset%i+csz%i
      cend1%j = cOffset%j+csz%j
@@ -354,21 +358,25 @@ subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
         enddo
      enddo
   endif
-  call SetBCs(uC,cp,tc) 
-  !call SetBCs(uC2,cp,tc) ! RHS does not need to be done!
+  call SetBCs(uC,cp,ct,nsg) 
+  !call SetBCs(uC2,cp,ct) ! RHS does not need to be done!
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(3),ierr)
 #endif
   return
 end subroutine RestrictFuse
 !-----------------------------------------------------------------------
-subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp)
+subroutine Prolong(uxF,uxC,ft,ct,cOffset,fp,cp,high)
   !  uxF = uxF + P * uxC
-  use discretization
+  use discretization,only:nvar,nsg
+  use bc_module
   use mpistuff
   use pms,only:mg_ref_ratio
   implicit none
-  type(patcht)::fp,cp
+  type(patcht),intent(in)::fp,cp
+  type(ipoint),intent(in)::cOffset
+  type(topot),intent(in)::ct,ft
+  logical,intent(in)::high
   double precision,intent(in)::uxC(&
        cp%all%lo%i:cp%all%hi%i,&
        cp%all%lo%j:cp%all%hi%j,&
@@ -377,11 +385,10 @@ subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp)
        fp%all%lo%i:fp%all%hi%i,&
        fp%all%lo%j:fp%all%hi%j,&
        fp%all%lo%k:fp%all%hi%k,nvar)
-  type(ipoint),intent(in)::cOffset
-  type(topot),intent(in)::tc,tf
   !     Local vars
   integer:: ic,jc,jj,kc,ii,kk,cist,cjst,ckst,lpe
   double precision :: vv(nvar),a11,a22,a33,a44
+  logical::issplit
 #ifndef TWO_D
 #ifdef HAVE_PETSC
   flops = 106*cp%max%hi%i*cp%max%hi%j*cp%max%hi%k
@@ -389,54 +396,51 @@ subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp)
   call PetscLogFlops(flops,ierr)
 #endif
 #endif
-  
-  if (mg_ref_ratio .ne. 2) stop 'Prolong not done for refratio != 2'
+  issplit = (fp%max%hi%i==cp%max%hi%i)
+  if (mg_ref_ratio .ne. 2) stop 'Prolong: not done for refratio != 2'
   cist = cOffset%i+1
   cjst = cOffset%j+1
   ckst = cOffset%k+1
   lpe = -1
-  if(fp%max%hi%i == cp%max%hi%i) then ! split grid - chop it, not SR
-
-     call MPI_comm_rank(tc%loc_comm,lpe,ierr)
-
+  if (issplit) then ! split grid - chop it, not SR
+     if (fp%max%hi%j/=cp%max%hi%j.or.fp%max%hi%k/=cp%max%hi%k) stop 'RestrictFuse: splits not right'
+     call MPI_comm_rank(ct%loc_comm,lpe,ierr)
 #ifdef TWO_D
-     if( lpe == 0 ) then       ! (1,1)
+     if ( lpe == 0 ) then       ! (1,1)
      else if ( lpe == 1 ) then ! (1,2)
-        cjst = cjst+fp%max%hi%j/2
+        cjst = cjst + cp%max%hi%j/2
      else 
-        cist = cist+fp%max%hi%i/2
+        cist = cist + cp%max%hi%i/2
         if ( lpe == 2 ) then ! (2,1)
         else if ( lpe == 3 ) then ! (2,2)
-           cjst = cjst+fp%max%hi%j/2
+           cjst = cjst + cp%max%hi%j/2
         end if
      end if
 #else
-     if( lpe == 0 ) then       ! (1,1,1)
+     if ( lpe == 0 ) then       ! (1,1,1)
      else if ( lpe == 1 ) then ! (1,1,2)
-        ckst = ckst+fp%max%hi%k/2
+        ckst = ckst + cp%max%hi%k/2
      else if ( lpe == 2 ) then ! (1,2,1)
-        cjst = cjst+fp%max%hi%j/2
+        cjst = cjst + cp%max%hi%j/2
      else if ( lpe == 3 ) then ! (1,2,2)
-        cjst = cjst+fp%max%hi%j/2
-        ckst = ckst+fp%max%hi%k/2
+        cjst = cjst + cp%max%hi%j/2
+        ckst = ckst + cp%max%hi%k/2
      else
-        cist = cist+fp%max%hi%i/2
-        if( lpe == 4 ) then  ! (2,1,1)
+        cist = cist+cp%max%hi%i/2
+        if ( lpe == 4 ) then  ! (2,1,1)
         else if ( lpe == 5 ) then ! (2,1,2)
-           ckst = ckst+fp%max%hi%k/2
+           ckst = ckst + cp%max%hi%k/2
         else if ( lpe == 6 ) then ! (2,2,1)
-           cjst = cjst+fp%max%hi%j/2
+           cjst = cjst + cp%max%hi%j/2
         else if ( lpe == 7 ) then ! (2,2,2)
-           cjst = cjst+fp%max%hi%j/2
-           ckst = ckst+fp%max%hi%k/2
+           cjst = cjst + cp%max%hi%j/2
+           ckst = ckst + cp%max%hi%k/2
         else
            stop 'should not be here 3): Prolong'
         endif
      end if
 #endif
-
   endif ! else not split
- 
 #ifdef TWO_D
   a11 = 9.d0/16.d0
   a22 = 3.d0/16.d0
@@ -447,6 +451,12 @@ subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp)
   a33 = 3.d0/64.d0
   a44 = 1.d0/64.d0
 #endif
+!!$  if (.not.issplit.and.high.and.mype==4) then
+!!$     write(6,'(I2,A,I2,I2,I2,A,I2,A,I2,A,I2,A,I2,A,I2,A,I2)')&
+!!$          mype,'] c st:',cist,cjst,ckst,&
+!!$          ', C max i:',cp%max%hi%i,', j:',cp%max%hi%j,', k:',cp%max%hi%k,&
+!!$          ', F max i:',fp%max%hi%i,', j:',fp%max%hi%j,', k:',fp%max%hi%k
+!!$  end if
   ic = cist-1
   do ii=1,fp%max%hi%i,2
      ic=ic+1
@@ -456,141 +466,143 @@ subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp)
         kc = ckst-1
         do kk=1,fp%max%hi%k,2
            kc = kc+1
-
-           vv = a11*uxC(ic,jc,kc,:);
+!!$if (.not.issplit.and.high.and.mype==4) write(6,'(I3,A,I4,I4,I4,A,I4,I4,I4,A,E15.5)')mype,&
+!!$     '] fine:',ii,jj,kk,', coarse:',ic,jc,kc,', UC=',uxC(ic,jc,kc,:)
+!!$     
+           vv = a11*uxC(ic,jc,kc,:)
            uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
            uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
            uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
            uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
            
-           vv = a22*uxC(ic,jc-1,kc,:);
+           vv = a22*uxC(ic,jc-1,kc,:)
            uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
            uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
            
-           vv = a22*uxC(ic,jc+1,kc,:);
+           vv = a22*uxC(ic,jc+1,kc,:)
            uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
            uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
            
-           vv = a22*uxC(ic+1,jc,kc,:);
+           vv = a22*uxC(ic+1,jc,kc,:)
            uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
            uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
            
-           vv = a22*uxC(ic-1,jc,kc,:);            
+           vv = a22*uxC(ic-1,jc,kc,:)      
            uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
            uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
            
-           vv = a33*uxC(ic-1,jc-1,kc,:);
+           vv = a33*uxC(ic-1,jc-1,kc,:)
            uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
            
-           vv = a33*uxC(ic-1,jc+1,kc,:);            
+           vv = a33*uxC(ic-1,jc+1,kc,:)
            uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
            
-           vv = a33*uxC(ic+1,jc-1,kc,:);            
+           vv = a33*uxC(ic+1,jc-1,kc,:)
            uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
            
-           vv = a33*uxC(ic+1,jc+1,kc,:);            
+           vv = a33*uxC(ic+1,jc+1,kc,:)
            uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
 #ifndef TWO_D
-           vv = a11*uxC(ic,jc,kc,:);
+           vv = a11*uxC(ic,jc,kc,:)
            uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
            uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
            uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
            uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
            
-           vv = a22*uxC(ic,jc-1,kc,:);
+           vv = a22*uxC(ic,jc-1,kc,:)
            uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
            uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
            
-           vv = a22*uxC(ic,jc+1,kc,:);
+           vv = a22*uxC(ic,jc+1,kc,:)
            uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
            uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
            
-           vv = a22*uxC(ic+1,jc,kc,:);
+           vv = a22*uxC(ic+1,jc,kc,:)
            uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
            uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
            
-           vv = a22*uxC(ic-1,jc,kc,:);            
+           vv = a22*uxC(ic-1,jc,kc,:)          
            uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
            uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
            
-           vv = a33*uxC(ic-1,jc-1,kc,:);
+           vv = a33*uxC(ic-1,jc-1,kc,:)
            uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
            
-           vv = a33*uxC(ic-1,jc+1,kc,:);            
+           vv = a33*uxC(ic-1,jc+1,kc,:)            
            uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
            
-           vv = a33*uxC(ic+1,jc-1,kc,:);            
+           vv = a33*uxC(ic+1,jc-1,kc,:)            
            uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
            
-           vv = a33*uxC(ic+1,jc+1,kc,:);            
-           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
-                
-           vv = a22*uxC(ic,jc,kc-1,:);
-           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
-           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
-           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
-           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
-           
-           vv = a22*uxC(ic,jc,kc+1,:);
-           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
-           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
-           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
-           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
-           
-           vv = a33*uxC(ic-1,jc,kc-1,:);
-           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
-           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
-           
-           vv = a33*uxC(ic-1,jc,kc+1,:);
-           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
-           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
-           
-           vv = a33*uxC(ic,jc-1,kc-1,:);
-           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
-           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
-           
-           vv = a33*uxC(ic,jc-1,kc+1,:);
-           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
-           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
-           
-           vv = a33*uxC(ic+1,jc,kc-1,:);
-           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
-           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
-           
-           vv = a33*uxC(ic+1,jc,kc+1,:);
-           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
-           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
-           
-           vv = a33*uxC(ic,jc+1,kc-1,:);
-           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
-           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
-           
-           vv = a33*uxC(ic,jc+1,kc+1,:);
-           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
+           vv = a33*uxC(ic+1,jc+1,kc,:)            
            uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
                 
-           vv = a44*uxC(ic-1,jc-1,kc-1,:);
+           vv = a22*uxC(ic,jc,kc-1,:)
            uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
-           
-           vv = a44*uxC(ic+1,jc-1,kc-1,:);
            uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
-           
-           vv = a44*uxC(ic-1,jc+1,kc-1,:);
            uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
-           
-           vv = a44*uxC(ic-1,jc-1,kc+1,:);
-           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
-           
-           vv = a44*uxC(ic+1,jc+1,kc-1,:);
            uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
            
-           vv = a44*uxC(ic-1,jc+1,kc+1,:);
+           vv = a22*uxC(ic,jc,kc+1,:)
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
+           
+           vv = a33*uxC(ic-1,jc,kc-1,:)
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
+           
+           vv = a33*uxC(ic-1,jc,kc+1,:)
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
            uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
            
-           vv = a44*uxC(ic+1,jc-1,kc+1,:);
+           vv = a33*uxC(ic,jc-1,kc-1,:)
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
+           
+           vv = a33*uxC(ic,jc-1,kc+1,:)
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
+           
+           vv = a33*uxC(ic+1,jc,kc-1,:)
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
+           
+           vv = a33*uxC(ic+1,jc,kc+1,:)
+           uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
+           
+           vv = a33*uxC(ic,jc+1,kc-1,:)
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
+           
+           vv = a33*uxC(ic,jc+1,kc+1,:)
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
+           uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
+                
+           vv = a44*uxC(ic-1,jc-1,kc-1,:)
+           uxF(ii,jj,kk,:)=uxF(ii,jj,kk,:) + vv
+           
+           vv = a44*uxC(ic+1,jc-1,kc-1,:)
+           uxF(ii+1,jj,kk,:)=uxF(ii+1,jj,kk,:) + vv
+           
+           vv = a44*uxC(ic-1,jc+1,kc-1,:)
+           uxF(ii,jj+1,kk,:)=uxF(ii,jj+1,kk,:) + vv
+           
+           vv = a44*uxC(ic-1,jc-1,kc+1,:)
+           uxF(ii,jj,kk+1,:)=uxF(ii,jj,kk+1,:) + vv
+           
+           vv = a44*uxC(ic+1,jc+1,kc-1,:)
+           uxF(ii+1,jj+1,kk,:)=uxF(ii+1,jj+1,kk,:) + vv
+           
+           vv = a44*uxC(ic-1,jc+1,kc+1,:)
+           uxF(ii,jj+1,kk+1,:)=uxF(ii,jj+1,kk+1,:) + vv
+           
+           vv = a44*uxC(ic+1,jc-1,kc+1,:)
            uxF(ii+1,jj,kk+1,:)=uxF(ii+1,jj,kk+1,:) + vv
 
-           vv = a44*uxC(ic+1,jc+1,kc+1,:);
+           vv = a44*uxC(ic+1,jc+1,kc+1,:)
            uxF(ii+1,jj+1,kk+1,:)=uxF(ii+1,jj+1,kk+1,:) + vv
 #endif
         enddo
@@ -599,12 +611,13 @@ subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp)
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(5),ierr)
 #endif
-  call SetBCs(uxF,fp,tf)
+  call SetBCs(uxF,fp,ft,nsg)
   return
 end subroutine Prolong
 !-----------------------------------------------------------------------
 subroutine GS_RB_const_Lap(phi,rhs,p,t,nits)
-  use discretization
+  use discretization, only:nvar,nsg
+  use bc_module
   use mpistuff
   use pms, only:verbose
   implicit none
@@ -667,13 +680,14 @@ subroutine GS_RB_const_Lap(phi,rhs,p,t,nits)
 #ifdef HAVE_PETSC
         call PetscLogEventEnd(events(2),ierr)
 #endif
-        call SetBCs(phi,p,t)
+        call SetBCs(phi,p,t,nsg)
      enddo                ! r/b i
   enddo                   ! iters
 end subroutine GS_RB_const_Lap
 !-----------------------------------------------------------------------
 subroutine Jacobi_const_Lap(phi,rhs,p,t,nits)
-  use discretization
+  use discretization, only:nvar
+  use base_data_module
   use mpistuff
   implicit none
   type(patcht)::p
@@ -753,7 +767,8 @@ end subroutine Jacobi_const_Lap
 
 !-----------------------------------------------------------------------
 subroutine Apply_const_Lap(uxo,ux,p,t)
-  use discretization
+  use discretization, only:nvar,nsg
+  use bc_module
   use mpistuff
   implicit none
   type(patcht)::p
@@ -799,7 +814,7 @@ subroutine Apply_const_Lap(uxo,ux,p,t)
            ti = ti + dzi2*(ux(ii,jj,kk+1,1)+ux(ii,jj,kk-1,1))&
                 - 2.d0*dzi2*ux(ii,jj,kk,1)
 #endif
-                 !if(ii==1.and.jj==1.and.kk==1) then
+                 !if (ii==1.and.jj==1.and.kk==1) then
 !!$                    print *,'kk-1 index"',ii,jj,kk
 !!$                    print *,ux(ii-1,jj-1,kk-1,1),ux(ii,jj-1,kk-1,1),ux(ii-1,jj-1,kk-1,1)
 !!$                    print *,ux(ii-1,jj,kk-1,1),ux(ii,jj,kk-1,1),ux(ii-1,jj,kk-1,1)
@@ -821,12 +836,12 @@ subroutine Apply_const_Lap(uxo,ux,p,t)
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(4),ierr)
 #endif
-  call SetBCs(uxo,p,t)
+  call SetBCs(uxo,p,t,nsg)
   return
 end subroutine Apply_const_Lap
 !-----------------------------------------------------------------------
 subroutine formExactU(exact,all,val,ip,dx)
-  use pe_patch_data_module
+  use bc_module
   use mpistuff
   use pms
   use domain
@@ -843,23 +858,27 @@ subroutine formExactU(exact,all,val,ip,dx)
 #ifdef HAVE_PETSC
   call PetscLogEventBegin(events(7),ierr)
 #endif
-  ig = getIglobalx(val,ip)
-  jg = getIglobaly(val,ip)
-  kg = getIglobalz(val,ip)
+  ig = getIglobalx(val,ip)-1
+  jg = getIglobaly(val,ip)-1
+  kg = getIglobalz(val,ip)-1
+
   ! have to do exact by hand - valid region plus ghost
-  do kk=val%lo%i,val%hi%i
-     do jj=val%lo%k,val%hi%j
-        do ii=val%lo%k,val%hi%k
-           coord(1) = xl+(ig+ii-1)*dx%i-0.5*dx%i
-           coord(2) = yl+(jg+jj-1)*dx%j-0.5*dx%j
+  do ii=val%lo%i,val%hi%i
+     do jj=val%lo%j,val%hi%j
+        do kk=val%lo%k,val%hi%k
+           coord(1) = xl+(ig+ii-val%lo%i)*dx%i+0.5*dx%i
+           coord(2) = yl+(jg+jj-val%lo%j)*dx%j+0.5*dx%j
 #ifndef TWO_D
-           coord(3) = zl+(kg+kk-1)*dx%k-0.5*dx%k
+           coord(3) = zl+(kg+kk-val%lo%k)*dx%k+0.5*dx%k
 #endif
+           if (coord(1)<xl.or.coord(1)>xr) stop 'formExactU coord x'
+           if (coord(2)<yl.or.coord(2)>yr) stop 'formExactU coord y'
+           if (coord(3)<zl.or.coord(3)>zr) stop 'formExactU coord z'
+
            select case (problemType)
-           case(0)              
-              !write (6,'(A18,E14.6,E14.6,E14.6)') "formExactU: coord=",coord
+           case(0)                            
               x2 = coord*coord
-              a = x2*(x2-1.);              
+              a = x2*(x2-1.)              
 #ifdef TWO_D
               exact(ii,jj,kk,1) = a(1)*a(2)
 #else
@@ -875,10 +894,11 @@ subroutine formExactU(exact,all,val,ip,dx)
 #ifdef HAVE_PETSC
   call PetscLogEventEnd(events(7),ierr)
 #endif
+  return
 end subroutine formExactU
 !-----------------------------------------------------------------------
 subroutine FormRHS(rhs,p,val,ip)
-  use pe_patch_data_module
+  use bc_module
   use pms
   use domain
   use mpistuff
@@ -894,35 +914,38 @@ subroutine FormRHS(rhs,p,val,ip)
 #ifdef HAVE_PETSC
   call PetscLogEventBegin(events(7),ierr)
 #endif 
-  ig = getIglobalx(val,ip)
-  jg = getIglobaly(val,ip)
-  kg = getIglobalz(val,ip)
+  ig = getIglobalx(val,ip)-1 ! zero based
+  jg = getIglobaly(val,ip)-1
+  kg = getIglobalz(val,ip)-1
 
   select case (problemType)
   case(0)
      ! x^4 - x^2
 #ifdef XPERIODIC
-     stop 'x^4 - x^2 XPERIODIC not defined'
+     stop 'FormRHS: x^4 - x^2 XPERIODIC not defined'
 #endif
 #ifdef YPERIODIC
-     stop 'x^4 - x^2 YPERIODIC not defined'
+     stop 'FormRHS: x^4 - x^2 YPERIODIC not defined'
 #endif
 #ifdef ZPERIODICtod
-     stop 'x^4 - x^2 ZPERIODIC not defined'
+     stop 'FormRHS: x^4 - x^2 ZPERIODIC not defined'
 #endif
      ! RHS = Lap(x^4-x^2)
-     do kk=1,p%max%hi%k
+     do ii=1,p%max%hi%i
         do jj=1,p%max%hi%j
-           do ii=1,p%max%hi%i
-              coord(1) = xl+(ig+ii-1)*p%dx%i-0.5*p%dx%i
-              coord(2) = yl+(jg+jj-1)*p%dx%j-0.5*p%dx%j
+           do kk=1,p%max%hi%k
+              coord(1) = xl+(ig+ii-val%lo%i)*p%dx%i + 0.5*p%dx%i
+              coord(2) = yl+(jg+jj-val%lo%j)*p%dx%j + 0.5*p%dx%j
 #ifndef TWO_D
-              coord(3) = zl+(kg+kk-1)*p%dx%k-0.5*p%dx%k
+              coord(3) = zl+(kg+kk-val%lo%k)*p%dx%k + 0.5*p%dx%k
 #endif
-              !write (6,'(A15,E14.6,E14.6,E14.6)') "FormRHS: coord=",coord
+              if (coord(1)<xl.or.coord(1)>xr) stop 'FormRHS coord'
+              if (coord(2)<yl.or.coord(2)>yr) stop 'FormRHS coord'
+              if (coord(3)<zl.or.coord(3)>zr) stop 'FormRHS coord'
+
               x2 = coord*coord
-              a = x2*(x2-1.);
-              b = 12.*x2-2.;
+              a = x2*(x2-1.)
+              b = 12.*x2-2.
 #ifdef TWO_D
               rhs(ii,jj,kk,1) = b(1)*a(2) + a(1)*b(2)
 #else
@@ -934,13 +957,13 @@ subroutine FormRHS(rhs,p,val,ip)
   case(1)
      !     for bubble
 #ifndef XPERIODIC
-     stop 'bubble not XPERIODIC not defined'
+     stop 'FormRHS: bubble not XPERIODIC not defined'
 #endif
 #ifndef YPERIODIC
-     stop 'bubble not YPERIODIC defined'
+     stop 'bFormRHS: ubble not YPERIODIC defined'
 #endif
 #ifndef ZPERIODIC
-     stop 'bubble not ZPERIODIC defined'
+     stop 'FormRHS: bubble not ZPERIODIC defined'
 #endif
      ! RHS = bubble
      
@@ -957,7 +980,7 @@ end subroutine FormRHS
 ! norms
 !-----------------------------------------------------------------
 double precision function level_norm1(ux,all,val,dx,comm)
-  use pe_patch_data_module
+  use base_data_module
   use mpistuff
   implicit none 
   type(box),intent(in)::val
@@ -980,7 +1003,7 @@ double precision function level_norm1(ux,all,val,dx,comm)
 end function level_norm1
 !-----------------------------------------------------------------
 double precision function level_norm2(ux,all,val,dx,comm)
-  use pe_patch_data_module
+  use base_data_module
   use mpistuff
   implicit none 
   type(box),intent(in)::val
@@ -999,13 +1022,12 @@ double precision function level_norm2(ux,all,val,dx,comm)
 #endif
   t1 = sum(ux(val%lo%i:val%hi%i,val%lo%j:val%hi%j,val%lo%k:val%hi%k,1)**2)
   call MPI_Allreduce(t1,t2,1,MPI_DOUBLE_PRECISION,MPI_SUM,comm,ierr)
-  IF (ierr /= 0) STOP "*** level_norm2 all reduce error ***"
+  IF (ierr /= 0) STOP "level_norm2: *** level_norm2 all reduce error ***"
   level_norm2 = sqrt(t2*vol)
-
 end function level_norm2
 !-----------------------------------------------------------------
 double precision function level_norminf(ux,all,val,dx,comm)
-  use pe_patch_data_module
+  use base_data_module
   use mpistuff
   implicit none 
   type(box),intent(in)::val
@@ -1022,7 +1044,7 @@ double precision function level_norminf(ux,all,val,dx,comm)
 end function level_norminf
 !-----------------------------------------------------------------
 double precision function norm(ux,all,val,dx,comm,type)
-  use pe_patch_data_module
+  use base_data_module
   use mpistuff
   implicit none 
   type(box),intent(in)::val
@@ -1041,6 +1063,6 @@ double precision function norm(ux,all,val,dx,comm,type)
   else if (type==3) then
      norm = level_norminf(ux,all,val,dx,comm)
   else 
-     stop 'unknown norm type'
+     stop 'norm: unknown norm type'
   end if
 end function norm

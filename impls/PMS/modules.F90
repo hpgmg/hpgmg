@@ -28,9 +28,10 @@ module pms
   integer:: ncycles  ! V==1, W==2
   integer:: nfmgvcycles ! 1 for normal FMG, more for more power
   double precision:: rtol
-  integer:: nsmoothsup 
-  integer:: nsmoothsdown
-  integer:: ncoarsesolveits
+  integer::nsmoothsup 
+  integer::nsmoothsdown
+  integer::nsmoothsfmg
+  integer::ncoarsesolveits
   ! general
   integer:: verbose 
   integer:: num_solves
@@ -89,12 +90,12 @@ module error_data_module
   type error_data
      double precision:: uerror,resid
   end type error_data
-  integer :: err_lev ! cache of currant level for error output
-  integer,parameter::error_norm=1 ! 3 == inf
+  integer::err_lev ! cache of currant level for error output
+  integer::error_norm ! 3 == inf
 end module error_data_module
 !-----------------------------------------------------------------------
-! patch data types
-module pe_patch_data_module
+! base objects
+module base_data_module
   !
   type ipoint
      integer:: i,j,k
@@ -138,6 +139,33 @@ module pe_patch_data_module
   type data_ptr
      double precision,DIMENSION(:,:,:,:),POINTER::ptr
   end type data_ptr
+end module base_data_module
+!-----------------------------------------------------------------------
+module discretization
+  use base_data_module
+  ! number of stencil ghosts, need to hack for one SR exch.     
+  type(ipoint),parameter::nsg=ipoint(1,1,1) 
+  ! num vars per cell
+  integer,parameter::nvar=1  
+end module discretization
+!-----------------------------------------------------------------------
+! patch data types
+module bc_module
+  use base_data_module
+  interface
+     subroutine SetBCs(ux,p,t,ng)
+       use discretization,only:nvar
+       use base_data_module
+       implicit none
+       type(ipoint),intent(in)::ng
+       type(topot),intent(in)::t
+       type(patcht),intent(in)::p
+       double precision:: ux(&
+            p%all%lo%i:p%all%hi%i,&
+            p%all%lo%j:p%all%hi%j,&
+            p%all%lo%k:p%all%hi%k,nvar)
+     end subroutine SetBCs
+  end interface
 contains
   !-----------------------------------------------------------------
   integer function getIglobalx(val,ip)
@@ -160,25 +188,21 @@ contains
     type(ipoint),intent(in)::ip
     getiglobalz = (ip%k-1)*(val%hi%k-val%lo%k+1) + 1 
   end function getIglobalz
-end module pe_patch_data_module
-!-----------------------------------------------------------------------
-module discretization
-  use pe_patch_data_module
-  ! PDE, Disc
-  type(ipoint)::nsg          ! number of stencil ghosts, need to hack for one SR exch.     
-  integer,parameter:: nvar=1 ! num vars per cell
-end module discretization
+end module bc_module
 !-----------------------------------------------------------------------
 module grid_module
-  use pe_patch_data_module
+  use bc_module
   ! interfaces - kernels
   interface
      ! prolongate
-     subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp)
+     subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp,high)
        !  uxF = uxF + P * uxC
        use discretization
        implicit none
-       type(patcht)::fp,cp
+       type(patcht),intent(in)::fp,cp
+       type(ipoint),intent(in)::cOffset
+       type(topot),intent(in)::tc,tf
+       logical,intent(in)::high
        double precision,intent(in)::uxC(&
             cp%all%lo%i:cp%all%hi%i,&
             cp%all%lo%j:cp%all%hi%j,&
@@ -187,8 +211,6 @@ module grid_module
             fp%all%lo%i:fp%all%hi%i,&
             fp%all%lo%j:fp%all%hi%j,&
             fp%all%lo%k:fp%all%hi%k,nvar)
-       type(ipoint),intent(in)::cOffset
-       type(topot),intent(in)::tc,tf
      end subroutine Prolong
      ! restriction
      subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
@@ -236,7 +258,7 @@ module grid_module
      end subroutine GS_RB_const_Lap
      !
      subroutine formExactU(exact,all,val,ip,dx)
-       use pe_patch_data_module    
+       use discretization    
        implicit none
        type(box),intent(in)::val
        type(ipoint),intent(in)::ip
@@ -246,7 +268,7 @@ module grid_module
             all%lo%k:all%hi%k,1)
      end subroutine formExactU
      subroutine FormRHS(rhs,p,val,ip)
-       use pe_patch_data_module
+       use base_data_module 
        implicit none
        type(patcht)::p             ! max, dx & allocated
        type(box),intent(in)::val   ! needed to get correct coordinates with buffers in max (SR)
@@ -256,7 +278,7 @@ module grid_module
      end subroutine FormRHS
      !
      double precision function norm(ux,all,val,dx,comm,type)
-       use pe_patch_data_module
+       use base_data_module
        use mpistuff
        implicit none 
        type(box),intent(in)::val
@@ -267,18 +289,6 @@ module grid_module
        integer,intent(in) :: type
        integer,intent(in)::comm
      end function norm
-     !
-     subroutine SetBCs(ux,p,t)
-       use discretization
-       use mpistuff
-       implicit none
-       type(topot),intent(in)::t
-       type(patcht),intent(in)::p
-       double precision:: ux(&
-            p%all%lo%i:p%all%hi%i,&
-            p%all%lo%j:p%all%hi%j,&
-            p%all%lo%k:p%all%hi%k,nvar)
-     end subroutine SetBCs
   end interface
 contains
   !-----------------------------------------------------------------
@@ -306,7 +316,7 @@ contains
     interface
        subroutine new_grids_private(gc,gsr,NPeAxis,iPeAxis,nloc,comm3d)
          use pms, only:dom_max_sr_grids,dom_max_grids
-         use pe_patch_data_module
+         use base_data_module
          implicit none
          type(ipoint)::nloc
          integer,intent(in)::comm3d
@@ -320,14 +330,14 @@ contains
   !-----------------------------------------------------------------
   subroutine destroy_grids(gc,gsr)
     use pms, only:dom_max_sr_grids,dom_max_grids
-    use pe_patch_data_module
+    use base_data_module
     implicit none    
     type(crs_patcht),intent(out):: gc(0:dom_max_grids-1)
     type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
     interface       
        subroutine destroy_grids_private(gc,gsr)
          use pms, only:dom_max_sr_grids,dom_max_grids
-         use pe_patch_data_module
+         use base_data_module
          implicit none
          type(crs_patcht),intent(out):: gc(0:dom_max_grids-1)
          type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
@@ -337,4 +347,39 @@ contains
   end subroutine destroy_grids
   !
 end module grid_module
+! 
+module sr_interfaces
+  use discretization
+  interface
+     subroutine copy_sr_crs2(crs1,crs2,sr1,sr2,cg0,srg0)
+       use discretization
+       implicit none
+       type(sr_patcht),intent(in)::srg0
+       type(crs_patcht),intent(in)::cg0
+       double precision,intent(out),dimension(&
+            cg0%p%all%lo%i:cg0%p%all%hi%i,& 
+            cg0%p%all%lo%j:cg0%p%all%hi%j,& 
+            cg0%p%all%lo%k:cg0%p%all%hi%k, nvar)::crs1,crs2
+       double precision,intent(in),dimension(&
+            srg0%p%all%lo%i:srg0%p%all%hi%i,&
+            srg0%p%all%lo%j:srg0%p%all%hi%j,&
+            srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::sr1,sr2
+     end subroutine copy_sr_crs2
+     !
+     subroutine copy_crs_sr_w_bc_ex(u_sr,u_crs,srg0,cg0)
+       use discretization
+       implicit none
+       type(sr_patcht),intent(in)::srg0
+       type(crs_patcht),intent(in)::cg0
+       double precision,intent(in),dimension(&
+            cg0%p%all%lo%i:cg0%p%all%hi%i,& 
+            cg0%p%all%lo%j:cg0%p%all%hi%j,& 
+            cg0%p%all%lo%k:cg0%p%all%hi%k, nvar)::u_crs
+       double precision,intent(out),dimension(&
+            srg0%p%all%lo%i:srg0%p%all%hi%i,&
+            srg0%p%all%lo%j:srg0%p%all%hi%j,&
+            srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::u_sr
+     end subroutine copy_crs_sr_w_bc_ex
+  end interface
+end module sr_interfaces
 

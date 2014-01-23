@@ -8,7 +8,7 @@ program main
   use pms, only:verbose,dom_max_grids,dom_max_sr_grids,problemType
   use mpistuff
   use tags
-  use discretization
+  !use discretization
   implicit none
   integer:: rank,comm3d,ndims
   integer:: NPeAxis(3),iPeAxis(3)
@@ -24,9 +24,6 @@ program main
   MSG_XCH_YHI_TAG=400
   MSG_XCH_ZLOW_TAG=500
   MSG_XCH_ZHI_TAG=600
-  nsg%i=1
-  nsg%j=1
-  nsg%k=1
 
   ! MPI init - globals
   call MPI_init(ierr)
@@ -91,7 +88,7 @@ program main
   call MPI_cart_create(MPI_COMM_WORLD,ndims,NPeAxis,periodic,&
        .true.,comm3d,ierr) ! reoder is ignored???
   call MPI_comm_rank(comm3d,rank,ierr) ! new rank?
-  if((mype==0.and.verbose.gt.3).or.mype.ne.rank) then
+  if ((mype==0.and.verbose.gt.3).or.mype.ne.rank) then
      if (verbose.gt.0) write(6,*) 'main: warning old mype=',mype,', comm3D new rank = ',rank
   endif
   mype=rank
@@ -160,15 +157,15 @@ subroutine driver(gc,gsr)
         case(0)
            call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,GS_RB_const_Lap,res0,errors,nViters)
         case(1)
-           if(mype==0) write(6,*) 'problemType 1 not implemented -- todo'
+           if (mype==0) write(6,*) 'problemType 1 not implemented -- todo'
         end select
 #ifdef HAVE_PETSC
         if (kk==1) call PetscLogEventEnd(events(1),ierr)
 #endif
         !if (kk==1) exit ! just do one solve to page everything in
         ! output run data and convergance data
-        if(mype==0) then
-           if (nfcycles .ne. 0 .and. .not. is_top(gc(0)) ) then
+        if (mype==0) then
+           if (nfcycles.ne.0 .and. .not.is_top(gc(0)) ) then
               write(iconv,900) isolve,-1.d0,-1.d0,errors(0)%uerror,&
                    -1.0,errors(0)%resid
               do ii=1,dom_max_grids-1+nsr
@@ -180,19 +177,19 @@ subroutine driver(gc,gsr)
                       log(rateu)*log2r
                  write(iconv,900) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(ii)%uerror,&
                       -1.0,errors(ii)%resid
-
-                 if(ii.gt.nsr.and.is_top(gc(ii-nsr))) exit 
+                 if (ii.gt.nsr.and.is_top(gc(ii-nsr))) exit 
               end do
            end if
            ! print V cycles
-           do ii=ncgrids-1,ncgrids-1+nViters-1 ! i is zero bases for 'errors'
-              if (verbose.gt.0) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: V cycle',&
-                   ii, ': error=',errors(ii)%uerror,&
-                   ': resid=',errors(ii)%resid
-              write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,-1.0,&
-                   errors(ii)%resid
-           end do
-
+           if (nViters>0) then
+              do ii=0,nViters-1 ! i is zero bases for 'errors'
+                 if (verbose.gt.0) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: V cycle',&
+                      ii, ': error=',errors(ii)%uerror,&
+                      ': resid=',errors(ii)%resid
+                 write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,-1.0,&
+                      errors(ii)%resid
+              end do
+           end if
            ! general output
            ii = ncgrids + nViters - 1 + nsr
            if (verbose.gt.1) write(6,888) 'solve ',isolve,' done |r|/|f|=',errors(ii)%resid/res0
@@ -215,7 +212,8 @@ end subroutine driver
 subroutine get_params(npe,nloc)
   use pms
   use mpistuff
-  use pe_patch_data_module
+  use base_data_module
+  use error_data_module,only:error_norm
 #ifndef HAVE_COMM_ARGS
   use f2kcli        ! command line args class
 #endif
@@ -228,7 +226,7 @@ subroutine get_params(npe,nloc)
   CHARACTER(LEN=32)  :: CMD,CMD2
   INTEGER            :: NARG,IARG,fact,nsmooths
   integer*8 :: ti
-  integer, parameter :: nargs=22
+  integer, parameter :: nargs=26
   double precision t2,t1,iarray(nargs)
   ! default input args: ?local, n?, ?pes
   npe%i=-1
@@ -245,12 +243,16 @@ subroutine get_params(npe,nloc)
   !       1: bubble      - periodic domain???
   problemType = 0
   ! solver parameters
+  error_norm = 3 ! inf==3
   nvcycles = 0 ! pure FMG
   nfcycles = 1 ! pure FMG
   rtol = 1.d-5    ! only used for V-cycles
   ncycles = 1     ! v-cycles or w-cycles
   nfmgvcycles = 1 ! no interface for this (always 1)
-  nsmooths = 2
+  nsmooths = 1
+  nsmoothsup = -1
+  nsmoothsdown = -1
+  nsmoothsfmg = -1
   verbose = 1
   bot_min_sz = 2 ! min size for bottom solver (grad get messed up with 1)
   pe_min_sz = 8  ! or 16 ...
@@ -260,41 +262,47 @@ subroutine get_params(npe,nloc)
   sr_bufsz_inc = 0
   !msg_tag_inc = 0 ! better place to initilize this?
   ! read in args
-  if( mype==0 ) then
+  if ( mype==0 ) then
      NARG = COMMAND_ARGUMENT_COUNT()
      DO IARG = 1,NARG,2
         CALL GET_COMMAND_ARGUMENT(IARG,CMD)
         CALL GET_COMMAND_ARGUMENT(IARG+1,CMD2)
-        if( CMD == '-nx' ) READ (CMD2, '(I10)') nglob%i
-        if( CMD == '-ny' ) READ (CMD2, '(I10)') nglob%j
-        if( CMD == '-nz' ) READ (CMD2, '(I10)') nglob%k
+        if ( CMD == '-nx' ) READ (CMD2, '(I10)') nglob%i
+        if ( CMD == '-ny' ) READ (CMD2, '(I10)') nglob%j
+        if ( CMD == '-nz' ) READ (CMD2, '(I10)') nglob%k
         
-        if( CMD == '-nxloc' ) READ (CMD2, '(I10)') nloc%i
-        if( CMD == '-nyloc' ) READ (CMD2, '(I10)') nloc%j
-        if( CMD == '-nzloc' ) READ (CMD2, '(I10)') nloc%k
+        if ( CMD == '-nxloc' ) READ (CMD2, '(I10)') nloc%i
+        if ( CMD == '-nyloc' ) READ (CMD2, '(I10)') nloc%j
+        if ( CMD == '-nzloc' ) READ (CMD2, '(I10)') nloc%k
         
-        if( CMD == '-nxpe' ) READ (CMD2, '(I10)') npe%i
-        if( CMD == '-nype' ) READ (CMD2, '(I10)') npe%j
-        if( CMD == '-nzpe' ) READ (CMD2, '(I10)') npe%k
+        if ( CMD == '-nxpe' ) READ (CMD2, '(I10)') npe%i
+        if ( CMD == '-nype' ) READ (CMD2, '(I10)') npe%j
+        if ( CMD == '-nzpe' ) READ (CMD2, '(I10)') npe%k
 
-        if( CMD == '-bot_min_sz' ) READ (CMD2, '(I10)') bot_min_sz
-        if( CMD == 'pe_min_sz' ) READ (CMD2, '(I10)') pe_min_sz
+        if ( CMD == '-bot_min_sz' ) READ (CMD2, '(I10)') bot_min_sz
+        if ( CMD == 'pe_min_sz' ) READ (CMD2, '(I10)') pe_min_sz
 
-        if( CMD == '-problem' ) READ (CMD2, '(I10)') problemType
+        if ( CMD == '-problem' ) READ (CMD2, '(I10)') problemType
 
-        if( CMD == '-nvcycles' ) READ (CMD2, '(I10)') nvcycles
-        if( CMD == '-nsmooths' ) READ (CMD2, '(I10)') nsmooths
-        if( CMD == '-nfcycles' ) READ (CMD2, '(I10)') nfcycles
-        if( CMD == '-rtol' )    READ (CMD2, '(E14.6)') rtol
-        if( CMD == '-ncycle' )  READ (CMD2, '(I10)') ncycles
+        if ( CMD == '-nvcycles' ) READ (CMD2, '(I10)') nvcycles
+        if ( CMD == '-nsmooths' ) READ (CMD2, '(I10)') nsmooths
+        if ( CMD == '-nfcycles' ) READ (CMD2, '(I10)') nfcycles
+        if ( CMD == '-rtol' )    READ (CMD2, '(E14.6)') rtol
+        if ( CMD == '-ncycle' )  READ (CMD2, '(I10)') ncycles
 
-        if( CMD == '-verbose' )  READ (CMD2, '(I10)') verbose
-        if( CMD == '-num_solves' )  READ (CMD2, '(I10)') num_solves
+        if ( CMD == '-verbose' )  READ (CMD2, '(I10)') verbose
+        if ( CMD == '-num_solves' )  READ (CMD2, '(I10)') num_solves
 
-        if( CMD == '-sr_max_loc_sz' )  READ (CMD2, '(I10)') sr_max_loc_sz
+        if ( CMD == '-sr_max_loc_sz' )  READ (CMD2, '(I10)') sr_max_loc_sz
 
-        if( CMD == '-sr_base_bufsz' )  READ (CMD2, '(I10)') sr_base_bufsz
-        if( CMD == '-sr_bufsz_inc' )  READ (CMD2, '(I10)') sr_bufsz_inc
+        if ( CMD == '-sr_base_bufsz' )  READ (CMD2, '(I10)') sr_base_bufsz
+        if ( CMD == '-sr_bufsz_inc' )  READ (CMD2, '(I10)') sr_bufsz_inc
+
+        if ( CMD == '-nsmoothsup' ) READ (CMD2, '(I10)') nsmoothsup
+        if ( CMD == '-nsmoothsdown' ) READ (CMD2, '(I10)') nsmoothsdown
+        if ( CMD == '-nsmoothsfmg' ) READ (CMD2, '(I10)') nsmoothsfmg
+
+        if ( CMD == '-error_norm' ) READ (CMD2, '(I10)') error_norm
      END DO
 #ifdef TWO_D
      nglob%k = 1; nloc%k = 1; npe%k = 1;
@@ -329,6 +337,12 @@ subroutine get_params(npe,nloc)
      iarray(20) = sr_max_loc_sz
      iarray(21) = sr_base_bufsz
      iarray(22) = sr_bufsz_inc
+
+     iarray(23) = nsmoothsup
+     iarray(24) = nsmoothsdown
+     iarray(25) = nsmoothsfmg
+
+     iarray(26) = error_norm
 
      call MPI_Bcast(iarray,nargs,MPI_DOUBLE_PRECISION, 0, &
           mpi_comm_world, ierr)
@@ -365,14 +379,40 @@ subroutine get_params(npe,nloc)
      sr_max_loc_sz = int(iarray(20))
      sr_base_bufsz = int(iarray(21))
      sr_bufsz_inc = int(iarray(22))
+     
+     nsmoothsup = int(iarray(23))
+     nsmoothsdown = int(iarray(24))
+     nsmoothsfmg = int(iarray(25))
+
+     error_norm = int(iarray(26))
   endif
   if (nfcycles .ne. 0) nfcycles = 1 ! only valid 0,1
   if (nvcycles .lt. 0) nvcycles = 0 ! only valid 0,1
   if (nfcycles+nvcycles .le. 0) print *, 'no solver iterations!!!'
   ! general constructor stuff
-  nsmoothsup = nsmooths
-  nsmoothsdown = nsmooths
+  if (nsmoothsup==-1) nsmoothsup = nsmooths
+  if (nsmoothsdown==-1) nsmoothsdown = nsmooths
+  if (nsmoothsfmg==-1) nsmoothsfmg = 0 ! default
   ncoarsesolveits = bot_min_sz*bot_min_sz
+  
+  if (verbose.gt.3) then
+     print *,'problemType=',problemType
+     print *,'nvcycles=',nvcycles
+     print *,'nfcycles=',nfcycles
+     print *,'rtol=',rtol
+     print *,'ncycles=',ncycles
+     print *,'bot_min_sz=',bot_min_sz
+     print *,'pe_min_sz=',pe_min_sz
+     print *,'num_solves=',num_solves
+     print *,'sr_max_loc_sz=',sr_max_loc_sz
+     print *,'sr_base_bufsz=',sr_base_bufsz
+     print *,'sr_bufsz_inc=',sr_bufsz_inc
+     print *,'nsmoothsup=',nsmoothsup
+     print *,'nsmoothsdown=',nsmoothsdown
+     print *,'nsmoothsfmg=',nsmoothsfmg
+     print *,'error_norm=',error_norm
+  end if
+
   ! get ijk pes
   t1 = mpisize
 #ifdef TWO_D
@@ -380,9 +420,9 @@ subroutine get_params(npe,nloc)
   nglob%k = 1
   nloc%k = 1
   if (npe%i == -1) then
-     if( abs(dsqrt(t1) - floor(dsqrt(t1))) > 0.d0 ) then
-        if(abs(dsqrt(t1/2.d0)-floor(dsqrt(t1/2.d0)))>0.d0)then
-           if(abs(dsqrt(t1/4.d0)-floor(dsqrt(t1/4.d0)))>0.d0)then
+     if ( abs(dsqrt(t1) - floor(dsqrt(t1))) > 0.d0 ) then
+        if (abs(dsqrt(t1/2.d0)-floor(dsqrt(t1/2.d0)))>0.d0)then
+           if (abs(dsqrt(t1/4.d0)-floor(dsqrt(t1/4.d0)))>0.d0)then
               fact=8    ! hope this works
            else
               fact=4
@@ -402,9 +442,9 @@ subroutine get_params(npe,nloc)
      endif
   else (npe%j == -1) then
      npe%j=t1/npe%i
-     if(npe%j<1)stop'too many npe%i???'
+     if (npe%j<1)stop'too many npe%i???'
      fact = npe%i/npe%j
-     if( fact < 1 ) then
+     if ( fact < 1 ) then
         write(6,*) 'npe%i must be greater than npe%j', NPES,&
        'npe%i=',npe%i,&
        'npe%j=',npe%j,'npe%k=',npe%k,'npes=',mpisize
@@ -414,23 +454,23 @@ subroutine get_params(npe,nloc)
 #else
   if (npe%i == -1) then
      t1 = mpisize
-     if(mpisize==1) then ! one pe
+     if (mpisize==1) then ! one pe
         npe%i = 1; npe%j = 1; npe%k = 1;
-     elseif(nglob%i==nglob%j .and. nglob%j==nglob%k)then ! square
+     elseif (nglob%i==nglob%j .and. nglob%j==nglob%k)then ! square
         npe%i = floor(t1**.3333333334d0)
         npe%j = npe%i
         npe%k = mpisize/(npe%i*npe%j)
-     elseif(nglob%k==nglob%j)then ! z==y
+     elseif (nglob%k==nglob%j)then ! z==y
         t1 = nglob%j*mpisize; t2 = nglob%i; t1 = t1/t2 
         npe%j = floor(t1**.333333334d0)
         npe%k = npe%j
         npe%i = mpisize/(npe%j*npe%k) 
-     elseif(nglob%k==nglob%i)then
+     elseif (nglob%k==nglob%i)then
         t1 = nglob%k*mpisize; t2 = nglob%j; t1 = t1/t2 
         npe%i = floor(t1**.333333334d0)
         npe%k = npe%i
         npe%j = mpisize/(npe%i*npe%k) 
-     elseif(nglob%i==nglob%j)then
+     elseif (nglob%i==nglob%j)then
         t1 = nglob%j*mpisize; t2 = nglob%k; t1 = t1/t2 
         npe%j = floor(t1**.333333334d0)
         npe%i = npe%j
@@ -461,7 +501,7 @@ subroutine get_params(npe,nloc)
   if (nloc%k.ne.-1 .and. nglob%k.eq.-1) nglob%k = nloc%k*npe%k 
   if (nglob%k .ne. nloc%k*npe%k) stop 'nz .ne. nloc%k*npe%k'
   ! print topology
-  if(mype==0 .and. verbose .gt. 3) then
+  if (mype==0 .and. verbose .gt. 3) then
      write(6,*) '[',mype,'] nx =',nglob%i,',ny= ',nglob%j,',nz= ',nglob%k
      write(6,*) '[',mype,'] npx=',npe%i,  ',npy=',npe%j,  ',npz=',npe%k
      write(6,*) '[',mype,'] nxl=',nloc%i, ',nyl=',nloc%j, ',nzl=',nloc%k
@@ -478,14 +518,14 @@ subroutine SetupDomain(problemType)
   !     0: (x^4-x^2)
   !     1: bubble
   !
-  if(problemType.eq.0) then
+  if (problemType.eq.0) then
      xl=0.D0
      xr=1.D0
      yl=0.D0
      yr=1.D0
      zl=0.D0
      zr=1.D0
-  else if(problemType.eq.1) then
+  else if (problemType.eq.1) then
      xl=0.D0
      xr=1.D0
      yl=0.D0
@@ -504,9 +544,9 @@ end subroutine SetupDomain
 subroutine InitIO()
   use iounits
   use mpistuff, only:mype
-  use error_data_module, only:error_norm
+  use error_data_module,only:error_norm
   implicit none
-  if(mype==0) then
+  if (mype==0) then
      open(irun,file='Run.history', form='formatted')
       write(irun,  '(A,I1,A)') 'solve # error_',error_norm,': u           grad(u)          |f-Au|_2/|f|_2'
      write(irun,*) '-----------------------------------------------------------'
@@ -522,7 +562,7 @@ subroutine finalizeio()
   use mpistuff, only:mype
   implicit none
   ! Close all open files
-  if(mype==0) then
+  if (mype==0) then
      close(irun)
      close(iconv)
   endif
@@ -571,8 +611,8 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
   use discretization,only:nsg
   implicit none
   type(ipoint)::nloc
-  integer,intent(in):: comm3d
-  integer,intent(in):: NPeAxis(3),iPeAxis(3)
+  integer,intent(in)::comm3d
+  integer,intent(in)::NPeAxis(3),iPeAxis(3)
   type(crs_patcht),intent(out)::cg(0:dom_max_grids-1)
   type(sr_patcht),intent(out)::gsr(-dom_max_sr_grids:0)
   ! 
@@ -592,7 +632,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
   call MPI_Cart_Shift(comm3D,0,1,cg(0)%t%left,cg(0)%t%right,ierr)
   call MPI_Cart_Shift(comm3D,1,1,cg(0)%t%bottom,cg(0)%t%top,ierr)
   call MPI_cart_Shift(comm3D,2,1,cg(0)%t%behind,cg(0)%t%forward,ierr)
-  if(mype==0.and.verbose.gt.4) write(6,*)'[',mype,'] l,r,t,b=',&
+  if (mype==0.and.verbose.gt.4) write(6,*)'[',mype,'] l,r,t,b=',&
        cg(0)%t%left,cg(0)%t%right,cg(0)%t%top,&
        cg(0)%t%bottom,cg(0)%t%behind,cg(0)%t%forward
   !       ipex ...	
@@ -615,7 +655,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
   cg(0)%p%max%hi%k=nloc%k
   cg(0)%p%max%lo%k=1
 #endif
-  if(mype==0.and.verbose.gt.1) then
+  if (mype==0.and.verbose.gt.3) then
      write(6,*) '[',mype,'] level ',0,', nxl=',cg(0)%p%max%hi%i,'npx=',cg(0)%t%npe%i
   end if
   !----------------------------------------------------------------------
@@ -630,7 +670,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
      cg(n)%p%dx%k = cg(n-1)%p%dx%k*mg_ref_ratio
 #endif
      ! take care of reductions
-     if( is_top(cg(n-1)) ) then
+     if ( is_top(cg(n-1)) ) then
         ! all done - clear rest of grids
         do ii=n,dom_max_grids-1
            cg(ii)%t%npe%i = 0 
@@ -691,7 +731,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         cg(n)%t%forward = cg(n-1)%t%forward
         cg(n)%t%behind = cg(n-1)%t%behind
         
-     else if(cg(n-1)%t%npe%k==1 .or. cg(n-1)%t%npe%j==1 &
+     else if (cg(n-1)%t%npe%k==1 .or. cg(n-1)%t%npe%j==1 &
 #ifndef TWO_D
           .or. cg(n-1)%t%npe%i==1 ) then ! one pe reduction, copy comm stuff
 #else
@@ -770,9 +810,9 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         ! debug              
         call MPI_comm_rank(cg(n)%t%comm3D,ii,ierr)
         call MPI_Cart_Coords(cg(n)%t%comm3D,ii,ndims,npes,ierr)
-        if(cg(n)%t%ipe%i.ne.npes(1)+1) stop '%t%ipe%i'
-        if(cg(n)%t%ipe%j.ne.npes(2)+1) stop '%t%ipe%j'
-        if(cg(n)%t%ipe%k.ne.npes(3)+1) stop '%t%ipe%k'
+        if (cg(n)%t%ipe%i.ne.npes(1)+1) stop '%t%ipe%i'
+        if (cg(n)%t%ipe%j.ne.npes(2)+1) stop '%t%ipe%j'
+        if (cg(n)%t%ipe%k.ne.npes(3)+1) stop '%t%ipe%k'
         if (mype==mpisize/2.and.verbose.gt.4)then
            write(0,*) '[',mype, '] cart rank',ii
            write(0,*) '[',mype, '] X:',cg(n)%t%ipe%i,npes(1)+1
@@ -796,7 +836,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         cg(n)%p%max%lo%k=1
      endif
      ! print topology
-     if(mype==0.and.verbose.gt.1) then
+     if (mype==0.and.verbose.gt.3) then
         write(6,*) '[',mype,'] level ',n,', nxl=',cg(n)%p%max%hi%i,'npx=',cg(n)%t%npe%i
         if (mype==-1) then
            write(6,*) '[',mype,'] ipx=',cg(n)%t%ipe%i, ',ipy=',cg(n)%t%ipe%j,',ipz= ',cg(n)%t%ipe%k
@@ -823,11 +863,11 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
      cg(n)%p%all%lo%k=1
      cg(n)%p%all%hi%k=1
 #endif 
-     if (verbose.gt.1 .and.mype==0) write (6,'(A,I2,A,I2,I2,I2,A,I4,I4,I4,A,I4,I4,I4)'),&
+     if (verbose.gt.1.and.mype==mpisize/2) write (6,'(A,I2,A,I2,I2,I2,A,I4,I4,I4,A,I4,I4,I4,A,I4)'),&
           'new level:',n,&
           ') allocated lo:',cg(n)%p%all%lo%i,cg(n)%p%all%lo%j,cg(n)%p%all%lo%k&
-          ,' allocated hi:',cg(n)%p%all%hi%i,cg(n)%p%all%hi%j,cg(n)%p%all%hi%k&
-          ,' max:',cg(n)%p%max%hi%i,cg(n)%p%max%hi%j,cg(n)%p%max%hi%k
+          ,' hi:',cg(n)%p%all%hi%i,cg(n)%p%all%hi%j,cg(n)%p%all%hi%k&
+          ,' max:',cg(n)%p%max%hi%i,cg(n)%p%max%hi%j,cg(n)%p%max%hi%k,', npx=',cg(n)%t%npe%i
   end do
   !----------------------------------------------------------------------
   ! setup SR 0 if we have SR
@@ -837,38 +877,37 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
 #else 
      .and. nloc%k*mg_ref_ratio.le.sr_max_loc_sz) then
 #endif
-     if(mype==0.and.verbose.gt.2) then
+     if (mype==0.and.verbose.gt.3) then
         write(6,*) '[',mype,'] setup SR grid 0, loc n:',nloc%i,nloc%j,nloc%k
      end if
-     n=0
-     gsr(n)%t%loc_comm = mpi_comm_null
-     gsr(n)%t%comm = comm3d          ! for norms
-     gsr(n)%t%comm3d = mpi_comm_null ! flag in BC
-     gsr(n)%t%npe%i=NPeAxis(1)       ! for BCs
-     gsr(n)%t%npe%j=NPeAxis(2)
-     gsr(n)%t%npe%k=NPeAxis(3)
-     gsr(n)%t%ipe%i=iPeAxis(1)
-     gsr(n)%t%ipe%j=iPeAxis(2)
-     gsr(n)%t%ipe%k=iPeAxis(3)
+     gsr(0)%t%loc_comm = mpi_comm_null ! 
+     gsr(0)%t%comm = comm3d          ! for norms
+     gsr(0)%t%comm3d = mpi_comm_null ! flag in BC
+     gsr(0)%t%npe%i=NPeAxis(1)       ! for BCs
+     gsr(0)%t%npe%j=NPeAxis(2)
+     gsr(0)%t%npe%k=NPeAxis(3)
+     gsr(0)%t%ipe%i=iPeAxis(1)
+     gsr(0)%t%ipe%j=iPeAxis(2)
+     gsr(0)%t%ipe%k=iPeAxis(3)
      ! dx
-     gsr(n)%p%dx%i = cg(0)%p%dx%i
-     gsr(n)%p%dx%j = cg(0)%p%dx%j
+     gsr(0)%p%dx%i = cg(0)%p%dx%i
+     gsr(0)%p%dx%j = cg(0)%p%dx%j
 #ifdef TWO_D
-     gsr(n)%p%dx%k  = 0.d0
+     gsr(0)%p%dx%k  = 0.d0
 #else 
-     gsr(n)%p%dx%k = cg(0)%p%dx%k
+     gsr(0)%p%dx%k = cg(0)%p%dx%k
 #endif
      ! new valide size, needs to be grown later
-     gsr(n)%p%max%hi%i=nloc%i
-     gsr(n)%p%max%hi%j=nloc%j
+     gsr(0)%p%max%hi%i=nloc%i
+     gsr(0)%p%max%hi%j=nloc%j
 #ifdef TWO_D
-     gsr(n)%p%max%hi%k=1
+     gsr(0)%p%max%hi%k=1
 #else 
-     gsr(n)%p%max%hi%k=nloc%k
+     gsr(0)%p%max%hi%k=nloc%k
 #endif
-     gsr(n)%p%max%lo%i=1
-     gsr(n)%p%max%lo%j=1
-     gsr(n)%p%max%lo%k=1
+     gsr(0)%p%max%lo%i=1
+     gsr(0)%p%max%lo%j=1
+     gsr(0)%p%max%lo%k=1
   else
      gsr(0)%p%max%hi%i=0 ! flag for empty
      gsr(0)%p%max%hi%j=0
@@ -925,7 +964,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         gsr(n)%p%max%hi%k=0
      end if
   end do
-  if(mype==0.and.verbose.gt.3.and.nsr.gt.0) then
+  if (mype==0.and.verbose.gt.3.and.nsr.gt.0) then
      write(6,*) '[',mype,'] setup ',nsr,' SR levels, buffer schedual:',sr_base_bufsz,sr_bufsz_inc
   end if
   !----------------------------------------------------------------------
@@ -1004,15 +1043,25 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
 #ifdef TWO_D
         gsr(n)%p%all%lo%k=1
         gsr(n)%p%all%hi%k=1
-#else 
+#else
         gsr(n)%p%all%lo%k=-nsg%k+1
         gsr(n)%p%all%hi%k=gsr(n)%p%max%hi%k+nsg%k
 #endif
-        if (verbose.gt.1 .and.mype==0) write (6,'(A,I2,A,I2,I2,I2,A,I4,I4,I4,A,I4,I4,I4,A,I2,I2,I2)'),&
+        if (n==-nsr) then ! no cf needed for finest
+           gsr(n)%cfoffset%i = 0
+           gsr(n)%cfoffset%j = 0
+           gsr(n)%cfoffset%k = 0
+        end if
+     end do
+  end if
+  ! print SR levels
+  if (nsr>0.and.verbose.gt.1.and.mype==mpisize/2) then
+     do n=0,-nsr,-1
+        write (6,'(A,I2,A,I3,I3,I3,A,I3,I3,I3,A,I4,I4,I4,A,I3,I3,I3)'),&
              'new SR level:',n,') valid lo:',gsr(n)%val%lo%i,gsr(n)%val%lo%j,gsr(n)%val%lo%k&
-             ,' valid hi:',gsr(n)%val%hi%i,gsr(n)%val%hi%j,gsr(n)%val%hi%k&
+             ,' hi:',gsr(n)%val%hi%i,gsr(n)%val%hi%j,gsr(n)%val%hi%k&
              ,' max:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j,gsr(n)%p%max%hi%k,&
-             ', coarse R/P offset=',gsr(n)%cfoffset%i,gsr(n)%cfoffset%j,gsr(n)%cfoffset%k
+             ', (crs) R/P offset:',gsr(n)%cfoffset%i,gsr(n)%cfoffset%j,gsr(n)%cfoffset%k
      end do
   end if
   return
