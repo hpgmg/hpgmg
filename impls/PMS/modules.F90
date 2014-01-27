@@ -76,7 +76,7 @@ module mpistuff
   include "mpif.h"
 #endif
   integer:: status(MPI_STATUS_SIZE),ierr
-  integer:: mype,mpisize
+  integer::mype,mpisize
   integer,parameter::ERROR_CARTCOORDS=1
   integer,parameter::ERROR_CARTSHIFT=2
   integer,parameter::ERROR_WAIT=3
@@ -165,7 +165,19 @@ module bc_module
             p%all%lo%j:p%all%hi%j,&
             p%all%lo%k:p%all%hi%k,nvar)
      end subroutine SetBCs
+     subroutine sr_exchange(u_sr,srg0,cg0)
+       use mpistuff,only:mype
+       use discretization
+       implicit none
+       type(sr_patcht),intent(in)::srg0
+       type(crs_patcht),intent(in)::cg0
+       double precision,dimension(&
+            srg0%p%all%lo%i:srg0%p%all%hi%i,&
+            srg0%p%all%lo%j:srg0%p%all%hi%j,&
+            srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::u_sr
+     end subroutine sr_exchange
   end interface
+  type(ipoint)::bc_valid
 contains
   !-----------------------------------------------------------------
   integer function getIglobalx(val,ip)
@@ -195,13 +207,13 @@ module grid_module
   ! interfaces - kernels
   interface
      ! prolongate
-     subroutine Prolong(uxF,uxC,tf,tc,cOffset,fp,cp,high)
+     subroutine Prolong(uxF,uxC,ft,ct,fp,cp,cOffset,high)
        !  uxF = uxF + P * uxC
        use discretization
        implicit none
        type(patcht),intent(in)::fp,cp
        type(ipoint),intent(in)::cOffset
-       type(topot),intent(in)::tc,tf
+       type(topot),intent(in)::ct,ft
        logical,intent(in)::high
        double precision,intent(in)::uxC(&
             cp%all%lo%i:cp%all%hi%i,&
@@ -213,7 +225,7 @@ module grid_module
             fp%all%lo%k:fp%all%hi%k,nvar)
      end subroutine Prolong
      ! restriction
-     subroutine RestrictFuse(cp,fp,tc,cOffset,uC,uC2,ux,ux2)
+     subroutine RestrictFuse(cp,fp,ct,cOffset,uC,uC2,ux,ux2)
        use discretization
        implicit none
        type(patcht),intent(in)::fp,cp
@@ -226,7 +238,7 @@ module grid_module
        cp%all%lo%j:cp%all%hi%j,&
        cp%all%lo%k:cp%all%hi%k,nvar)::uC,uC2
        type(ipoint),intent(in)::cOffset
-       type(topot),intent(in)::tc
+       type(topot),intent(in)::ct
      end subroutine RestrictFuse
      !
      subroutine Apply_const_Lap(uxo,ux,p,t)

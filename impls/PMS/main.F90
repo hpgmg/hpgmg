@@ -226,8 +226,9 @@ subroutine get_params(npe,nloc)
   CHARACTER(LEN=32)  :: CMD,CMD2
   INTEGER            :: NARG,IARG,fact,nsmooths
   integer*8 :: ti
-  integer, parameter :: nargs=26
+  integer, parameter :: nargs=27
   double precision t2,t1,iarray(nargs)
+  logical::show_options
   ! default input args: ?local, n?, ?pes
   npe%i=-1
   npe%j=-1
@@ -243,23 +244,24 @@ subroutine get_params(npe,nloc)
   !       1: bubble      - periodic domain???
   problemType = 0
   ! solver parameters
-  error_norm = 3 ! inf==3
+  error_norm = 2 ! inf==3
   nvcycles = 0 ! pure FMG
   nfcycles = 1 ! pure FMG
   rtol = 1.d-5    ! only used for V-cycles
   ncycles = 1     ! v-cycles or w-cycles
   nfmgvcycles = 1 ! no interface for this (always 1)
   nsmooths = 1
-  nsmoothsup = -1
-  nsmoothsdown = -1
+  nsmoothsdown = 0
+  nsmoothsup = 1
   nsmoothsfmg = -1
   verbose = 1
   bot_min_sz = 2 ! min size for bottom solver (grad get messed up with 1)
   pe_min_sz = 8  ! or 16 ...
   num_solves = 1
   sr_max_loc_sz = 0 ! no SR by default
-  sr_base_bufsz = 4
-  sr_bufsz_inc = 0
+  sr_base_bufsz = 6
+  sr_bufsz_inc = 6
+  show_options=.false.
   !msg_tag_inc = 0 ! better place to initilize this?
   ! read in args
   if ( mype==0 ) then
@@ -303,6 +305,8 @@ subroutine get_params(npe,nloc)
         if ( CMD == '-nsmoothsfmg' ) READ (CMD2, '(I10)') nsmoothsfmg
 
         if ( CMD == '-error_norm' ) READ (CMD2, '(I10)') error_norm
+
+        if ( CMD == '-show_options' ) READ (CMD2, '(L1)') show_options
      END DO
 #ifdef TWO_D
      nglob%k = 1; nloc%k = 1; npe%k = 1;
@@ -343,6 +347,9 @@ subroutine get_params(npe,nloc)
      iarray(25) = nsmoothsfmg
 
      iarray(26) = error_norm
+     
+     iarray(27) = 0.d0
+     if (show_options) iarray(27) = 1.d0
 
      call MPI_Bcast(iarray,nargs,MPI_DOUBLE_PRECISION, 0, &
           mpi_comm_world, ierr)
@@ -385,6 +392,8 @@ subroutine get_params(npe,nloc)
      nsmoothsfmg = int(iarray(25))
 
      error_norm = int(iarray(26))
+     
+     if (iarray(27)==1.d0) show_options = .true.
   endif
   if (nfcycles .ne. 0) nfcycles = 1 ! only valid 0,1
   if (nvcycles .lt. 0) nvcycles = 0 ! only valid 0,1
@@ -393,24 +402,30 @@ subroutine get_params(npe,nloc)
   if (nsmoothsup==-1) nsmoothsup = nsmooths
   if (nsmoothsdown==-1) nsmoothsdown = nsmooths
   if (nsmoothsfmg==-1) nsmoothsfmg = 0 ! default
+  if (error_norm<1.or.error_norm>3) error_norm=3
   ncoarsesolveits = bot_min_sz*bot_min_sz
   
-  if (verbose.gt.3) then
-     print *,'problemType=',problemType
-     print *,'nvcycles=',nvcycles
-     print *,'nfcycles=',nfcycles
-     print *,'rtol=',rtol
-     print *,'ncycles=',ncycles
-     print *,'bot_min_sz=',bot_min_sz
-     print *,'pe_min_sz=',pe_min_sz
-     print *,'num_solves=',num_solves
-     print *,'sr_max_loc_sz=',sr_max_loc_sz
-     print *,'sr_base_bufsz=',sr_base_bufsz
-     print *,'sr_bufsz_inc=',sr_bufsz_inc
-     print *,'nsmoothsup=',nsmoothsup
-     print *,'nsmoothsdown=',nsmoothsdown
-     print *,'nsmoothsfmg=',nsmoothsfmg
-     print *,'error_norm=',error_norm
+  if ((verbose.gt.2.or.show_options).and.mype==0) then
+     write(6,'(A16,I2)') 'problemType=',problemType
+     write(6,'(A16,I2)') 'nvcycles=',nvcycles
+     write(6,'(A16,I2)') 'nfcycles=',nfcycles
+     write(6,'(A16,I2)') 'ncycles=',ncycles
+     write(6,'(A16,I2)') 'bot_min_sz=',bot_min_sz
+     write(6,'(A16,I2)') 'pe_min_sz=',pe_min_sz
+     write(6,'(A16,I2)') 'num_solves=',num_solves
+     write(6,'(A16,I2)') 'sr_max_loc_sz=',sr_max_loc_sz
+     write(6,'(A16,I2)') 'sr_base_bufsz=',sr_base_bufsz
+     write(6,'(A16,I2)') 'sr_bufsz_inc=',sr_bufsz_inc
+     write(6,'(A16,I2)') 'nsmoothsfmg=',nsmoothsfmg
+     write(6,'(A16,I2)') 'nsmoothsdown=',nsmoothsdown
+     write(6,'(A16,I2,A,I2,A,I2,A,I2,A)') ' nsmoothsup=',nsmoothsup,': V(',nsmoothsfmg,',',nsmoothsdown,&
+          ',',nsmoothsup,') cycles'
+     if (error_norm==3) then 
+        write(6,'(A16,A)') 'error_norm=',' infinity'
+     else
+        write(6,'(A16,I2)') 'error_norm=',error_norm
+     end if
+     if (nvcycles>0) write(6,'(A16,ES8.1)') 'rtol=',rtol
   end if
 
   ! get ijk pes
@@ -616,7 +631,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
   type(crs_patcht),intent(out)::cg(0:dom_max_grids-1)
   type(sr_patcht),intent(out)::gsr(-dom_max_sr_grids:0)
   ! 
-  integer::n,ndims,ii,jj,kk,srbf,pe_id,rank,npes(3)
+  integer::n,ndims,ii,jj,kk,srbf,finer_nb,pe_id,rank,npes(3)
 
   ndims = 3
   !----------------------------------------------------------------------
@@ -714,22 +729,13 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
 #else
         cg(n)%p%max%hi%k=1
 #endif
+        cg(n)%t%ipe = cg(n-1)%t%ipe
+        cg(n)%t%npe = cg(n-1)%t%npe
+        
+        cg(n)%t = cg(n-1)%t
         cg(n)%t%comm3d = comm3d
         cg(n)%t%comm = MPI_COMM_WORLD
         cg(n)%t%loc_comm = mpi_comm_null
-        cg(n)%t%ipe%i = cg(n-1)%t%ipe%i
-        cg(n)%t%ipe%j = cg(n-1)%t%ipe%j
-        cg(n)%t%ipe%k = cg(n-1)%t%ipe%k
-        cg(n)%t%npe%i = cg(n-1)%t%npe%i
-        cg(n)%t%npe%j = cg(n-1)%t%npe%j
-        cg(n)%t%npe%k = cg(n-1)%t%npe%k
-        
-        cg(n)%t%left = cg(n-1)%t%left
-        cg(n)%t%right = cg(n-1)%t%right
-        cg(n)%t%top = cg(n-1)%t%top
-        cg(n)%t%bottom = cg(n-1)%t%bottom
-        cg(n)%t%forward = cg(n-1)%t%forward
-        cg(n)%t%behind = cg(n-1)%t%behind
         
      else if (cg(n-1)%t%npe%k==1 .or. cg(n-1)%t%npe%j==1 &
 #ifndef TWO_D
@@ -737,12 +743,8 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
 #else
         ) then
 #endif
-        cg(n)%t%npe%i = cg(n-1)%t%npe%i
-        cg(n)%t%npe%j = cg(n-1)%t%npe%j
-        cg(n)%t%ipe%i = cg(n-1)%t%ipe%i
-        cg(n)%t%ipe%j = cg(n-1)%t%ipe%j
-        cg(n)%t%npe%k = cg(n-1)%t%npe%k
-        cg(n)%t%ipe%k = cg(n-1)%t%ipe%k
+        cg(n)%t%npe = cg(n-1)%t%npe
+        cg(n)%t%ipe = cg(n-1)%t%ipe
         
         cg(n)%p%max%hi%i=cg(n-1)%p%max%hi%i/mg_ref_ratio
         cg(n)%p%max%hi%j=cg(n-1)%p%max%hi%j/mg_ref_ratio
@@ -759,12 +761,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         cg(n)%t%comm = cg(n-1)%t%comm
         cg(n)%t%loc_comm = cg(n-1)%t%loc_comm
         
-        cg(n)%t%left = cg(n-1)%t%left
-        cg(n)%t%right = cg(n-1)%t%right
-        cg(n)%t%top = cg(n-1)%t%top
-        cg(n)%t%bottom = cg(n-1)%t%bottom
-        cg(n)%t%forward = cg(n-1)%t%forward
-        cg(n)%t%behind = cg(n-1)%t%behind
+        cg(n)%t = cg(n-1)%t
         if (mype==0.and.verbose.gt.4)then
            write(0,*) '[',mype, '] one pe reduction'
            write(0,*) '[',mype, '] X:',cg(n)%t%ipe%i
@@ -828,9 +825,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         call MPI_Cart_Shift(cg(n)%t%comm3D,1,1,cg(n)%t%bottom,cg(n)%t%top,ierr)
         call MPI_cart_Shift(cg(n)%t%comm3D,2,1,cg(n)%t%behind,cg(n)%t%forward,ierr)
         !     logical size of grid stays the same, npe is reduced
-        cg(n)%p%max%hi%i=cg(n-1)%p%max%hi%i
-        cg(n)%p%max%hi%j=cg(n-1)%p%max%hi%j
-        cg(n)%p%max%hi%k=cg(n-1)%p%max%hi%k
+        cg(n)%p%max%hi=cg(n-1)%p%max%hi
         cg(n)%p%max%lo%i=1
         cg(n)%p%max%lo%j=1
         cg(n)%p%max%lo%k=1
@@ -890,12 +885,9 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
      gsr(0)%t%ipe%j=iPeAxis(2)
      gsr(0)%t%ipe%k=iPeAxis(3)
      ! dx
-     gsr(0)%p%dx%i = cg(0)%p%dx%i
-     gsr(0)%p%dx%j = cg(0)%p%dx%j
+     gsr(0)%p%dx = cg(0)%p%dx
 #ifdef TWO_D
      gsr(0)%p%dx%k  = 0.d0
-#else 
-     gsr(0)%p%dx%k = cg(0)%p%dx%k
 #endif
      ! new valide size, needs to be grown later
      gsr(0)%p%max%hi%i=nloc%i
@@ -948,12 +940,9 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         gsr(n)%p%dx%k = gsr(n+1)%p%dx%k/mg_ref_ratio
 #endif
         ! new valide size, needs to be grown later
-        gsr(n)%p%max%hi%i=nloc%i
-        gsr(n)%p%max%hi%j=nloc%j
+        gsr(n)%p%max%hi=nloc
 #ifdef TWO_D
         gsr(n)%p%max%hi%k=1
-#else 
-        gsr(n)%p%max%hi%k=nloc%k
 #endif
         gsr(n)%p%max%lo%i=1
         gsr(n)%p%max%lo%j=1
@@ -964,25 +953,42 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         gsr(n)%p%max%hi%k=0
      end if
   end do
-  if (mype==0.and.verbose.gt.3.and.nsr.gt.0) then
-     write(6,*) '[',mype,'] setup ',nsr,' SR levels, buffer schedual:',sr_base_bufsz,sr_bufsz_inc
+  if (mype==0.and.verbose.gt.2.and.nsr.gt.0) then
+     write(6,*) '[',mype,'] setup ',nsr,' SR levels, nb_0=',sr_base_bufsz,', nv inc=',sr_bufsz_inc
   end if
   !----------------------------------------------------------------------
   ! add buffer/ghosts, set size, from fine to coarse
   if (nsr.gt.0) then
      srbf = sr_base_bufsz-sr_bufsz_inc ! the buffer schedual
      do n=-nsr,0,1
-        srbf = srbf+sr_bufsz_inc ! number of buffer cells
+        if (n==0) then 
+           srbf = finer_nb/2 + 1 ! the size needed for grid 0
+        else 
+           srbf = srbf+sr_bufsz_inc ! number of buffer cells
+        end if
+        if (mype==0.and.verbose.gt.2) then
+           write(6,*) '[',mype,'] setup SR level ',n,', nb=',srbf,', grid:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j
+        end if
+        ! offset to line up with finer grid for R & P: c.bfsz - f.bfsz/2 = c.bfsz/2 + inc/2
+        if (n==-nsr) then
+           gsr(n)%cfoffset%i = 10000 ! valgrind whould catch this being used
+           gsr(n)%cfoffset%j = 10000
+           gsr(n)%cfoffset%k = 10000
+        else
+           gsr(n)%cfoffset%i = srbf - finer_nb/2 
+           gsr(n)%cfoffset%j = srbf - finer_nb/2
+           gsr(n)%cfoffset%k = srbf - finer_nb/2
+        end if
+        finer_nb = srbf
+
         if (srbf.gt.gsr(n)%p%max%hi%i.or.srbf.gt.gsr(n)%p%max%hi%j&
 #ifndef TWO_D
-             .or.srbf.gt.gsr(n)%p%max%hi%k)&
+             .or.srbf.gt.gsr(n)%p%max%hi%k&
 #endif
-             stop 'SR buffer larger than grid'
-        ! offset to line up with finer grid for R & P: c.bfsz - f.bfsz/2 = c.bfsz/2 + inc/2
-        gsr(n)%cfoffset%i = srbf - (srbf-sr_bufsz_inc)/2 
-        gsr(n)%cfoffset%j = srbf - (srbf-sr_bufsz_inc)/2
-        gsr(n)%cfoffset%k = srbf - (srbf-sr_bufsz_inc)/2
-        
+             ) then
+           print *,'srbf=',srbf,', max=',gsr(n)%p%max%hi%i
+           stop 'SR buffer larger than grid'
+        end if
         ! clip buffers at BCs
         ii = srbf
         jj = srbf
@@ -1047,17 +1053,12 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         gsr(n)%p%all%lo%k=-nsg%k+1
         gsr(n)%p%all%hi%k=gsr(n)%p%max%hi%k+nsg%k
 #endif
-        if (n==-nsr) then ! no cf needed for finest
-           gsr(n)%cfoffset%i = 0
-           gsr(n)%cfoffset%j = 0
-           gsr(n)%cfoffset%k = 0
-        end if
      end do
   end if
   ! print SR levels
   if (nsr>0.and.verbose.gt.1.and.mype==mpisize/2) then
      do n=0,-nsr,-1
-        write (6,'(A,I2,A,I3,I3,I3,A,I3,I3,I3,A,I4,I4,I4,A,I3,I3,I3)'),&
+        write (6,'(A,I2,A,I3,I3,I3,A,I4,I4,I4,A,I4,I4,I4,A,I3,I3,I3)'),&
              'new SR level:',n,') valid lo:',gsr(n)%val%lo%i,gsr(n)%val%lo%j,gsr(n)%val%lo%k&
              ,' hi:',gsr(n)%val%hi%i,gsr(n)%val%hi%j,gsr(n)%val%hi%k&
              ,' max:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j,gsr(n)%p%max%hi%k,&

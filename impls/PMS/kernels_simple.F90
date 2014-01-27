@@ -366,7 +366,7 @@ subroutine RestrictFuse(cp,fp,ct,cOffset,uC,uC2,ux,ux2)
   return
 end subroutine RestrictFuse
 !-----------------------------------------------------------------------
-subroutine Prolong(uxF,uxC,ft,ct,cOffset,fp,cp,high)
+subroutine Prolong(uxF,uxC,ft,ct,fp,cp,cOffset,high)
   !  uxF = uxF + P * uxC
   use discretization,only:nvar,nsg
   use bc_module
@@ -654,11 +654,11 @@ subroutine GS_RB_const_Lap(phi,rhs,p,t,nits)
   denoi = 1.d0/denoi
   do m=1,nits
      ! red/black
-     do rbi = 0,1
 #ifdef HAVE_PETSC
         call PetscLogEventBegin(events(2),ierr)
         call PetscLogFlops(flops,ierr)
 #endif 
+     do rbi = 0,1
         do ii=1,p%max%hi%i
            do jj=1,p%max%hi%j
               offi = mod(ig+ii+jg+jj+kg-2+rbi,2)+1
@@ -677,11 +677,11 @@ subroutine GS_RB_const_Lap(phi,rhs,p,t,nits)
               enddo       ! ii
            enddo          ! jj
         enddo             ! kk
+     enddo                ! r/b i
 #ifdef HAVE_PETSC
         call PetscLogEventEnd(events(2),ierr)
 #endif
         call SetBCs(phi,p,t,nsg)
-     enddo                ! r/b i
   enddo                   ! iters
 end subroutine GS_RB_const_Lap
 !-----------------------------------------------------------------------
@@ -799,14 +799,9 @@ subroutine Apply_const_Lap(uxo,ux,p,t)
   dzl=p%dx%k
   dzi2=1.d0/dzl**2
 #endif
-!!$  write(6,'(A,E10.2,E10.2,E10.2,A,I3,I3,I3,A,I3,I3,I3,A,I3,I3,I3)') &
-!!$       'Apply_const_Lap:',dxi2,dyi2,dzi2,&
-!!$       ', max:',p%max%hi%i,p%max%hi%j,p%max%hi%k,&
-!!$       ', all%lo:',p%all%lo%i,p%all%lo%j,p%all%lo%k,&
-!!$       ', all%hi:',p%all%hi%i,p%all%hi%j,p%all%hi%k
-  do ii=1,p%max%hi%i,1                    
-        do jj=1,p%max%hi%j,1           
-           do kk=1,p%max%hi%k,1
+  do ii=1,p%max%hi%i
+        do jj=1,p%max%hi%j
+           do kk=1,p%max%hi%k
            ti =   dxi2*(ux(ii+1,jj,kk,1)+ux(ii-1,jj,kk,1))&
                 + dyi2*(ux(ii,jj+1,kk,1)+ux(ii,jj-1,kk,1))&
                 - 2.d0*(dxi2+dyi2)*ux(ii,jj,kk,1)
@@ -814,21 +809,6 @@ subroutine Apply_const_Lap(uxo,ux,p,t)
            ti = ti + dzi2*(ux(ii,jj,kk+1,1)+ux(ii,jj,kk-1,1))&
                 - 2.d0*dzi2*ux(ii,jj,kk,1)
 #endif
-                 !if (ii==1.and.jj==1.and.kk==1) then
-!!$                    print *,'kk-1 index"',ii,jj,kk
-!!$                    print *,ux(ii-1,jj-1,kk-1,1),ux(ii,jj-1,kk-1,1),ux(ii-1,jj-1,kk-1,1)
-!!$                    print *,ux(ii-1,jj,kk-1,1),ux(ii,jj,kk-1,1),ux(ii-1,jj,kk-1,1)
-!!$                    print *,ux(ii-1,jj+1,kk-1,1),ux(ii,jj+1,kk-1,1),ux(ii-1,jj+1,kk-1,1)
-!!$                    print *,'kk'
-!!$                    print *,ux(ii-1,jj-1,kk,1),ux(ii,jj-1,kk,1),ux(ii-1,jj-1,kk,1)
-!!$                    print *,ux(ii-1,jj,kk,1),ux(ii,jj,kk,1),ux(ii-1,jj,kk,1)
-!!$                    print *,ux(ii-1,jj+1,kk,1),ux(ii,jj+1,kk,1),ux(ii-1,jj+1,kk,1)
-!!$                    print *,'kk+1'
-!!$                    print *,ux(ii-1,jj-1,kk+1,1),ux(ii,jj-1,kk+1,1),ux(ii-1,jj-1,kk+1,1)
-!!$                    print *,ux(ii-1,jj,kk+1,1),ux(ii,jj,kk+1,1),ux(ii-1,jj,kk+1,1)
-!!$                    print *,ux(ii-1,jj+1,kk+1,1),ux(ii,jj+1,kk+1,1),ux(ii-1,jj+1,kk+1,1)
-                 !end if
-
            uxo(ii,jj,kk,1) = ti               
         enddo               ! ii
      enddo                  ! jj
