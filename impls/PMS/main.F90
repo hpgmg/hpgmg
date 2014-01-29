@@ -130,7 +130,6 @@ subroutine driver(gc,gsr)
   integer,parameter:: cache_flusher_size=1 !1024*1024 ! cache flush array size
   double precision:: cache_flusher(cache_flusher_size),res0,rateu,rategrad
   type(error_data)::errors(0:ncgrids-1+nvcycles+dom_max_sr_grids)
-  !external Apply_const_Lap,GS_RB_const_Lap,Jacobi_const_Lap
   double precision,parameter:: log2r = 1.d0/log(2.d0);
 #ifdef HAVE_PETSC
   call PetscInitialize(PETSC_NULL_CHARACTER,ierr)
@@ -155,6 +154,7 @@ subroutine driver(gc,gsr)
 #endif
         select case (problemType)
         case(0)
+           !call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,Jacobi_const_Lap,res0,errors,nViters)
            call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,GS_RB_const_Lap,res0,errors,nViters)
         case(1)
            if (mype==0) write(6,*) 'problemType 1 not implemented -- todo'
@@ -244,7 +244,7 @@ subroutine get_params(npe,nloc)
   !       1: bubble      - periodic domain???
   problemType = 0
   ! solver parameters
-  error_norm = 2 ! inf==3
+  error_norm = 3 ! inf==3
   nvcycles = 0 ! pure FMG
   nfcycles = 1 ! pure FMG
   rtol = 1.d-5    ! only used for V-cycles
@@ -406,7 +406,11 @@ subroutine get_params(npe,nloc)
   ncoarsesolveits = bot_min_sz*bot_min_sz
   
   if ((verbose.gt.2.or.show_options).and.mype==0) then
-     write(6,'(A16,I2)') 'problemType=',problemType
+#ifdef TWO_D
+     write(6,'(A16,I2)') '2D: problemType=',problemType
+#else
+     write(6,'(A16,I2)') '3D: problemType=',problemType
+#endif
      write(6,'(A16,I2)') 'nvcycles=',nvcycles
      write(6,'(A16,I2)') 'nfcycles=',nfcycles
      write(6,'(A16,I2)') 'ncycles=',ncycles
@@ -449,20 +453,19 @@ subroutine get_params(npe,nloc)
         fact=1
      endif
      npe%i=fact*floor(dsqrt(t1/fact))
-     npe%j=t1/npe%i
+     npe%j=int(t1)/npe%i
      if (mpisize .ne. npe%k*npe%i*npe%j) then
-        write(6,*) 'INCORRECT NP:', NPES,'npe%i=',npe%i,&
+        write(6,*) 'INCORRECT NP:', npe%k*npe%i*npe%j,'npe%i=',npe%i,&
              'npe%j=',npe%j,'npe%k=',npe%k,'npes=',mpisize
         stop
      endif
-  else (npe%j == -1) then
-     npe%j=t1/npe%i
+  else if (npe%j == -1) then
+     npe%j=int(t1)/npe%i
      if (npe%j<1)stop'too many npe%i???'
      fact = npe%i/npe%j
      if ( fact < 1 ) then
-        write(6,*) 'npe%i must be greater than npe%j', NPES,&
-       'npe%i=',npe%i,&
-       'npe%j=',npe%j,'npe%k=',npe%k,'npes=',mpisize
+        write(6,*) 'npe%i must be greater than npe%j: ',npe,&
+       '. npe%i=',npe%i,'npe%j=',npe%j,'npe%k=',npe%k,'npes=',mpisize
         stop
      endif
   endif
@@ -962,22 +965,23 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
      srbf = sr_base_bufsz-sr_bufsz_inc ! the buffer schedual
      do n=-nsr,0,1
         if (n==0) then 
-           srbf = finer_nb/2 + 1 ! the size needed for grid 0
+           srbf = (finer_nb+1)/2 + 1 ! the size needed for grid 0
         else 
            srbf = srbf+sr_bufsz_inc ! number of buffer cells
         end if
-        if (mype==0.and.verbose.gt.2) then
+        if (mype==0.and.(verbose.gt.2.or.mod(srbf,2)/=1)) then
            write(6,*) '[',mype,'] setup SR level ',n,', nb=',srbf,', grid:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j
         end if
+        if (mod(srbf,2)/=1) stop 'new_grids_private: need odd number of buffer cells (odd base, even inc)'
         ! offset to line up with finer grid for R & P: c.bfsz - f.bfsz/2 = c.bfsz/2 + inc/2
         if (n==-nsr) then
            gsr(n)%cfoffset%i = 10000 ! valgrind whould catch this being used
            gsr(n)%cfoffset%j = 10000
            gsr(n)%cfoffset%k = 10000
         else
-           gsr(n)%cfoffset%i = srbf - finer_nb/2 
-           gsr(n)%cfoffset%j = srbf - finer_nb/2
-           gsr(n)%cfoffset%k = srbf - finer_nb/2
+           gsr(n)%cfoffset%i = srbf - (finer_nb+1)/2 
+           gsr(n)%cfoffset%j = srbf - (finer_nb+1)/2
+           gsr(n)%cfoffset%k = srbf - (finer_nb+1)/2
         end if
         finer_nb = srbf
 

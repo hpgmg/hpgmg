@@ -146,7 +146,9 @@ module discretization
   ! number of stencil ghosts, need to hack for one SR exch.     
   type(ipoint),parameter::nsg=ipoint(1,1,1) 
   ! num vars per cell
-  integer,parameter::nvar=1  
+  integer,parameter::nvar=1
+  ! physics
+  double precision,parameter::alpha=-1.d0
 end module discretization
 !-----------------------------------------------------------------------
 ! patch data types
@@ -269,6 +271,32 @@ module grid_module
        integer,intent(in):: nits
      end subroutine GS_RB_const_Lap
      !
+     subroutine GS_Lex_const_Lap(phi,rhs,p,t,nits)
+       use discretization
+       use pms, only:verbose
+       implicit none
+       type(patcht)::p
+       double precision,dimension(&
+            p%all%lo%i:p%all%hi%i,&
+            p%all%lo%j:p%all%hi%j,&
+            p%all%lo%k:p%all%hi%k,nvar)::phi,rhs
+       type(topot),intent(in)::t
+       integer,intent(in):: nits
+     end subroutine GS_Lex_const_Lap
+     ! 
+     subroutine Jacobi_const_Lap(phi,rhs,p,t,nits)
+       use discretization
+       use pms, only:verbose
+       implicit none
+       type(patcht)::p
+       double precision,dimension(&
+            p%all%lo%i:p%all%hi%i,&
+            p%all%lo%j:p%all%hi%j,&
+            p%all%lo%k:p%all%hi%k,nvar)::phi,rhs
+       type(topot),intent(in)::t
+       integer,intent(in):: nits
+     end subroutine Jacobi_const_Lap
+     !
      subroutine formExactU(exact,all,val,ip,dx)
        use discretization    
        implicit none
@@ -279,7 +307,7 @@ module grid_module
        double precision,intent(out)::exact(all%lo%i:all%hi%i,all%lo%j:all%hi%j,&
             all%lo%k:all%hi%k,1)
      end subroutine formExactU
-     subroutine FormRHS(rhs,p,val,ip)
+     subroutine FormF(rhs,p,val,ip)
        use base_data_module 
        implicit none
        type(patcht)::p             ! max, dx & allocated
@@ -287,7 +315,7 @@ module grid_module
        type(ipoint),intent(in)::ip ! global position for coordinates
        double precision,intent(out)::rhs(p%all%lo%i:p%all%hi%i,p%all%lo%j:p%all%hi%j,&
             p%all%lo%k:p%all%hi%k,1)
-     end subroutine FormRHS
+     end subroutine FormF
      !
      double precision function norm(ux,all,val,dx,comm,type)
        use base_data_module
