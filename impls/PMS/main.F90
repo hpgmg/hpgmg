@@ -257,8 +257,8 @@ subroutine get_params(npe,nloc)
   ncycles = 1     ! v-cycles or w-cycles
   nfmgvcycles = 1 ! no interface for this (always 1)
   nsmooths = 1
-  nsmoothsdown = 0
-  nsmoothsup = 1
+  nsmoothsdown = 2
+  nsmoothsup = 2
   nsmoothsfmg = -1
   verbose = 1
   bot_min_sz = 2 ! min size for bottom solver (grad get messed up with 1)

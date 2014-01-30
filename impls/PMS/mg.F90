@@ -22,7 +22,7 @@ subroutine solve(cg,srg,Apply1,Apply2,Relax,Res0,errors,nViters)
   double precision,target,dimension(& ! alloc fine grid data here
        cg(0)%p%all%lo%i:cg(0)%p%all%hi%i,&
        cg(0)%p%all%lo%j:cg(0)%p%all%hi%j,&
-       cg(0)%p%all%lo%k:cg(0)%p%all%hi%k,nvar)::L2u_f,f,ux
+       cg(0)%p%all%lo%k:cg(0)%p%all%hi%k,nvar)::L2u_f,f0,ux
   type(data_ptr),dimension(-nsr:0)::sr_ux,sr_f,sr_aux,sr_rhs
   interface
      subroutine MGSR(srg,cg,fl,sr_ux,sr_f,sr_aux,sr_rhs,uxC0,auxC0,Apply1,Apply2,Relax,Res0,errors)
@@ -46,8 +46,8 @@ subroutine solve(cg,srg,Apply1,Apply2,Relax,Res0,errors,nViters)
      end subroutine MGSR
   end interface
 
-  call formF(f,cg(0)%p,cg(0)%p%max,cg(0)%t%ipe)
-  Res0 = norm(f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
+  call formF(f0,cg(0)%p,cg(0)%p%max,cg(0)%t%ipe)
+  Res0 = norm(f0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
   if (verbose.gt.1.and.nsr.eq.0.and.nvcycles>0) then
      call formExactU(L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%t%ipe,cg(0)%p%dx)
      Reslast = norm(L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2) 
@@ -61,16 +61,16 @@ subroutine solve(cg,srg,Apply1,Apply2,Relax,Res0,errors,nViters)
   if (nfcycles .ne. 0) then
      iter = iter + 1
      ! SR start of FMG
-     call MGF(ux,f,cg,0,Apply1,Apply2,Relax,errors)
+     call MGF(ux,f0,cg,0,Apply1,Apply2,Relax,errors)
      ! diagnostics
      if (verbose.gt.1.and.nsr==0.and.nvcycles>0) then
         call Apply2(L2u_f,ux,cg(0)%p,cg(0)%t)
-        Res = norm(f-L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
+        Res = norm(f0-L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
         if (mype==0)write(6,'(I2,A,E12.4,A,F10.6)') &
              iter,') solve: FMG done |f-Au|_2=',Res,', rate=',Res/Reslast
         Reslast=Res
      else if (nsr==0.and.nvcycles>0) then
-        Res = norm(f-L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
+        Res = norm(f0-L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
      end if
      ! SR 
      if (nsr.gt.0) then
@@ -91,11 +91,11 @@ subroutine solve(cg,srg,Apply1,Apply2,Relax,Res0,errors,nViters)
   ! finish with V-cycle - no V with SR
   nViters = 0
   do while(nsr==0.and.iter<nvcycles.and.Res/Res0>rtol)
-     call MGV(ux,f,cg,0,Apply1,Relax)
+     call MGV(ux,f0,cg,0,Apply1,Relax)
      iter=iter+1 ! 2 for FMG and 1 for V 
      ! residual
      call Apply2(L2u_f,ux,cg(0)%p,cg(0)%t)            
-     Res = norm(f-L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
+     Res = norm(f0-L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
      if (mype==0 .and. verbose.gt.0)write(6,'(I2,A,E12.4,A,F10.6)') &
           iter,') solve: |f-Au|_2=',Res,', rate=',Res/Reslast     
      ! form errors & convergance measure
