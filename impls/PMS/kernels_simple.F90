@@ -639,9 +639,9 @@ subroutine GS_RB_const_Lap(phi,rhs,p,t,nits)
   jg = 0 ! getIglobaly(val,t)
   kg = 0 ! getIglobalz(val,t)
 #ifndef TWO_D
-  flops = 13*p%max%hi%i*p%max%hi%j*p%max%hi%k/2 
+  flops = 13*p%max%hi%i*p%max%hi%j*p%max%hi%k 
 #else
-  flops = 9*p%max%hi%i*p%max%hi%j*p%max%hi%k/2 
+  flops = 9*p%max%hi%i*p%max%hi%j*p%max%hi%k 
 #endif
   dxi2=1.d0/p%dx%i**2
   dyi2=1.d0/p%dx%j**2
@@ -655,7 +655,7 @@ subroutine GS_RB_const_Lap(phi,rhs,p,t,nits)
      ! red/black
 #ifdef HAVE_PETSC
      call PetscLogEventBegin(events(2),ierr)
-     call PetscLogFlops(flops,ierr)
+     call PetscLogFlops(flops,ierr) ! need flops/2 for non-lazy
 #endif 
      do rbi = 0,1
         do kk=1,p%max%hi%k
@@ -705,16 +705,16 @@ subroutine GS_Lex_const_Lap(phi,rhs,p,t,nits)
   double precision:: dzi2
 #endif
 #ifndef TWO_D
-  flops = 13*p%max%hi%i*p%max%hi%j*p%max%hi%k/2 
+  flops = 13*p%max%hi%i*p%max%hi%j*p%max%hi%k 
 #else
-  flops = 9*p%max%hi%i*p%max%hi%j*p%max%hi%k/2 
+  flops = 9*p%max%hi%i*p%max%hi%j*p%max%hi%k 
 #endif
   dxi2=1.d0/p%dx%i**2
   dyi2=1.d0/p%dx%j**2
   denoi=alpha*2.d0*(dxi2 + dyi2)  ! diag
 #ifndef TWO_D
   dzi2=1.d0/p%dx%k**2
-  denoi=denoi + alpha*2.d0*dzi2
+  denoi=denoi+alpha*2.d0*dzi2
 #endif
   denoi=-1.d0/denoi
   do m=1,nits
@@ -748,7 +748,7 @@ subroutine GS_Lex_const_Lap(phi,rhs,p,t,nits)
 end subroutine GS_Lex_const_Lap
 !-----------------------------------------------------------------------
 subroutine Jacobi_const_Lap(phi,rhs,p,t,nits) 
-  use discretization, only:nvar,alpha
+  use discretization,only:nvar,alpha
   use base_data_module
   use mpistuff
   implicit none
@@ -772,9 +772,9 @@ subroutine Jacobi_const_Lap(phi,rhs,p,t,nits)
   double precision:: over,under,rhok,rhokp1,beta,alpha2,delta,theta,s1,ct1,ct2,omega,norm
   integer::k
 #ifndef TWO_D
-  flops = 13*p%max%hi%i*p%max%hi%j*p%max%hi%k/2 
+  flops = 13*p%max%hi%i*p%max%hi%j*p%max%hi%k 
 #else
-  flops = 9*p%max%hi%i*p%max%hi%j*p%max%hi%k/2 
+  flops = 9*p%max%hi%i*p%max%hi%j*p%max%hi%k 
 #endif
 #ifdef HAVE_PETSC
   call PetscLogEventBegin(events(4),ierr)
@@ -793,13 +793,13 @@ subroutine Jacobi_const_Lap(phi,rhs,p,t,nits)
   diagi=1.d0/diagi
   rhok = 2.d0 ! max eigen of D^-1A
   if (.true.) then
-     omega = diagi*4.d0/(13.d0*rhok)
+     omega = 4/(3*rhok)
      ti=norm(phi,p%all,p%max,p%dx,t%comm,2)
 if(mype==0)print *, 'Jacobi_const_Lap: omega=', omega, ', |phi|=', ti
      do k=0,nits-1
         call Apply_const_Lap(Aux,phi,p,t)
         Aux = rhs - Aux
-        phi = phi + omega*Aux
+        phi = phi + omega*diagi*Aux
 ti=norm(Aux,p%all,p%max,p%dx,t%comm,2)
 if(mype==0)print *, k,'|r|=',ti
      enddo
@@ -817,10 +817,11 @@ if(mype==0)print *, k,'|r|=',ti
      Dk = rhs - Dk
      Dk = Dk * diagi
      ct1 = 1.d0/theta
+
      Dk = Dk*ct1
      phi = phi + Dk
      
-     do k=0,nits-2
+     do k=0,nits-12
         rhokp1 = 1.d0/(2.d0*s1 - rhok)
         ct1 = rhokp1*rhok
         ct2 = 2.d0*rhokp1/delta

@@ -30,11 +30,10 @@ realclean:
 
 # regression test -- this is what should work
 reg:
-	-@${MPIEXEC} -n 8 ./pms.${PETSC_ARCH}.ex -verbose 2 -nxloc 256 -nyloc 256 -nzloc 256 -verbose 2 -show_options true -nsmoothsup 2 -nsmoothsdown 2
-#-log_summary
+	-@${MPIEXEC} -n 8 ./pms.${PETSC_ARCH}.ex -verbose 2 -nxloc 128 -nyloc 128 -nzloc 128 -verbose 2 -show_options true -nsmoothsup 2 -nsmoothsdown 2 -log_summary
 
 regsr:
-	-@${MPIEXEC} -n 8 ./pms.${PETSC_ARCH}.ex -nxloc 4 -nyloc 4 -nzloc 4 -verbose 2 -pe_min_sz 4 -sr_max_loc_sz 8 -nsmoothsup 2 -nsmoothsdown 2
+	-@${MPIEXEC} -n 8 ./pms.${PETSC_ARCH}.ex -nxloc 4 -nyloc 4 -nzloc 4 -verbose 2 -pe_min_sz 4 -sr_max_loc_sz 8 -nsmoothsup 2 -nsmoothsdown 2 -sr_base_bufsz 3 -sr_bufsz_inc 4 
 
 valreg:
 	-@${MPIEXEC} -n 64 ~/Codes/valgrind-3.9.0/bin/bin/valgrind --dsymutil=yes --leak-check=no --gen-suppressions=no --num-callers=20 ./pms.${PETSC_ARCH}.ex -verbose 2 -nxloc 8 -nyloc 8 -nzloc 8
@@ -42,22 +41,22 @@ valreg:
 runv:
 	-@${MPIEXEC} -n 8 ./pms.${PETSC_ARCH}.ex -verbose 2 -nxloc 128 -nyloc 128 -nzloc 128 -nvcycles 10 -nfcycles 0 -nsmoothsup 3
 
-SRLOCN=8
-SRFINEST=32
+SRLOCN=4
+SRFINEST=16
 SRNP=8
-SRBUF_BASE=3
-SRBUF_INC=4
-NSMUP=3
-NSMDOWN=0
+SRBUF_BASE=12
+SRBUF_INC=0
+NSMUP=2
+NSMDOWN=2
 
 sr:
 	-@${MPIEXEC} -n ${SRNP} ./pms.${PETSC_ARCH}.ex -nxloc ${SRLOCN} -nyloc ${SRLOCN} -nzloc ${SRLOCN} -verbose 2 -pe_min_sz ${SRLOCN} -sr_max_loc_sz ${SRFINEST} -show_options true -sr_base_bufsz ${SRBUF_BASE} -sr_bufsz_inc  ${SRBUF_INC} -nsmoothsup ${NSMUP} -nsmoothsdown ${NSMDOWN}
 
 run:
-	-@${MPIEXEC} -n ${SRNP} ./pms.${PETSC_ARCH}.ex -problem 0 -nxloc ${SRFINEST} -nyloc ${SRFINEST} -nzloc ${SRFINEST} -nvcycles 0 -nfcycles 1 -verbose 3 -pe_min_sz ${SRLOCN} -show_options true -nsmoothsup ${NSMUP} -nsmoothsdown ${NSMDOWN}
+	-@${MPIEXEC} -n ${SRNP} ./pms.${PETSC_ARCH}.ex -nxloc ${SRFINEST} -nyloc ${SRFINEST} -nzloc ${SRFINEST} -nvcycles 0 -nfcycles 1 -verbose 3 -pe_min_sz ${SRLOCN} -show_options true -nsmoothsup ${NSMUP} -nsmoothsdown ${NSMDOWN}
 
 val:
 	-@${MPIEXEC} -n ${SRNP} ~/Codes/valgrind-3.9.0/bin/bin/valgrind --dsymutil=yes --leak-check=no --gen-suppressions=no --num-callers=20 ./pms.${PETSC_ARCH}.ex -nxloc ${SRLOCN} -nyloc ${SRLOCN} -nzloc ${SRLOCN} -verbose 2 -pe_min_sz ${SRLOCN} -sr_max_loc_sz ${SRFINEST} -show_options true -sr_base_bufsz ${SRBUF_BASE} -sr_bufsz_inc ${SRBUF_INC} -nsmoothsup ${NSMUP} -nsmoothsdown ${NSMDOWN}
-
+# sudo /usr/local/bin/gdb
 debug:
-	-@/usr/bin/gdb --args ./pms.${PETSC_ARCH}.ex -nxloc ${SRLOCN} -nyloc ${SRLOCN} -nzloc ${SRLOCN} -verbose 3 -pe_min_sz ${SRLOCN} -sr_max_loc_sz ${SRFINEST} -show_options true -sr_base_bufsz ${SRBUF_BASE} -sr_bufsz_inc ${SRBUF_INC} -nsmoothsup ${NSMUP} -nsmoothsdown ${NSMDOWN}
+	-@/usr/bin/gdb --args ./pms.${PETSC_ARCH}.ex -nxloc ${SRFINEST} -nyloc ${SRFINEST} -nzloc ${SRFINEST} -nvcycles 0 -nfcycles 1 -verbose 3 -pe_min_sz ${SRLOCN} -show_options true -nsmoothsup ${NSMUP} -nsmoothsdown ${NSMDOWN}

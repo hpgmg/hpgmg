@@ -239,7 +239,7 @@ recursive subroutine MGV(uxF,fF,g,lev,Apply,Relax)
   !
   type(ipoint)::cfoffset
   double precision::tt
-  integer:: ii,jj
+  integer:: ii,jj,kk
   !     Coarse, here is the allocation on stack
   double precision,dimension(&
        g(lev+1)%p%all%lo%i:g(lev+1)%p%all%hi%i,&
@@ -276,6 +276,7 @@ recursive subroutine MGV(uxF,fF,g,lev,Apply,Relax)
      !     resid: f - Au -- f has tau in it
      call Apply(auxF,uxF,g(lev)%p,g(lev)%t)
      auxF = fF - auxF
+
      if (verbose.gt.2) then
         tt = norm(auxF,g(lev)%p%all,g(lev)%p%max,g(lev)%p%dx,g(lev)%t%comm,2)
         if (mype==0)write(6,'(A,I2,A,E12.4)')'       lev=',nsr+lev,') V: |f-Au|=',tt

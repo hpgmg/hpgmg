@@ -15,7 +15,9 @@ program main
   type(ipoint):: nloc,npe
   type(crs_patcht):: gc(0:dom_max_grids-1)
   type(sr_patcht):: gsr(-dom_max_sr_grids:0)
-
+#ifdef HAVE_PETSC
+  call PetscInitialize(PETSC_NULL_CHARACTER,ierr)
+#endif
   ! global constructor stuff
   MSG_RESTRICT_TAG = 90 ! this incs slower than the XCH
   MSG_XCH_XLOW_TAG=100
@@ -26,7 +28,6 @@ program main
   MSG_XCH_ZHI_TAG=600
 
   ! MPI init - globals
-  call MPI_init(ierr)
   call MPI_comm_rank(MPI_COMM_WORLD, mype, ierr)
   call MPI_comm_size(MPI_COMM_WORLD, mpisize, ierr)
 
@@ -110,7 +111,9 @@ program main
   ! end it
   call destroy_grids_private(gc,gsr)
   call FinalizeIO()
-  call MPI_Finalize(ierr)
+#ifdef HAVE_PETSC
+  call PetscFinalize(ierr)
+#endif
 end program MAIN
 !-----------------------------------------------------------------
 !  driver - the PETSc main
@@ -126,84 +129,87 @@ subroutine driver(gc,gsr)
   type(crs_patcht),intent(out):: gc(0:dom_max_grids-1)
   type(sr_patcht),intent(out):: gsr(-dom_max_sr_grids:0)
   !
-  integer:: isolve,ii,nViters,kk
+  integer:: isolve,ii,nViters
   integer,parameter:: cache_flusher_size=1 !1024*1024 ! cache flush array size
   double precision:: cache_flusher(cache_flusher_size),res0,rateu,rategrad
   type(error_data)::errors(0:ncgrids-1+nvcycles+dom_max_sr_grids)
   double precision,parameter:: log2r = 1.d0/log(2.d0);
 #ifdef HAVE_PETSC
-  call PetscInitialize(PETSC_NULL_CHARACTER,ierr)
+  integer::stage
   call PetscLogEventRegister('HPGMG solve', 0, events(1), ierr)
   call PetscLogEventRegister('HPGMG   smooth', 0, events(2), ierr)
   call PetscLogEventRegister('HPGMG   restrict', 0, events(3), ierr)
   call PetscLogEventRegister('HPGMG   apply', 0, events(4), ierr)
   call PetscLogEventRegister('HPGMG   prolong', 0, events(5), ierr)
-  call PetscLogEventRegister('HPGMG   BC & exch', 0, events(6), ierr)
-  call PetscLogEventRegister('HPGMG   form u,..', 0, events(7), ierr)
+  call PetscLogEventRegister('HPGMG   BC & ex', 0, events(6), ierr)
+  call PetscLogEventRegister('HPGMG   u,f', 0, events(7), ierr)
   call PetscLogEventRegister('HPGMG   other', 0, events(8), ierr)
+  call PetscLogStageRegister("pre", stage, ierr)
+  call PetscLogStagePush(stage, ierr)
 #endif
-  call mpi_barrier(mpi_comm_world,ierr)
-  do kk=1,1
-     do isolve=1,num_solves
-        ! flush cache
-        do ii=1,cache_flusher_size
-           cache_flusher(ii) = 1.235d3
-        end do
+  
+  call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,GS_RB_const_Lap,res0,errors,nViters)
+#ifdef HAVE_PETSC 
+!#if defined(PETSC_USE_LOG)
+  call PetscLogStagePop(ierr)
+#endif
+  
+  do isolve=1,num_solves
+     ! flush cache
+     do ii=1,cache_flusher_size
+        cache_flusher(ii) = 1.235d3
+     end do
 #ifdef HAVE_PETSC
-        if (kk==1) call PetscLogEventBegin(events(1),ierr)
+     call PetscLogEventBegin(events(1),ierr)
 #endif
-        select case (problemType)
-        case(0)
-           !call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,Jacobi_const_Lap,res0,errors,nViters)
-           call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,GS_RB_const_Lap,res0,errors,nViters)
-        case(1)
-           if (mype==0) write(6,*) 'problemType 1 not implemented -- todo'
-        end select
+     select case (problemType)
+     case(0)
+        !call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,Jacobi_const_Lap,res0,errors,nViters)
+        call solve(gc,gsr,Apply_const_Lap,Apply_const_Lap,GS_Lex_const_Lap,res0,errors,nViters)
+     case(1)
+        if (mype==0) write(6,*) 'problemType 1 not implemented -- todo'
+     end select
 #ifdef HAVE_PETSC
-        if (kk==1) call PetscLogEventEnd(events(1),ierr)
+     call PetscLogEventEnd(events(1),ierr)
 #endif
-        !if (kk==1) exit ! just do one solve to page everything in
-        ! output run data and convergance data
-        if (mype==0) then
-           if (nfcycles.ne.0 .and. .not.is_top(gc(0)) ) then
-              write(iconv,900) isolve,-1.d0,-1.d0,errors(0)%uerror,&
-                   -1.0,errors(0)%resid
-              do ii=1,dom_max_grids-1+nsr
-                 ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
-                 rateu = errors(ii-1)%uerror/errors(ii)%uerror
-                 rategrad = 1.0
-                 if (verbose .gt.0) write(6,'(A,I2,A,E14.6)') &
-                      'driver: level ',ii, ': converg order u=', &
-                      log(rateu)*log2r
-                 write(iconv,900) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(ii)%uerror,&
-                      -1.0,errors(ii)%resid
-                 if (ii.gt.nsr.and.is_top(gc(ii-nsr))) exit 
-              end do
-           end if
-           ! print V cycles
-           if (nViters>0) then
-              do ii=0,nViters-1 ! i is zero bases for 'errors'
-                 if (verbose.gt.0) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: V cycle',&
-                      ii, ': error=',errors(ii)%uerror,&
-                      ': resid=',errors(ii)%resid
-                 write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,-1.0,&
-                      errors(ii)%resid
-              end do
-           end if
-           ! general output
-           ii = ncgrids + nViters - 1 + nsr
-           if (verbose.gt.1) write(6,888) 'solve ',isolve,' done |r|/|f|=',errors(ii)%resid/res0
-           write(irun,700) isolve,errors(ii)%uerror,-1.0,errors(ii)%resid/res0
-        endif
-     enddo
-  end do
+     !if (kk==1) exit ! just do one solve to page everything in
+     ! output run data and convergance data
+     if (mype==0) then
+        if (nfcycles.ne.0 .and. .not.is_top(gc(0)) ) then
+           write(iconv,900) isolve,-1.d0,-1.d0,errors(0)%uerror,&
+                -1.0,errors(0)%resid
+           do ii=1,dom_max_grids-1+nsr
+              ! go from coarse to fine.  Need to pass through top empty 'coarse' grids
+              rateu = errors(ii-1)%uerror/errors(ii)%uerror
+              rategrad = 1.0
+              if (verbose .gt.0) write(6,'(A,I2,A,E14.6)') &
+                   'driver: level ',ii, ': converg order u=', &
+                   log(rateu)*log2r
+              write(iconv,900) isolve,log(rateu)*log2r,log(rategrad)*log2r,errors(ii)%uerror,&
+                   -1.0,errors(ii)%resid
+              if (ii.gt.nsr.and.is_top(gc(ii-nsr))) exit 
+           end do
+        end if
+        ! print V cycles
+        if (nViters>0) then
+           do ii=0,nViters-1 ! i is zero bases for 'errors'
+              if (verbose.gt.0) write(6,'(A,I2,A,E14.6,A,E14.6)') 'driver: V cycle',&
+                   ii, ': error=',errors(ii)%uerror,&
+                   ': resid=',errors(ii)%resid
+              write(iconv,901) 'V:',isolve,0.d0,0.d0,errors(ii)%uerror,-1.0,&
+                   errors(ii)%resid
+           end do
+        end if
+        ! general output
+        ii = ncgrids + nViters - 1 + nsr
+        if (verbose.gt.1) write(6,888) 'solve ',isolve,' done |r|/|f|=',errors(ii)%resid/res0
+        write(irun,700) isolve,errors(ii)%uerror,-1.0,errors(ii)%resid/res0
+     endif
+  enddo
 700 format (I7,6x,E14.6,E14.6,3x,E14.6)
 900 format (I7,5x,E14.6,E14.6,3x,E14.6,E14.6,E14.6,E14.6)
 901 format (A,I5,5x,E14.6,E14.6,3x,E14.6,E14.6,E14.6,E14.6)
 888 format (A,I5,A,E14.6)
-#ifdef HAVE_PETSC
-  call PetscFinalize(ierr)
-#endif
   return
 end subroutine driver
 !-----------------------------------------------------------------
@@ -634,7 +640,7 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
   type(crs_patcht),intent(out)::cg(0:dom_max_grids-1)
   type(sr_patcht),intent(out)::gsr(-dom_max_sr_grids:0)
   ! 
-  integer::n,ndims,ii,jj,kk,srbf,finer_nb,pe_id,rank,npes(3)
+  integer::n,ndims,ii,jj,kk,srbf,finer_nb,pe_id,rank,npes(3),sr_bfsz_fact
 
   ndims = 3
   !----------------------------------------------------------------------
@@ -961,18 +967,10 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
   end if
   !----------------------------------------------------------------------
   ! add buffer/ghosts, set size, from fine to coarse
+  sr_bfsz_fact = 2
   if (nsr.gt.0) then
-     srbf = sr_base_bufsz-sr_bufsz_inc ! the buffer schedual
+     srbf = sr_base_bufsz ! the buffer schedual,start at fine grid
      do n=-nsr,0,1
-        if (n==0) then 
-           srbf = (finer_nb+1)/2 + 1 ! the size needed for grid 0
-        else 
-           srbf = srbf+sr_bufsz_inc ! number of buffer cells
-        end if
-        if (mype==0.and.(verbose.gt.2.or.mod(srbf,2)/=1)) then
-           write(6,*) '[',mype,'] setup SR level ',n,', nb=',srbf,', grid:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j
-        end if
-        if (mod(srbf,2)/=1) stop 'new_grids_private: need odd number of buffer cells (odd base, even inc)'
         ! offset to line up with finer grid for R & P: c.bfsz - f.bfsz/2 = c.bfsz/2 + inc/2
         if (n==-nsr) then
            gsr(n)%cfoffset%i = 10000 ! valgrind whould catch this being used
@@ -983,14 +981,13 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
            gsr(n)%cfoffset%j = srbf - (finer_nb+1)/2
            gsr(n)%cfoffset%k = srbf - (finer_nb+1)/2
         end if
-        finer_nb = srbf
 
-        if (srbf.gt.gsr(n)%p%max%hi%i.or.srbf.gt.gsr(n)%p%max%hi%j&
+        if ((srbf.gt.gsr(n)%p%max%hi%i.or.srbf.gt.gsr(n)%p%max%hi%j&
 #ifndef TWO_D
              .or.srbf.gt.gsr(n)%p%max%hi%k&
 #endif
-             ) then
-           print *,'srbf=',srbf,', max=',gsr(n)%p%max%hi%i
+             ) .and. n==0) then
+           print *,'ERROR: srbf=',srbf,', max=',gsr(n)%p%max%hi%i
            stop 'SR buffer larger than grid'
         end if
         ! clip buffers at BCs
@@ -1057,6 +1054,18 @@ subroutine new_grids_private(cg,gsr,NPeAxis,iPeAxis,nloc,comm3d)
         gsr(n)%p%all%lo%k=-nsg%k+1
         gsr(n)%p%all%hi%k=gsr(n)%p%max%hi%k+nsg%k
 #endif
+        !
+        finer_nb = srbf
+        srbf = srbf/sr_bfsz_fact +sr_bufsz_inc 
+!!$        if (n==0) then 
+!!$           srbf = (finer_nb+1)/2 + 1 ! the size needed for grid 0
+!!$        else 
+!!$           srbf = srbf+sr_bufsz_inc ! number of buffer cells
+!!$        end if
+!!$        if (mype==0.and.(verbose.gt.2.or.mod(srbf,2)/=1)) then
+!!$           write(6,*) '[',mype,'] setup SR level ',n,', nb=',srbf,', grid:',gsr(n)%p%max%hi%i,gsr(n)%p%max%hi%j
+!!$        end if
+!!$        if (mod(srbf,2)/=1) stop 'new_grids_private: need odd number of buffer cells (odd base, even inc)'
      end do
   end if
   ! print SR levels
