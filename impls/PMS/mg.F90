@@ -335,8 +335,9 @@ end subroutine MGV
 !-----------------------------------------------------------------------
 ! SR: copy_sr_crs2 
 !  - copy two vectors (u,f) from SR (sr0) valid to normal (cg0) 'max'
+!  - order is imprtant for BCs
 !-----------------------------------------------------------------------
-subroutine copy_sr_crs2(crs1,crs2,sr1,sr2,cg0,srg0)
+subroutine copy_sr_crs2(crs_u,crs_rhs,sr_u,sr_rhs,cg0,srg0)
   use bc_module
   use pms
   use mpistuff,only:mype
@@ -347,11 +348,11 @@ subroutine copy_sr_crs2(crs1,crs2,sr1,sr2,cg0,srg0)
   double precision,intent(out),dimension(&
        cg0%p%all%lo%i:cg0%p%all%hi%i,& 
        cg0%p%all%lo%j:cg0%p%all%hi%j,& 
-       cg0%p%all%lo%k:cg0%p%all%hi%k, nvar)::crs1,crs2
+       cg0%p%all%lo%k:cg0%p%all%hi%k, nvar)::crs_u,crs_rhs
   double precision,intent(in),dimension(&
        srg0%p%all%lo%i:srg0%p%all%hi%i,&
        srg0%p%all%lo%j:srg0%p%all%hi%j,&
-       srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::sr1,sr2
+       srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::sr_u,sr_rhs
   !
   integer::ii,jj,kk,sri,srj,srk
   ! copy
@@ -364,30 +365,38 @@ subroutine copy_sr_crs2(crs1,crs2,sr1,sr2,cg0,srg0)
         kk=0
         do srk=srg0%val%lo%k,srg0%val%hi%k
            kk=kk+1
-           crs1(ii,jj,kk,:) = sr1(sri,srj,srk,:)
-           crs2(ii,jj,kk,:) = sr2(sri,srj,srk,:)
+           crs_u  (ii,jj,kk,:) = sr_u  (sri,srj,srk,:)
+           crs_rhs(ii,jj,kk,:) = sr_rhs(sri,srj,srk,:)
         end do
      end do
   end do
-  call SetBCs(crs1,cg0%p,cg0%t,nsg) ! normal BC exchange 
+  if (ii/=cg0%p%max%hi%i) stop 'copy_crs_sr_w_bc_ex2 ii'
+  if (jj/=cg0%p%max%hi%j) stop 'copy_crs_sr_w_bc_ex2 jj'
+  if (kk/=cg0%p%max%hi%k) stop 'copy_crs_sr_w_bc_ex2 kk'
+  call SetBCs(crs_u,cg0%p,cg0%t,nsg) ! normal BC exchange, no need to do rhs
   return
 end subroutine copy_sr_crs2
-!
-subroutine sr_exchange(u_sr,srg0,cg0)
+!------------------------------------------------------------------------
+!subroutine sr_exchange
+!  do big exchange to get up-to-date buffer region in SR grid
+!------------------------------------------------------------------------
+subroutine sr_exchange(u_sr,srg0,cg0,nv)
   use base_data_module
   use mpistuff,only:mype
-  use discretization
+  use discretization,only:nsg
   implicit none
+  integer,intent(in)::nv
   type(sr_patcht),intent(in)::srg0
   type(crs_patcht),intent(in)::cg0
   double precision,dimension(&
        srg0%p%all%lo%i:srg0%p%all%hi%i,&
        srg0%p%all%lo%j:srg0%p%all%hi%j,&
-       srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::u_sr
+       srg0%p%all%lo%k:srg0%p%all%hi%k,nv)::u_sr
   !
   type(patcht)::p
   type(ipoint)::ng
   type(ipoint)::shift
+
   ng = nsg
   shift%i=srg0%val%lo%i-1
   shift%j=srg0%val%lo%j-1
@@ -403,7 +412,7 @@ subroutine sr_exchange(u_sr,srg0,cg0)
   if (srg0%val%lo%k-1+nsg%k .gt. ng%k) ng%k = srg0%val%lo%k-1+nsg%k
   if (nsg%i.gt.srg0%p%max%hi%i+nsg%i) then
      print *,ng%i,srg0%val%hi%i-srg0%val%lo%i+1,cg0%p%all%hi%i-cg0%p%all%lo%i+1
-     stop 'copy_crs_sr_w_bc_ex SR buffer too big for (valid) domain. increase box size'
+     stop 'sr_exchange SR buffer too big for (valid) domain. increase box size'
   end if
   ! strange patch with big exchange areas
   p%dx%i = 0.d0 ! not used
@@ -429,14 +438,13 @@ subroutine sr_exchange(u_sr,srg0,cg0)
 #else
   p%max%hi%k=1
 #endif
-  call SetBCs(u_sr,p,cg0%t,ng)
-
+  call SetBCs(u_sr,p,cg0%t,ng,nv)
   return
 end subroutine sr_exchange
 !-----------------------------------------------------------------------
-! SR: copy_crs_sr_w_bc_ex - copy vector from normal to SR
+! SR: copy_crs_sr_w_bc_ex2 - copy vector from normal (crs) to SR & do big exchange
 !-----------------------------------------------------------------------
-subroutine copy_crs_sr_w_bc_ex(u_sr,u_crs,srg0,cg0)
+subroutine copy_crs_sr_w_bc_ex2(u_sr1,u_sr2,u_crs1,u_crs2,srg0,cg0)
   use mpistuff,only:mype
   use discretization
   implicit none
@@ -445,39 +453,57 @@ subroutine copy_crs_sr_w_bc_ex(u_sr,u_crs,srg0,cg0)
   double precision,intent(in),dimension(&
        cg0%p%all%lo%i:cg0%p%all%hi%i,& 
        cg0%p%all%lo%j:cg0%p%all%hi%j,& 
-       cg0%p%all%lo%k:cg0%p%all%hi%k, nvar)::u_crs
+       cg0%p%all%lo%k:cg0%p%all%hi%k, nvar)::u_crs1,u_crs2
   double precision,intent(out),dimension(&
        srg0%p%all%lo%i:srg0%p%all%hi%i,&
        srg0%p%all%lo%j:srg0%p%all%hi%j,&
-       srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::u_sr
+       srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::u_sr1,u_sr2
   !
-  integer::ii,jj,kk,sri,srj,srk,nbuff
+  integer::ii,jj,kk,sri,srj,srk
+  double precision,dimension(&
+       srg0%p%all%lo%i:srg0%p%all%hi%i,&
+       srg0%p%all%lo%j:srg0%p%all%hi%j,&
+       srg0%p%all%lo%k:srg0%p%all%hi%k,2*nvar)::u_sr_pack
+
   ! copy to valid from whole
-  ii=0
-  do sri=srg0%val%lo%i,srg0%val%hi%i
-     ii=ii+1
+  kk=0
+  do srk=srg0%val%lo%k,srg0%val%hi%k
+     kk=kk+1
      jj=0
      do srj=srg0%val%lo%j,srg0%val%hi%j
         jj=jj+1
-        kk=0
-        do srk=srg0%val%lo%k,srg0%val%hi%k
-           kk=kk+1
-           u_sr(sri,srj,srk,:) = u_crs(ii,jj,kk,:)
+        ii=0
+        do sri=srg0%val%lo%i,srg0%val%hi%i
+           ii=ii+1
+           u_sr_pack(sri,srj,srk,1:nvar)        = u_crs1(ii,jj,kk,:)
+           u_sr_pack(sri,srj,srk,nvar+1:2*nvar) = u_crs2(ii,jj,kk,:)
         end do
      end do
   end do
-  if (ii/=cg0%p%max%hi%i) stop 'copy_crs_sr_w_bc_ex ii'
-  if (jj/=cg0%p%max%hi%j) stop 'copy_crs_sr_w_bc_ex jj'
-  if (kk/=cg0%p%max%hi%k) stop 'copy_crs_sr_w_bc_ex kk'
+  if (ii/=cg0%p%max%hi%i) stop 'copy_crs_sr_w_bc_ex2 ii'
+  if (jj/=cg0%p%max%hi%j) stop 'copy_crs_sr_w_bc_ex2 jj'
+  if (kk/=cg0%p%max%hi%k) stop 'copy_crs_sr_w_bc_ex2 kk'
 
-  call sr_exchange(u_sr,srg0,cg0)
-
+  call sr_exchange(u_sr_pack,srg0,cg0,2*nvar)
+   
+  ! copy fused buffer out
+  do sri=srg0%val%lo%i,srg0%val%hi%i
+     do srj=srg0%val%lo%j,srg0%val%hi%j
+        do srk=srg0%val%lo%k,srg0%val%hi%k
+           u_sr1(sri,srj,srk,:) = u_sr_pack(sri,srj,srk,1:nvar)
+           u_sr2(sri,srj,srk,:) = u_sr_pack(sri,srj,srk,nvar+1:2*nvar)
+        end do
+     end do
+  end do
+  if (ii/=cg0%p%max%hi%i) stop 'copy_crs_sr_w_bc_ex2 ii'
+  if (jj/=cg0%p%max%hi%j) stop 'copy_crs_sr_w_bc_ex2 jj'
+  if (kk/=cg0%p%max%hi%k) stop 'copy_crs_sr_w_bc_ex2 kk'
   return
-end subroutine copy_crs_sr_w_bc_ex
+end subroutine copy_crs_sr_w_bc_ex2
 !-----------------------------------------------------------------------
 ! SR: MSRG - SR part of FMG
 !-----------------------------------------------------------------------
-subroutine MGSR(srg,cg,lev,sr_ux,sr_f,sr_aux,sr_rhs,uxC0,auxC0,Apply1,Apply2,Relax,Res0,errors)
+subroutine MGSR(srg,cg,lev,sr_ux,sr_f,sr_aux,sr_rhs,a_crs_ux0,a_crs_aux0,Apply1,Apply2,Relax,Res0,errors)
   use grid_module
   use pms
   use error_data_module
@@ -490,7 +516,7 @@ subroutine MGSR(srg,cg,lev,sr_ux,sr_f,sr_aux,sr_rhs,uxC0,auxC0,Apply1,Apply2,Rel
   double precision,dimension(&
        cg(0)%p%all%lo%i:cg(0)%p%all%hi%i,& 
        cg(0)%p%all%lo%j:cg(0)%p%all%hi%j,& 
-       cg(0)%p%all%lo%k:cg(0)%p%all%hi%k,nvar)::uxC0,auxC0 ! in/out, buffer
+       cg(0)%p%all%lo%k:cg(0)%p%all%hi%k,nvar)::a_crs_ux0,a_crs_aux0 ! in/out, buffer
   type(error_data),intent(out)::errors(0:ncgrids-1+nvcycles+nsr)
   integer,intent(in)::lev ! negative index into srg(lev)
   double precision,intent(out)::Res0 ! residual norm on finest grid
@@ -520,16 +546,14 @@ subroutine MGSR(srg,cg,lev,sr_ux,sr_f,sr_aux,sr_rhs,uxC0,auxC0,Apply1,Apply2,Rel
      IF (AllocateStatus /= 0) STOP "MGSR: *** Not enough memory ***"
      ! copy in solution, apply BC, and exchange
      uxC => sr_ux(0)%ptr 
-bc_valid = srg(0)%val%hi ! debug
-     call copy_crs_sr_w_bc_ex(uxC,uxC0,srg(0),cg(0)) ! input
+     bc_valid = srg(0)%val%hi ! debug
+     call copy_crs_sr_w_bc_ex2(uxC,uxC,a_crs_ux0,a_crs_ux0,srg(0),cg(0)) ! input
      
-     tt = norm(uxC0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
+     tt = norm(a_crs_ux0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
 !!$     if (mype==0)write(6,'(A,I2,A,E12.4)')        'lev=',nsr,') MGSR copy_crs_sr_w_bc_ex |u_src|=',tt
      t2 = norm(uxC,srg(0)%p%all,srg(0)%val,srg(0)%p%dx,srg(0)%t%comm,2)
 !!$     if (mype==0)write(6,'(A,I2,A,E12.4,A,E12.4)')'lev=',nsr,') MSRG copy_crs_sr_w_bc_ex |u_dest|=',t2,', error:',tt-t2
      if (abs(tt-t2)/t2>1.d-12) stop 'MSRG: big error'
-
-
 
      ! just compute F, could copy from normal grid 0
      fTmp => sr_f(0)%ptr
@@ -577,7 +601,7 @@ bc_valid = srg(0)%val%hi ! debug
   
   if (nsmoothsfmg>0) then
      uxF  => sr_ux (lev)%ptr
-     fTmp => sr_f(lev)%ptr ! no SR
+     fTmp => sr_f(lev)%ptr
      ! SR2:    pre smoothing
      call Relax(uxF,fTmp,srg(lev)%p,srg(lev)%t,nsmoothsfmg)
      if (verbose.gt.2) then
@@ -593,11 +617,9 @@ bc_valid = srg(0)%val%hi ! debug
   rhsF = fTmp ! first (finest) level has no tau correction, just F
   do iflv=lev,-1,1
      uxF  => sr_ux (iflv)%ptr
-     !fF => sr_f(iflv)%ptr
      auxF => sr_aux(iflv)%ptr
      rhsF => sr_rhs(iflv)%ptr
      uxC  => sr_ux (iflv+1)%ptr ! level 0 in last loop
-     !fC => sr_f(iflv+1)%ptr
      auxC => sr_aux(iflv+1)%ptr
      rhsC => sr_rhs(iflv+1)%ptr
      ALLOCATE(tmpSRC(iflv+1)%ptr(&
@@ -644,7 +666,7 @@ bc_valid = srg(0)%val%hi ! debug
      end if
      !     rhsC = Fc + A*R(u) - R(A*u) = Fc + tau_c
      call Apply1(tmpC,uxC,srg(iflv+1)%p,srg(iflv+1)%t)
-     rhsC = auxC + tmpC  
+     rhsC = auxC + tmpC  ! this is the next RHS
      if (verbose.gt.2) then
         if (mype==0) print *,'SR:'
         tt = norm(rhsC,srg(iflv+1)%p%all,srg(iflv+1)%val,srg(iflv+1)%p%dx,srg(iflv+1)%t%comm,2)
@@ -657,43 +679,50 @@ bc_valid = srg(0)%val%hi ! debug
      tmpC = uxC 
   end do
 
-  ! get U & F from (these are already set)
+  ! get U & F in SR coarse grid
   rhsC => sr_rhs(0)%ptr ! rhsC in MGV
   uxC  => sr_ux (0)%ptr 
-  ! 'copy out' to coarse grid
-  call copy_sr_crs2(uxC0,auxC0,uxC,rhsC,cg(0),srg(0))
+  ! 'copy out' to CRS coarse grid
+  call copy_sr_crs2(a_crs_ux0,a_crs_aux0,uxC,rhsC,cg(0),srg(0))
 
   ! debug
-  !tt = norm(auxC0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
-  !if (mype==0)write(6,'(A,I2,A,E12.4)')'    lev=',0,') SR: |f_crs_0|=',tt
-  !t2 = norm(fC,srg(0)%p%all,srg(0)%val,srg(0)%p%dx,srg(0)%t%comm,2)
-  !if (mype==0)write(6,'(A,I2,A,E12.4)')'    lev=',0,') SR: |f_sr_0|=',t2
-  !if (abs(tt-t2)/t2>1.d-12) stop 'MSRG: big error (2)'
+  tt = norm(a_crs_aux0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
+  if (mype==0)write(6,'(A,I2,A,E12.4)')'                lev=',0,') SR: |f_crs_0|=',tt
+  t2 = norm(rhsC,srg(0)%p%all,srg(0)%val,srg(0)%p%dx,srg(0)%t%comm,2)
+  if (mype==0)write(6,'(A,I2,A,E12.4)')'                lev=',0,') SR: |f_sr_0|=',t2
+  if (abs(tt-t2)/t2>1.d-12) stop 'MSRG: big error in RHS'
+  tt = norm(a_crs_ux0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
+  if (mype==0)write(6,'(A,I2,A,E12.4)')'                lev=',0,') SR: |u_crs_0|=',tt
+  t2 = norm(uxC,srg(0)%p%all,srg(0)%val,srg(0)%p%dx,srg(0)%t%comm,2)
+  if (mype==0)write(6,'(A,I2,A,E12.4)')'                lev=',0,') SR: |u_sr_0|=',t2
+  if (abs(tt-t2)/t2>1.d-12) stop 'MSRG: big error in U'
 
   ! coarse grid solve - these pointers are coarse data types, no SR buffers
-  call MGV(uxC0,auxC0,cg,0,Apply1,Relax)
+  call MGV(a_crs_ux0,a_crs_aux0,cg,0,Apply1,Relax)
 
-  ! 'copy in' coarse grid do SR coarse grid (cg.0-->sr.0)  
-  call copy_crs_sr_w_bc_ex(uxC,uxC0,srg(0),cg(0))
+  ! get updated u, and old u (tmp) for correction, with fresh buffers
+  tmpC => tmpSRC(0)%ptr  
+  call copy_sr_crs2(a_crs_aux0,a_crs_aux0,tmpC,tmpC,cg(0),srg(0))
+  ! 'copy in' coarse grid u & orgi u (tmp) 
+  call copy_crs_sr_w_bc_ex2(uxC,tmpC,a_crs_ux0,a_crs_aux0,srg(0),cg(0))
+  
   if (verbose.gt.2) then
      if (mype==0) print *,'SR:'
      tt = norm(uxC,srg(0)%p%all,srg(0)%val,srg(0)%p%dx,srg(0)%t%comm,2)
-        if (mype==0)write(6,'(A,I2,A,E12.4)')'       lev=',nsr,') V: after MGV() |u|=',tt
+     if (mype==0)write(6,'(A,I2,A,E12.4)')'       lev=',nsr,') V: after MGV() |u|=',tt
   end if
 
   ! SR3: prolongate, update, smooth, coarse to fine
   do iflv=-1,lev,-1
      uxF  =>  sr_ux(iflv)%ptr
-     !fF => sr_f(iflv)%ptr
      auxF => sr_aux(iflv)%ptr
      rhsF => sr_rhs(iflv)%ptr
      uxC => sr_ux(iflv+1)%ptr
-     !fC => sr_f(iflv+1)%ptr
      auxC => sr_aux(iflv+1)%ptr
      rhsC => sr_rhs(iflv+1)%ptr
      tmpC => tmpSRC(iflv+1)%ptr
      !     subtract off old Uc
-     tmpC = uxC - tmpC ! make increment now
+     tmpC = uxC - tmpC ! make increment now, this is perfect for first grid
      ! prolongate and correct
      bc_valid = srg(iflv)%val%hi ! debug
      ! u = u + P(u_c - u_c_0)
@@ -722,7 +751,7 @@ bc_valid = srg(0)%val%hi ! debug
   call formExactU(auxF,srg(lev)%p%all,srg(lev)%val,srg(lev)%t%ipe,srg(lev)%p%dx)
   tt=norm(auxF-uxF,srg(lev)%p%all,srg(lev)%val,srg(lev)%p%dx,srg(lev)%t%comm,error_norm)
   errors(err_lev)%uerror=tt
-  call sr_exchange(uxF,srg(lev),cg(0)) ! get an accurate residual
+  call sr_exchange(uxF,srg(lev),cg(0),nvar) ! get an accurate residual
   call Apply2(auxF,uxF,srg(lev)%p,srg(lev)%t) 
   tt=norm(fTmp-auxF,srg(lev)%p%all,srg(lev)%val,srg(lev)%p%dx,srg(lev)%t%comm,2)
   errors(err_lev)%resid=tt

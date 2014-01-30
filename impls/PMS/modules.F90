@@ -155,10 +155,11 @@ end module discretization
 module bc_module
   use base_data_module
   interface
-     subroutine SetBCs(ux,p,t,ng)
+     subroutine SetBCs(ux,p,t,ng,nv)
        use discretization,only:nvar
        use base_data_module
        implicit none
+       integer,intent(in),optional::nv
        type(ipoint),intent(in)::ng
        type(topot),intent(in)::t
        type(patcht),intent(in)::p
@@ -167,10 +168,11 @@ module bc_module
             p%all%lo%j:p%all%hi%j,&
             p%all%lo%k:p%all%hi%k,nvar)
      end subroutine SetBCs
-     subroutine sr_exchange(u_sr,srg0,cg0)
+     subroutine sr_exchange(u_sr,srg0,cg0,nv)
        use mpistuff,only:mype
        use discretization
        implicit none
+       integer,intent(in)::nv
        type(sr_patcht),intent(in)::srg0
        type(crs_patcht),intent(in)::cg0
        double precision,dimension(&
@@ -406,7 +408,7 @@ module sr_interfaces
             srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::sr1,sr2
      end subroutine copy_sr_crs2
      !
-     subroutine copy_crs_sr_w_bc_ex(u_sr,u_crs,srg0,cg0)
+     subroutine copy_crs_sr_w_bc_ex2(u_sr1,u_sr2,u_crs1,u_crs2,srg0,cg0)
        use discretization
        implicit none
        type(sr_patcht),intent(in)::srg0
@@ -414,12 +416,12 @@ module sr_interfaces
        double precision,intent(in),dimension(&
             cg0%p%all%lo%i:cg0%p%all%hi%i,& 
             cg0%p%all%lo%j:cg0%p%all%hi%j,& 
-            cg0%p%all%lo%k:cg0%p%all%hi%k, nvar)::u_crs
+            cg0%p%all%lo%k:cg0%p%all%hi%k, nvar)::u_crs1,u_crs2
        double precision,intent(out),dimension(&
             srg0%p%all%lo%i:srg0%p%all%hi%i,&
             srg0%p%all%lo%j:srg0%p%all%hi%j,&
-            srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::u_sr
-     end subroutine copy_crs_sr_w_bc_ex
+            srg0%p%all%lo%k:srg0%p%all%hi%k,nvar)::u_sr1,u_sr2
+     end subroutine copy_crs_sr_w_bc_ex2
   end interface
 end module sr_interfaces
 
