@@ -60,7 +60,7 @@ subroutine SetBCs(ux,p,t,ng)
      call PetscLogEventEnd(events(6),ierr)
 #endif
 
-  if (mype==10) then
+  if (mype==-10) then
      ii=bc_valid%i; jj=bc_valid%j; kk=bc_valid%k
      print *,'SetBCs: AFTER kk-1 plane"',p%all%lo%i,p%all%hi%i,p%all%lo%j,p%all%hi%j,p%all%lo%k,p%all%hi%k
      print *,'      ',ux(ii-1,jj-1,kk-1,1),ux(ii,jj-1,kk-1,1),ux(ii+1,jj-1,kk-1,1)

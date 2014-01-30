@@ -30,7 +30,7 @@ realclean:
 
 # regression test -- this is what should work
 reg:
-	-@${MPIEXEC} -n 8 ./pms.${PETSC_ARCH}.ex -verbose 2 -nxloc 128 -nyloc 128 -nzloc 128 -verbose 2 -show_options true -nsmoothsup 2 -nsmoothsdown 2 -log_summary
+	-@${MPIEXEC} -n 8 ./pms.${PETSC_ARCH}.ex -verbose 2 -nxloc 128 -nyloc 128 -nzloc 128 -verbose 2 -show_options true -nsmoothsup 2 -nsmoothsdown 2 -log_summary -fp_trap
 
 regsr:
 	-@${MPIEXEC} -n 8 ./pms.${PETSC_ARCH}.ex -nxloc 4 -nyloc 4 -nzloc 4 -verbose 2 -pe_min_sz 4 -sr_max_loc_sz 8 -nsmoothsup 2 -nsmoothsdown 2 -sr_base_bufsz 3 -sr_bufsz_inc 4 

@@ -75,7 +75,7 @@ module mpistuff
 #else
   include "mpif.h"
 #endif
-  integer:: status(MPI_STATUS_SIZE),ierr
+  integer::status(MPI_STATUS_SIZE),ierr
   integer::mype,mpisize
   integer,parameter::ERROR_CARTCOORDS=1
   integer,parameter::ERROR_CARTSHIFT=2
