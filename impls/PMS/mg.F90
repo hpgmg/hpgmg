@@ -63,12 +63,14 @@ subroutine solve(cg,srg,Apply1,Apply2,Relax,Res0,errors,nViters)
      ! SR start of FMG
      call MGF(ux,f,cg,0,Apply1,Apply2,Relax,errors)
      ! diagnostics
-     if (verbose.gt.1.and.nsr.eq.0.and.nvcycles>0) then
+     if (verbose.gt.1.and.nsr==0.and.nvcycles>0) then
         call Apply2(L2u_f,ux,cg(0)%p,cg(0)%t)
         Res = norm(f-L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
         if (mype==0)write(6,'(I2,A,E12.4,A,F10.6)') &
              iter,') solve: FMG done |f-Au|_2=',Res,', rate=',Res/Reslast
         Reslast=Res
+     else if (nsr==0.and.nvcycles>0) then
+        Res = norm(f-L2u_f,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
      end if
      ! SR 
      if (nsr.gt.0) then
@@ -88,7 +90,7 @@ subroutine solve(cg,srg,Apply1,Apply2,Relax,Res0,errors,nViters)
  
   ! finish with V-cycle - no V with SR
   nViters = 0
-  do while(nsr==0 .and. Res/Res0>rtol.and.iter<nvcycles)
+  do while(nsr==0.and.iter<nvcycles.and.Res/Res0>rtol)
      call MGV(ux,f,cg,0,Apply1,Relax)
      iter=iter+1 ! 2 for FMG and 1 for V 
      ! residual
