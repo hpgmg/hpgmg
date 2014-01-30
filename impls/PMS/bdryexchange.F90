@@ -21,39 +21,46 @@ enddo
 !===============================================================================
 end subroutine mysleep
 
-subroutine SetBCs(ux,p,t,ng)
+subroutine SetBCs(ux,p,t,ng,nv_optional)
   use discretization,only:nvar
   use base_data_module
   use mpistuff
   use bc_module,only:bc_valid
   implicit none
-  type(ipoint),intent(in)::ng  ! processor ghosts. BC, or stencil, ghost in 'nsg'
+  integer,intent(in),optional::nv_optional
+  type(ipoint),intent(in)::ng ! processor ghosts. BC, or stencil, ghost in 'nsg'
   type(topot),intent(in)::t
   type(patcht),intent(in)::p
   double precision:: ux(&
        p%all%lo%i:p%all%hi%i,&
        p%all%lo%j:p%all%hi%j,&
-       p%all%lo%k:p%all%hi%k,nvar)
+       p%all%lo%k:p%all%hi%k,*)
   !
-  integer::ii,jj,kk
+  integer::ii,jj,kk,nv
+  
+  if (present(nv_optional)) then
+     nv = nv_optional
+  else
+     nv = nvar
+  end if
 
 #ifdef HAVE_PETSC
   call PetscLogEventBegin(events(6),ierr)
 #endif
   if (t%comm3d==mpi_comm_null) then
-     call SetXBC(ux,p,t)
-     call SetYBC(ux,p,t)
+     call SetXBC(ux,p,t,nv)
+     call SetYBC(ux,p,t,nv)
 #ifndef TWO_D
-     call SetZBC(ux,p,t)
+     call SetZBC(ux,p,t,nv)
 #endif
   else
-     call SetXBC(ux,p,t)
-     call XExchange(ux,p,t,ng%i)
-     call SetYBC(ux,p,t)
-     call YExchange(ux,p,t,ng%j)
+     call SetXBC(ux,p,t,nv)
+     call XExchange(ux,p,t,ng%i,nv)
+     call SetYBC(ux,p,t,nv)
+     call YExchange(ux,p,t,ng%j,nv)
 #ifndef TWO_D
-     call SetZBC(ux,p,t)
-     call ZExchange(ux,p,t,ng%k)
+     call SetZBC(ux,p,t,nv)
+     call ZExchange(ux,p,t,ng%k,nv)
 #endif
   end if
 #ifdef HAVE_PETSC
@@ -81,22 +88,22 @@ subroutine SetBCs(ux,p,t,ng)
   return
 end subroutine SetBCs
 !-----------------------------------------------------------------------
-subroutine XExchange(ux,p,t,ng)
-  use discretization, only:nvar
+subroutine XExchange(ux,p,t,ng,nv)
   use base_data_module
   use mpistuff
   use tags
   implicit none
+  integer,intent(in)::nv
   integer,intent(in)::ng
   type(patcht),intent(in)::p
   type(topot),intent(in)::t
   double precision:: ux(&
        p%all%lo%i:p%all%hi%i,&
        p%all%lo%j:p%all%hi%j,&
-       p%all%lo%k:p%all%hi%k,nvar)
+       p%all%lo%k:p%all%hi%k,nv)
   !
-  double precision:: xbuffer_send(ng,p%max%hi%j,p%max%hi%k,nvar)
-  double precision:: xbuffer_recv(ng,p%max%hi%j,p%max%hi%k,nvar)
+  double precision:: xbuffer_send(ng,p%max%hi%j,p%max%hi%k,nv)
+  double precision:: xbuffer_recv(ng,p%max%hi%j,p%max%hi%k,nv)
   integer:: XBUFFSIZE
   integer:: jj,mm,kk
   integer:: msg_id_send_x_low
@@ -218,22 +225,22 @@ subroutine XExchange(ux,p,t,ng)
   return
 end subroutine XExchange
 !-----------------------------------------------------------------------
-subroutine YExchange(ux,p,t,ng)
-  use discretization, only:nvar
+subroutine YExchange(ux,p,t,ng,nv)
   use base_data_module
   use mpistuff
   use tags
   implicit none
+  integer,intent(in)::nv
   integer,intent(in)::ng
   type(patcht),intent(in) :: p
   type(topot),intent(in)::t
   double precision:: ux(&
        p%all%lo%i:p%all%hi%i,&
        p%all%lo%j:p%all%hi%j,&
-       p%all%lo%k:p%all%hi%k,nvar)
+       p%all%lo%k:p%all%hi%k,nv)
 
-  double precision:: ybuffer_send(p%all%lo%i:p%all%hi%i,ng,p%max%hi%k,nvar)
-  double precision:: ybuffer_recv(p%all%lo%i:p%all%hi%i,ng,p%max%hi%k,nvar)
+  double precision:: ybuffer_send(p%all%lo%i:p%all%hi%i,ng,p%max%hi%k,nv)
+  double precision:: ybuffer_recv(p%all%lo%i:p%all%hi%i,ng,p%max%hi%k,nv)
   integer:: YBUFFSIZE
   integer:: ii,mm,kk
   integer:: msg_id_send_y_low
@@ -354,22 +361,22 @@ subroutine YExchange(ux,p,t,ng)
   return
 end subroutine YExchange
 !-----------------------------------------------------------------------
-subroutine ZExchange(ux,p,t,ng)
-  use discretization, only:nvar
+subroutine ZExchange(ux,p,t,ng,nv)
   use base_data_module
   use mpistuff
   use tags
   implicit none
+  integer,intent(in)::nv
   integer,intent(in)::ng
   type(patcht),intent(in) :: p
   type(topot),intent(in)::t
   double precision:: ux(&
        p%all%lo%i:p%all%hi%i,&
        p%all%lo%j:p%all%hi%j,&
-       p%all%lo%k:p%all%hi%k,nvar)
+       p%all%lo%k:p%all%hi%k,nv)
 
-  double precision:: zbuffer_send(p%all%lo%i:p%all%hi%i,p%all%lo%j:p%all%hi%j,ng,nvar)
-  double precision:: zbuffer_recv(p%all%lo%i:p%all%hi%i,p%all%lo%j:p%all%hi%j,ng,nvar)
+  double precision:: zbuffer_send(p%all%lo%i:p%all%hi%i,p%all%lo%j:p%all%hi%j,ng,nv)
+  double precision:: zbuffer_recv(p%all%lo%i:p%all%hi%i,p%all%lo%j:p%all%hi%j,ng,nv)
   integer:: ZBUFFSIZE
   integer:: ii,jj,mm
   integer:: msg_id_send_z_low
@@ -490,16 +497,17 @@ subroutine ZExchange(ux,p,t,ng)
   return
 end subroutine ZExchange
 !-----------------------------------------------------------------
-subroutine SetXBC(u,p,t)
-  use discretization
+subroutine SetXBC(u,p,t,nv)
+  use discretization,only:nsg
+  use base_data_module
   use domain
-  use mpistuff,only:mype
   implicit none
+  integer,intent(in)::nv
   type(patcht),intent(in):: p
   type(topot),intent(in)::t
   double precision::u(p%all%lo%i:p%all%hi%i,&
        p%all%lo%j:p%all%hi%j,&
-       p%all%lo%k:p%all%hi%k,nvar)
+       p%all%lo%k:p%all%hi%k,nv)
   !
   integer xbdry_type
   integer:: ii,jj,mm,kk
@@ -545,14 +553,16 @@ subroutine SetXBC(u,p,t)
   return
 end subroutine SetXBC
 !-----------------------------------------------------------------
-subroutine SetYBC(u,p,t)
-  use discretization
+subroutine SetYBC(u,p,t,nv)
+  use discretization,only:nsg
+  use base_data_module
   use domain
   implicit none
+  integer,intent(in)::nv
   type(patcht),intent(in):: p
   double precision::u(p%all%lo%i:p%all%hi%i,&
        p%all%lo%j:p%all%hi%j,&
-       p%all%lo%k:p%all%hi%k,nvar)
+       p%all%lo%k:p%all%hi%k,nv)
   type(topot),intent(in)::t
 
   integer ybdry_type
@@ -600,14 +610,16 @@ subroutine SetYBC(u,p,t)
   return
 end subroutine SetYBC
 !-----------------------------------------------------------------
-subroutine SetZBC(u,p,t)
-  use discretization
+subroutine SetZBC(u,p,t,nv)
+  use discretization,only:nsg
+  use base_data_module
   use domain
   implicit none
+  integer,intent(in)::nv
   type(patcht),intent(in):: p
   double precision::u(p%all%lo%i:p%all%hi%i,&
        p%all%lo%j:p%all%hi%j,&
-       p%all%lo%k:p%all%hi%k,nvar)
+       p%all%lo%k:p%all%hi%k,nv)
   type(topot),intent(in)::t
 
   integer:: ii,jj,mm,kk
