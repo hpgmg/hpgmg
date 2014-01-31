@@ -61,3 +61,6 @@ val:
 # sudo /usr/local/bin/gdb
 debug:
 	-@/usr/bin/gdb --args ./pms.${PETSC_ARCH}.ex -nxloc ${SRFINEST} -nyloc ${SRFINEST} -nzloc ${SRFINEST} -nvcycles 0 -nfcycles 1 -verbose 3 -pe_min_sz ${SRLOCN} -show_options true -nsmoothsup ${NSMUP} -nsmoothsdown ${NSMDOWN} -verbose ${VERB}
+
+cray_val:
+	-@aprun -n 1 valgrind --dsymutil=yes --leak-check=no --gen-suppressions=no --num-callers=20 --suppressions=minimal.supp ./pms.arch-xc30-dbg64.ex -nxloc 4 -verbose 2 -pe_min_sz 4 -sr_max_loc_sz 16 -sr_base_bufsz 16 -sr_bufsz_inc 0 -show_options true

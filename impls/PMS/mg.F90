@@ -348,7 +348,7 @@ subroutine copy_sr_crs2(crs_u,crs_rhs,sr_u,sr_rhs,cg0,srg0)
   double precision,intent(out),dimension(&
        cg0%p%all%lo%i:cg0%p%all%hi%i,& 
        cg0%p%all%lo%j:cg0%p%all%hi%j,& 
-       cg0%p%all%lo%k:cg0%p%all%hi%k, nvar)::crs_u,crs_rhs
+       cg0%p%all%lo%k:cg0%p%all%hi%k,nvar)::crs_u,crs_rhs
   double precision,intent(in),dimension(&
        srg0%p%all%lo%i:srg0%p%all%hi%i,&
        srg0%p%all%lo%j:srg0%p%all%hi%j,&
@@ -370,9 +370,9 @@ subroutine copy_sr_crs2(crs_u,crs_rhs,sr_u,sr_rhs,cg0,srg0)
         end do
      end do
   end do
-  if (ii/=cg0%p%max%hi%i) stop 'copy_crs_sr_w_bc_ex2 ii'
-  if (jj/=cg0%p%max%hi%j) stop 'copy_crs_sr_w_bc_ex2 jj'
-  if (kk/=cg0%p%max%hi%k) stop 'copy_crs_sr_w_bc_ex2 kk'
+  if (ii/=cg0%p%max%hi%i) stop 'copy_sr_crs2 ii'
+  if (jj/=cg0%p%max%hi%j) stop 'copy_sr_crs2 jj'
+  if (kk/=cg0%p%max%hi%k) stop 'copy_sr_crs2 kk'
   call SetBCs(crs_u,cg0%p,cg0%t,nsg) ! normal BC exchange, no need to do rhs
   return
 end subroutine copy_sr_crs2
@@ -610,7 +610,7 @@ subroutine MGSR(srg,cg,lev,sr_ux,sr_f,sr_aux,sr_rhs,a_crs_ux0,a_crs_aux0,Apply1,
         if (mype==0) write(6,'(A,I2,A,E12.4)')'       lev=',nsr+lev,') V: after FMG pre sm |u|=',tt
      end if
   end if
-
+  if (lev.gt.-1) stop 'lev.gt.-1'
   ! SR2 = smooth restrict u & f-Au down to coarsest grid 0 (lev+1)
   fTmp => sr_f(lev)%ptr
   rhsF => sr_rhs(lev)%ptr
@@ -686,10 +686,10 @@ subroutine MGSR(srg,cg,lev,sr_ux,sr_f,sr_aux,sr_rhs,a_crs_ux0,a_crs_aux0,Apply1,
   call copy_sr_crs2(a_crs_ux0,a_crs_aux0,uxC,rhsC,cg(0),srg(0))
 
   ! debug
-  tt = norm(a_crs_aux0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
-  if (mype==0)write(6,'(A,I2,A,E12.4)')'                lev=',0,') SR: |f_crs_0|=',tt
   t2 = norm(rhsC,srg(0)%p%all,srg(0)%val,srg(0)%p%dx,srg(0)%t%comm,2)
   if (mype==0)write(6,'(A,I2,A,E12.4)')'                lev=',0,') SR: |f_sr_0|=',t2
+  tt = norm(a_crs_aux0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
+  if (mype==0)write(6,'(A,I2,A,E12.4)')'                lev=',0,') SR: |f_crs_0|=',tt
   if (abs(tt-t2)/t2>1.d-12) stop 'MSRG: big error in RHS'
   tt = norm(a_crs_ux0,cg(0)%p%all,cg(0)%p%max,cg(0)%p%dx,cg(0)%t%comm,2)
   if (mype==0)write(6,'(A,I2,A,E12.4)')'                lev=',0,') SR: |u_crs_0|=',tt
