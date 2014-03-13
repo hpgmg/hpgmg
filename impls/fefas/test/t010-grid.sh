@@ -47,4 +47,8 @@ test_expect_stdout '3D grid' 9 'fefas -cmax 100 -p 1,3,3 -M 16,48,32' '
 [8] Level 1: [   0:   2,   4:   6,   4:   4] of [   2,   6,   4] on [  1,  2,  2]
 '
 
+test_expect_error '3D grid incompatible coarsening' 9 'fefas -cmax 100 -p 1,3,3 -M 8,48,24' '
+Grid 1,6,3 cannot be coarsened on process grid 1,2,2
+'
+
 test_done

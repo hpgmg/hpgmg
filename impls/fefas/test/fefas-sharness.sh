@@ -46,4 +46,47 @@ test_expect_stdout() {
     echo >&3 ""
 }
 
+# Public: Run parallel executable and check for failure with error message
+#
+# When the test passed, an "ok" message is printed and the number of successful
+# tests is incremented. When it failed, a "not ok" message is printed and the
+# number of failed tests is incremented.
+#
+# With --immediate, exit test immediately upon the first failed test.
+#
+# Usually takes four arguments:
+# $1 - Test description
+# $2 - Number of processes
+# $3 - Executable name (found in ${PETSC_ARCH}/bin/) followed by runtime options
+# $4 - Expected string in error message (stderr)
+#
+# With five arguments, the first will be taken to be a prerequisite:
+# $1 - Comma-separated list of test prerequisites. The test will be skipped if
+#      not all of the given prerequisites are set. To negate a prerequisite,
+#      put a "!" in front of it.
+# $2 - Test description
+# $3 - Number of processes
+# $4 - Executable name (found in ${PETSC_ARCH}/bin/) followed by runtime options
+# $5 - Expected string in error message
+#
+# Returns nothing.
+test_expect_error() {
+    test "$#" = 5 && { test_prereq=$1; shift; } || test_prereq=
+    test "$#" = 4 || error "bug in test script: $# not 4 or 5 parameters to test_expect_stdout"
+
+    export test_prereq
+    if ! test_skip_ "$@"; then
+        say >&3 "checking known breakage: $2 $3"
+        expected_stderr=$(sed '1d' <<<"$4")
+        # Don't check exit code because process managers do not always propagate correctly
+        "${MPIEXEC}" -n $2 "${SHARNESS_TEST_DIRECTORY}/../${PETSC_ARCH}/bin/"$3 > /dev/null 2> actual.err
+        if fgrep -q "${expected_stderr}" actual.err; then
+            test_ok_ "$1"
+        else
+            test_failure_ "$1 $2 $3" "Expecting: ${expected_stderr}$(echo && cat actual.err)"
+        fi
+    fi
+    echo >&3 ""
+}
+
 MPIEXEC=$(awk '/MPIEXEC/{print $3}' "${PETSC_DIR}/${PETSC_ARCH}/conf/petscvariables")
