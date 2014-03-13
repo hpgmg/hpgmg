@@ -57,13 +57,16 @@ $(BINDIR)/fefas : $(fefas-y.c:%.c=$(OBJDIR)/%.o) $(libfefas) | $$(@D)/.DIR
 $(OBJDIR)/%.o: %.c | $$(@D)/.DIR
 	$(FEFAS_COMPILE.c) $(abspath $<) -o $@
 
+test : $(fefas)
+	make -C test PETSC_ARCH=${PETSC_ARCH} all
+
 %/.DIR :
 	@mkdir -p $(@D)
 	@touch $@
 
 .PRECIOUS: %/.DIR
 
-.PHONY: all clean print fefas libfefas
+.PHONY: all clean print fefas libfefas test
 
 clean:
 	rm -rf $(OBJDIR) $(LIBDIR) $(BINDIR)
