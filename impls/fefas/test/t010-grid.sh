@@ -4,7 +4,7 @@ test_description='Test grid creation'
 
 . ./fefas-sharness.sh
 
-test_expect_stdout 'single-process grid' 1 'fefas -cmax 100 -p 1,1,1 -M 48,48,16' '
+test_expect_stdout 'single-process grid' 1 'fefas test-grid -cmax 100 -p 1,1,1 -M 48,48,16' '
 [0] Level 4: [   0:  48,   0:  48,   0:  16] of [  48,  48,  16] on [  1,  1,  1]
 [0] Level 3: [   0:  24,   0:  24,   0:   8] of [  24,  24,   8] on [  1,  1,  1]
 [0] Level 2: [   0:  12,   0:  12,   0:   4] of [  12,  12,   4] on [  1,  1,  1]
@@ -12,7 +12,7 @@ test_expect_stdout 'single-process grid' 1 'fefas -cmax 100 -p 1,1,1 -M 48,48,16
 [0] Level 0: [   0:   3,   0:   3,   0:   1] of [   3,   3,   1] on [  1,  1,  1]
 '
 
-test_expect_stdout '3D grid' 9 'fefas -cmax 100 -p 1,3,3 -M 16,48,32' '
+test_expect_stdout '3D grid' 9 'fefas test-grid -cmax 100 -p 1,3,3 -M 16,48,32' '
 [0] Level 4: [   0:  16,   0:  16,   0:  16] of [  16,  48,  32] on [  1,  3,  3]
 [0] Level 3: [   0:   8,   0:   8,   0:   8] of [   8,  24,  16] on [  1,  3,  3]
 [0] Level 2: [   0:   4,   0:   4,   0:   4] of [   4,  12,   8] on [  1,  3,  3]
@@ -47,7 +47,7 @@ test_expect_stdout '3D grid' 9 'fefas -cmax 100 -p 1,3,3 -M 16,48,32' '
 [8] Level 1: [   0:   2,   4:   6,   4:   4] of [   2,   6,   4] on [  1,  2,  2]
 '
 
-test_expect_error '3D grid incompatible coarsening' 9 'fefas -cmax 100 -p 1,3,3 -M 8,48,24' '
+test_expect_error '3D grid incompatible coarsening' 9 'fefas test-grid -cmax 100 -p 1,3,3 -M 8,48,24' '
 Grid 1,6,3 cannot be coarsened on process grid 1,2,2
 '
 
