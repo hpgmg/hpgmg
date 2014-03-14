@@ -71,6 +71,7 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
     if (M[0]%2 || M[1]%2 || M[2]%2) {
       if (size != 1) SETERRQ4(comm,PETSC_ERR_ARG_INCOMP,"Grid %D,%D,%D exceeds cmax %D, but cannot be coarsened",M[0],M[1],M[2],cmax);
       // Coarsest grid, on a single process
+      g->coarse = NULL;
       for (j=0; j<3; j++) {
         g->m[j] = M[j];
         g->s[j] = 0;
@@ -114,6 +115,8 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
         csm[2*j+0] = g->coarse->s[j];
         csm[2*j+1] = g->coarse->m[j];
       }
+    } else {
+      g->coarse = NULL;
     }
     ierr = MPI_Bcast(csm,6,MPIU_INT,0,g->pcomm);CHKERRQ(ierr);
     for (j=0; j<3; j++) {
