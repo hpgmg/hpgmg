@@ -1,17 +1,40 @@
 #include "fefas.h"
+#include <petscsf.h>
+#include <petscdmshell.h>
 #include <stdint.h>
 
 typedef uint64_t zcode;
 
 struct Grid_private {
+  PetscInt refct;
   MPI_Comm comm;
   MPI_Comm pcomm; // Communicator to talk to parent.
   Grid coarse;
   PetscInt M[3],p[3];
-  PetscInt s[3],m[3];   // Owned part of global grid
-  PetscInt cs[3],cm[3]; // My part of coarse grid
+  PetscInt s[3],m[3];   // Owned cells of global grid
+  PetscInt cs[3],cm[3]; // My cells of coarse grid
   PetscMPIInt neighborranks[3][3][3];
 };
+
+// This type is hidden behind DM (not exposed publicly)
+typedef struct FESpace_private *FESpace;
+struct FESpace_private {
+  Grid grid;
+  PetscInt degree;      // Finite element polynomial degree
+  PetscInt dof;         // Number of degrees of freedom per vertex
+  PetscInt om[3];       // Array dimensions of owned part of global vectors
+  PetscInt lm[3];       // Array dimensions of local vectors
+  MPI_Datatype unit;
+  PetscSF sf;
+};
+
+static PetscInt FEIdxO(FESpace fe,PetscInt i,PetscInt j,PetscInt k) { return (i*fe->om[1] + j)*fe->om[2] + k; }
+static PetscInt FEIdxL(FESpace fe,PetscInt i,PetscInt j,PetscInt k) { return (i*fe->lm[1] + j)*fe->lm[2] + k; }
+static PetscInt FENeighborDim(FESpace fe,PetscInt l) {
+  return fe->grid->s[l] + 2*fe->grid->m[l] < fe->grid->M[l] // Can we fit another domain the same size as mine without reaching boundary?
+    ? fe->om[l]
+    : fe->degree*(fe->grid->M[l] - (fe->grid->s[l]+fe->grid->m[l])) + 1;
+}
 
 static PetscInt CeilDiv(PetscInt a,PetscInt b) {return a/b + !!(a%b);}
 
@@ -151,6 +174,7 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
     }
   } else SETERRQ3(comm,PETSC_ERR_SUP,"Multiprocess coarse grid %D,%D,%D",M[0],M[1],M[2]);
 
+  g->refct = 1;
   *grid = g;
   PetscFunctionReturn(0);
 }
@@ -161,6 +185,7 @@ PetscErrorCode GridDestroy(Grid *grid)
 
   PetscFunctionBegin;
   if (!*grid) PetscFunctionReturn(0);
+  if (--(*grid)->refct > 0) PetscFunctionReturn(0);
   ierr = GridDestroy(&(*grid)->coarse);CHKERRQ(ierr);
   if ((*grid)->pcomm != MPI_COMM_NULL) {ierr = MPI_Comm_free(&(*grid)->pcomm);CHKERRQ(ierr);}
   ierr = PetscCommDestroy(&(*grid)->comm);CHKERRQ(ierr);
@@ -189,5 +214,202 @@ PetscErrorCode GridView(Grid grid)
                                    g->p[0],g->p[1],g->p[2]);CHKERRQ(ierr);
   }
   ierr = PetscSynchronizedFlush(grid->comm,PETSC_STDOUT);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode DMCreateGlobalVector_FE(DM dm,Vec *G)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  ierr = VecCreate(PetscObjectComm((PetscObject)dm),G);CHKERRQ(ierr);
+  ierr = VecSetBlockSize(*G,fe->dof);CHKERRQ(ierr);
+  ierr = VecSetSizes(*G,fe->om[0]*fe->om[1]*fe->om[2]*fe->dof,PETSC_DETERMINE);CHKERRQ(ierr);
+  ierr = VecSetUp(*G);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode DMCreateLocalVector_FE(DM dm,Vec *G)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  ierr = VecCreate(PETSC_COMM_SELF,G);CHKERRQ(ierr);
+  ierr = VecSetBlockSize(*G,fe->dof);CHKERRQ(ierr);
+  ierr = VecSetSizes(*G,fe->lm[0]*fe->lm[1]*fe->lm[2]*fe->dof,PETSC_DETERMINE);CHKERRQ(ierr);
+  ierr = VecSetUp(*G);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode DMGlobalToLocalBegin_FE(DM dm,Vec G,InsertMode imode,Vec L)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+  const PetscScalar *g;
+  PetscScalar *l;
+
+  PetscFunctionBegin;
+  if (imode != INSERT_VALUES) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"InsertMode");
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(G,&g);CHKERRQ(ierr);
+  ierr = VecGetArray(L,&l);CHKERRQ(ierr);
+  ierr = PetscSFBcastBegin(fe->sf,fe->unit,g,l);CHKERRQ(ierr);
+  ierr = VecRestoreArrayRead(G,&g);CHKERRQ(ierr);
+  ierr = VecRestoreArray(L,&l);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode DMGlobalToLocalEnd_FE(DM dm,Vec G,InsertMode imode,Vec L)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+  PetscInt i,j,k,d;
+  const PetscScalar *g;
+  PetscScalar *l;
+
+  PetscFunctionBegin;
+  if (imode != INSERT_VALUES) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"InsertMode");
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(G,&g);CHKERRQ(ierr);
+  ierr = VecGetArray(L,&l);CHKERRQ(ierr);
+
+  // Copy over local part
+  for (i=0; i<fe->om[0]; i++) {
+    for (j=0; j<fe->om[1]; j++) {
+      for (k=0; k<fe->om[2]; k++) {
+        for (d=0; d<fe->dof; d++) {
+          l[FEIdxL(fe,i,j,k)*fe->dof+d] = g[FEIdxO(fe,i,j,k)*fe->dof+d];
+        }
+      }
+    }
+  }
+  ierr = PetscSFBcastEnd(fe->sf,fe->unit,g,l);CHKERRQ(ierr);
+  ierr = VecRestoreArrayRead(G,&g);CHKERRQ(ierr);
+  ierr = VecRestoreArray(L,&l);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode DMLocalToGlobalBegin_FE(DM dm,Vec L,InsertMode imode,Vec G)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+  const PetscScalar *l;
+  PetscScalar *g;
+
+  PetscFunctionBegin;
+  if (imode != ADD_VALUES) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"InsertMode");
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(L,&l);CHKERRQ(ierr);
+  ierr = VecGetArray(G,&g);CHKERRQ(ierr);
+  ierr = PetscSFReduceBegin(fe->sf,fe->unit,l,g,MPIU_SUM);CHKERRQ(ierr);
+  ierr = VecRestoreArrayRead(L,&l);CHKERRQ(ierr);
+  ierr = VecRestoreArray(G,&g);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode DMLocalToGlobalEnd_FE(DM dm,Vec L,InsertMode imode,Vec G)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+  PetscInt i,j,k,d;
+  const PetscScalar *l;
+  PetscScalar *g;
+
+  PetscFunctionBegin;
+  if (imode != ADD_VALUES) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"InsertMode");
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(L,&l);CHKERRQ(ierr);
+  ierr = VecGetArray(G,&g);CHKERRQ(ierr);
+
+  // Add local part
+  for (i=0; i<fe->om[0]; i++) {
+    for (j=0; j<fe->om[1]; j++) {
+      for (k=0; k<fe->om[2]; k++) {
+        for (d=0; d<fe->dof; d++) {
+          g[FEIdxO(fe,i,j,k)*fe->dof+d] += l[FEIdxL(fe,i,j,k)*fe->dof+d];
+        }
+      }
+    }
+  }
+  ierr = PetscSFReduceEnd(fe->sf,fe->unit,l,g,MPIU_SUM);CHKERRQ(ierr);
+  ierr = VecRestoreArrayRead(L,&l);CHKERRQ(ierr);
+  ierr = VecRestoreArray(G,&g);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+// Each process always owns the nodes in the negative direction (lower left).  The last process in each direction also
+// owns its outer boundary.
+PetscErrorCode DMCreateFESpace(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
+{
+  PetscErrorCode ierr;
+  PetscInt    *ilocal,i,j,k,nleaves,leaf,their_om[3];
+  PetscSFNode *iremote;
+  FESpace     fe;
+  DM          dm;
+
+  PetscFunctionBegin;
+  ierr = PetscNew(&fe);CHKERRQ(ierr);
+  grid->refct++;
+  fe->grid = grid;
+  fe->degree = fedegree;
+  fe->dof = dof;
+  for (i=0; i<3; i++) {
+    fe->lm[i] = fedegree*grid->m[i]+1;
+    if (grid->neighborranks[1+(i==0)][1+(i==1)][1+(i==2)] >= 0) { // My neighbor exists so I don't own that fringe
+      fe->om[i] = fe->lm[i]-1;
+    } else {                    // I own my high boundary
+      fe->om[i] = fe->lm[i];
+    }
+  }
+  nleaves = fe->lm[0]*fe->lm[1]*fe->lm[2] - fe->om[0]*fe->om[1]*fe->om[2];
+  ierr = PetscMalloc1(nleaves,&ilocal);CHKERRQ(ierr);
+  ierr = PetscMalloc1(nleaves,&iremote);CHKERRQ(ierr);
+  leaf = 0;
+  for (i=0; i<fe->lm[0]; i++) {
+    their_om[0] = i >= fe->om[0] ? FENeighborDim(fe,0) : fe->om[0];
+    for (j=0; j<fe->lm[1]; j++) {
+      their_om[1] = j >= fe->om[1] ? FENeighborDim(fe,1) : fe->om[1];
+      for (k=0; k<fe->lm[2]; k++) {
+        their_om[2] = k >= fe->om[2] ? FENeighborDim(fe,2) : fe->om[2];
+        if (i >= fe->om[0] || j >= fe->om[1] || k >= fe->om[2]) { // Someone else owns this vertex
+          ilocal[leaf] = FEIdxL(fe,i,j,k);
+          iremote[leaf].rank = grid->neighborranks[1+(i>=fe->om[0])][1+(j>=fe->om[1])][1+(k>=fe->om[2])];
+          iremote[leaf].index = ((i%fe->om[0])*their_om[1] + (j%fe->om[1]))*their_om[2] + (k%fe->om[2]);
+          leaf++;
+        }
+      }
+    }
+  }
+  ierr = PetscSFCreate(grid->comm,&fe->sf);CHKERRQ(ierr);
+  ierr = PetscSFSetGraph(fe->sf,fe->om[0]*fe->om[1]*fe->om[2],nleaves,ilocal,PETSC_OWN_POINTER,iremote,PETSC_OWN_POINTER);CHKERRQ(ierr);
+  ierr = MPI_Type_contiguous(dof,MPIU_SCALAR,&fe->unit);CHKERRQ(ierr);
+  ierr = MPI_Type_commit(&fe->unit);CHKERRQ(ierr);
+
+  ierr = DMShellCreate(grid->comm,&dm);CHKERRQ(ierr);
+  ierr = DMSetApplicationContext(dm,fe);CHKERRQ(ierr);
+  ierr = DMShellSetLocalToGlobal(dm,DMLocalToGlobalBegin_FE,DMLocalToGlobalEnd_FE);CHKERRQ(ierr);
+  ierr = DMShellSetGlobalToLocal(dm,DMGlobalToLocalBegin_FE,DMGlobalToLocalEnd_FE);CHKERRQ(ierr);
+  ierr = DMShellSetCreateGlobalVector(dm,DMCreateGlobalVector_FE);CHKERRQ(ierr);
+  ierr = DMShellSetCreateLocalVector(dm,DMCreateLocalVector_FE);CHKERRQ(ierr);
+  *dmfe = dm;
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode DMDestroyFESpace(DM *dm)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(*dm,&fe);CHKERRQ(ierr);
+  ierr = GridDestroy(&fe->grid);CHKERRQ(ierr);
+  ierr = MPI_Type_free(&fe->unit);CHKERRQ(ierr);
+  ierr = PetscSFDestroy(&fe->sf);CHKERRQ(ierr);
+  ierr = PetscFree(fe);CHKERRQ(ierr);
+  ierr = DMDestroy(dm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

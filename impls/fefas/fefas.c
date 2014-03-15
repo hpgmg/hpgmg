@@ -22,6 +22,35 @@ static PetscErrorCode TestGrid(Options opt)
   PetscFunctionReturn(0);
 }
 
+static PetscErrorCode TestFESpace(Options opt)
+{
+  PetscErrorCode ierr;
+  Grid grid;
+  DM dm;
+  Vec G,L;
+  PetscInt i,rstart,rend;
+  PetscScalar *g;
+
+  PetscFunctionBegin;
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = DMCreateFESpace(grid,1,1,&dm);CHKERRQ(ierr);
+  ierr = GridDestroy(&grid);CHKERRQ(ierr);
+
+  ierr = DMCreateGlobalVector(dm,&G);CHKERRQ(ierr);
+  ierr = DMCreateLocalVector(dm,&L);CHKERRQ(ierr);
+  ierr = VecGetOwnershipRange(G,&rstart,&rend);CHKERRQ(ierr);
+  ierr = VecGetArray(G,&g);CHKERRQ(ierr);
+  for (i=rstart; i<rend; i++) g[i-rstart] = i;
+  ierr = VecRestoreArray(G,&g);CHKERRQ(ierr);
+  ierr = DMGlobalToLocalBegin(dm,G,INSERT_VALUES,L);CHKERRQ(ierr);
+  ierr = DMGlobalToLocalEnd(dm,G,INSERT_VALUES,L);CHKERRQ(ierr);
+  ierr = VecView(L,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+  ierr = VecDestroy(&G);CHKERRQ(ierr);
+  ierr = VecDestroy(&L);CHKERRQ(ierr);
+  ierr = DMDestroyFESpace(&dm);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action)(Options))
 {
   PetscFunctionList actionlist = NULL;
@@ -31,6 +60,7 @@ static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action
   *action = NULL;
 
   ierr = PetscFunctionListAdd(&actionlist,"test-grid",TestGrid);CHKERRQ(ierr);
+  ierr = PetscFunctionListAdd(&actionlist,"test-fespace",TestFESpace);CHKERRQ(ierr);
 
   if (argc < 2 || !argv[1] || argv[1][0] == '-') {
     ierr = PetscViewerASCIIPrintf(PETSC_VIEWER_STDERR_WORLD,"First argument '%s' must be an action:",argc>=2&&argv[1]?argv[1]:"");CHKERRQ(ierr);
