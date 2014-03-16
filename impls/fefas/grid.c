@@ -18,10 +18,10 @@ struct Grid_private {
 };
 
 // This type is hidden behind DM (not exposed publicly)
-typedef struct FESpace_private *FESpace;
-struct FESpace_private {
+typedef struct FE_private *FE;
+struct FE_private {
   Grid grid;
-  FESpace fecoords;     // Dirty hack to work around application contexts not being destroyed
+  FE fecoords;     // Dirty hack to work around application contexts not being destroyed
   PetscInt degree;      // Finite element polynomial degree
   PetscInt dof;         // Number of degrees of freedom per vertex
   PetscInt om[3];       // Array dimensions of owned part of global vectors
@@ -37,9 +37,9 @@ struct FESpace_private {
   } ref;
 };
 
-static PetscInt FEIdxO(FESpace fe,PetscInt i,PetscInt j,PetscInt k) { return (i*fe->om[1] + j)*fe->om[2] + k; }
-static PetscInt FEIdxL(FESpace fe,PetscInt i,PetscInt j,PetscInt k) { return (i*fe->lm[1] + j)*fe->lm[2] + k; }
-static PetscInt FENeighborDim(FESpace fe,PetscInt l) {
+static PetscInt FEIdxO(FE fe,PetscInt i,PetscInt j,PetscInt k) { return (i*fe->om[1] + j)*fe->om[2] + k; }
+static PetscInt FEIdxL(FE fe,PetscInt i,PetscInt j,PetscInt k) { return (i*fe->lm[1] + j)*fe->lm[2] + k; }
+static PetscInt FENeighborDim(FE fe,PetscInt l) {
   return fe->grid->s[l] + 2*fe->grid->m[l] < fe->grid->M[l] // Can we fit another domain the same size as mine without reaching boundary?
     ? fe->om[l]
     : fe->degree*(fe->grid->M[l] - (fe->grid->s[l]+fe->grid->m[l])) + 1;
@@ -229,7 +229,7 @@ PetscErrorCode GridView(Grid grid)
 static PetscErrorCode DMCreateGlobalVector_FE(DM dm,Vec *G)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
@@ -243,7 +243,7 @@ static PetscErrorCode DMCreateGlobalVector_FE(DM dm,Vec *G)
 static PetscErrorCode DMCreateLocalVector_FE(DM dm,Vec *G)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
@@ -257,7 +257,7 @@ static PetscErrorCode DMCreateLocalVector_FE(DM dm,Vec *G)
 static PetscErrorCode DMGlobalToLocalBegin_FE(DM dm,Vec G,InsertMode imode,Vec L)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
   const PetscScalar *g;
   PetscScalar *l;
 
@@ -275,7 +275,7 @@ static PetscErrorCode DMGlobalToLocalBegin_FE(DM dm,Vec G,InsertMode imode,Vec L
 static PetscErrorCode DMGlobalToLocalEnd_FE(DM dm,Vec G,InsertMode imode,Vec L)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
   PetscInt i,j,k,d;
   const PetscScalar *g;
   PetscScalar *l;
@@ -305,7 +305,7 @@ static PetscErrorCode DMGlobalToLocalEnd_FE(DM dm,Vec G,InsertMode imode,Vec L)
 static PetscErrorCode DMLocalToGlobalBegin_FE(DM dm,Vec L,InsertMode imode,Vec G)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
   const PetscScalar *l;
   PetscScalar *g;
   MPI_Op op;
@@ -328,7 +328,7 @@ static PetscErrorCode DMLocalToGlobalBegin_FE(DM dm,Vec L,InsertMode imode,Vec G
 static PetscErrorCode DMLocalToGlobalEnd_FE(DM dm,Vec L,InsertMode imode,Vec G)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
   PetscInt i,j,k,d;
   const PetscScalar *l;
   PetscScalar *g;
@@ -363,18 +363,18 @@ static PetscErrorCode DMLocalToGlobalEnd_FE(DM dm,Vec L,InsertMode imode,Vec G)
   PetscFunctionReturn(0);
 }
 
-PetscErrorCode DMFESpaceSetUniformCoordinates(DM dm,const PetscReal L[])
+PetscErrorCode DMFESetUniformCoordinates(DM dm,const PetscReal L[])
 {
   PetscErrorCode ierr;
   DM dmc;
-  FESpace fe;
+  FE fe;
   Vec X;
   PetscScalar *x;
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
   if (fe->degree > 2) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"fe->degree %D > 2",fe->degree);
-  ierr = DMCreateFESpace(fe->grid,fe->degree,3,&dmc);CHKERRQ(ierr);
+  ierr = DMCreateFE(fe->grid,fe->degree,3,&dmc);CHKERRQ(ierr);
   ierr = DMCreateLocalVector(dmc,&X);CHKERRQ(ierr);
   ierr = VecGetArray(X,&x);CHKERRQ(ierr);
   for (PetscInt i=0; i<fe->lm[0]; i++) {
@@ -395,10 +395,10 @@ PetscErrorCode DMFESpaceSetUniformCoordinates(DM dm,const PetscReal L[])
   PetscFunctionReturn(0);
 }
 
-PetscErrorCode DMFESpaceGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal **B,const PetscReal **D,const PetscReal **x,PetscReal **w)
+PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal **B,const PetscReal **D,const PetscReal **x,PetscReal **w)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
@@ -437,10 +437,10 @@ PetscErrorCode DMFESpaceGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscR
   PetscFunctionReturn(0);
 }
 
-PetscErrorCode DMFESpaceGetNumElements(DM dm,PetscInt *nelems)
+PetscErrorCode DMFEGetNumElements(DM dm,PetscInt *nelems)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
   const PetscInt *m;
 
   PetscFunctionBegin;
@@ -453,10 +453,10 @@ PetscErrorCode DMFESpaceGetNumElements(DM dm,PetscInt *nelems)
 // Extract elements elem to elem+ne from local array u[grid i,j,k][0:dof], returning the result in y.
 // y is padded by replicating last element in case of irregular ending
 // vectorization-friendly ordering: y [0:dof] [0:(2*fedegree+1)^3] [0:ne]
-PetscErrorCode DMFESpaceExtractElements(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y)
+PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
   PetscInt P,fedegree,e;
 
   PetscFunctionBegin;
@@ -487,10 +487,10 @@ PetscErrorCode DMFESpaceExtractElements(DM dm,const PetscScalar *u,PetscInt elem
 
 // Sum/insert into elements elem:elem+ne in local vector u, using element contributions from y
 // Any "elements" beyond the locally-owned part are ignored
-PetscErrorCode DMFESpaceSetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,const PetscScalar *y)
+PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,const PetscScalar *y)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
   PetscInt P,fedegree,e;
   const PetscInt *m;
 
@@ -526,12 +526,12 @@ PetscErrorCode DMFESpaceSetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt 
 
 // Each process always owns the nodes in the negative direction (lower left).  The last process in each direction also
 // owns its outer boundary.
-PetscErrorCode DMCreateFESpace(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
+PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
 {
   PetscErrorCode ierr;
   PetscInt    *ilocal,i,j,k,nleaves,leaf,their_om[3];
   PetscSFNode *iremote;
-  FESpace     fe;
+  FE     fe;
   DM          dm;
 
   PetscFunctionBegin;
@@ -582,15 +582,15 @@ PetscErrorCode DMCreateFESpace(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe
   PetscFunctionReturn(0);
 }
 
-PetscErrorCode DMDestroyFESpace(DM *dm)
+PetscErrorCode DMDestroyFE(DM *dm)
 {
   PetscErrorCode ierr;
-  FESpace fe;
+  FE fe;
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(*dm,&fe);CHKERRQ(ierr);
   while (fe) {
-    FESpace fetmp;
+    FE fetmp;
     ierr = GridDestroy(&fe->grid);CHKERRQ(ierr);
     ierr = MPI_Type_free(&fe->unit);CHKERRQ(ierr);
     ierr = PetscSFDestroy(&fe->sf);CHKERRQ(ierr);

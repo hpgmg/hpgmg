@@ -1,10 +1,10 @@
 #!/bin/sh
 
-test_description='Test FESpace creation and scatters'
+test_description='Test FE creation and scatters'
 
 . ./fefas-sharness.sh
 
-test_expect_stdout 'FESpace GlobalToLocal fedegree=1' 4 'fefas test-fespace -p 2,2,1 -M 4,4,2' '
+test_expect_stdout 'FE GlobalToLocal fedegree=1' 4 'fefas test-fespace -p 2,2,1 -M 4,4,2' '
 Vec Object: 1 MPI processes
   type: seq
 0
@@ -36,7 +36,7 @@ Vec Object: 1 MPI processes
 50
 '
 
-test_expect_stdout 'FESpace Gradient/coordinates fedegree=1' 4 'fefas test-fegrad -M 6,2,10 -p 2,1,2 -L 7,11,13' '
+test_expect_stdout 'FE Gradient/coordinates fedegree=1' 4 'fefas test-fegrad -M 6,2,10 -p 2,1,2 -L 7,11,13' '
 '
 
 test_done

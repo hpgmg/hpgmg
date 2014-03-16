@@ -70,9 +70,9 @@ static PetscErrorCode TestFESpace()
   Options opt;
 
   PetscFunctionBegin;
-  ierr = OptionsParse("Finite Element FAS Test FESpace global-to-local",&opt);CHKERRQ(ierr);
+  ierr = OptionsParse("Finite Element FAS Test FE global-to-local",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
-  ierr = DMCreateFESpace(grid,1,1,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,1,1,&dm);CHKERRQ(ierr);
   ierr = GridDestroy(&grid);CHKERRQ(ierr);
 
   ierr = DMCreateGlobalVector(dm,&G);CHKERRQ(ierr);
@@ -86,7 +86,7 @@ static PetscErrorCode TestFESpace()
   ierr = VecView(L,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
   ierr = VecDestroy(&G);CHKERRQ(ierr);
   ierr = VecDestroy(&L);CHKERRQ(ierr);
-  ierr = DMDestroyFESpace(&dm);CHKERRQ(ierr);
+  ierr = DMDestroyFE(&dm);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -106,9 +106,9 @@ static PetscErrorCode TestFEGrad()
   PetscFunctionBegin;
   ierr = OptionsParse("Finite Element FAS Test Element Gradients",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
-  ierr = DMCreateFESpace(grid,fedegree,1,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,1,&dm);CHKERRQ(ierr);
   ierr = GridDestroy(&grid);CHKERRQ(ierr);
-  ierr = DMFESpaceSetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
+  ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
 
   ierr = DMCreateLocalVector(dm,&L);CHKERRQ(ierr);
   ierr = DMGetCoordinatesLocal(dm,&X);CHKERRQ(ierr);
@@ -121,13 +121,13 @@ static PetscErrorCode TestFEGrad()
   ierr = VecRestoreArray(L,&u);CHKERRQ(ierr);
   ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
 
-  ierr = DMFESpaceGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL);CHKERRQ(ierr);
-  ierr = DMFESpaceGetNumElements(dm,&nelems);CHKERRQ(ierr);
+  ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL);CHKERRQ(ierr);
+  ierr = DMFEGetNumElements(dm,&nelems);CHKERRQ(ierr);
   ierr = PetscMalloc2(P*P*P*ne,&ue,3*Q*Q*Q*ne,&du);CHKERRQ(ierr);
 
   ierr = VecGetArrayRead(L,&l);CHKERRQ(ierr);
   for (PetscInt e=0; e<nelems; e+=ne) {
-    ierr = DMFESpaceExtractElements(dm,l,e,ne,ue);CHKERRQ(ierr);
+    ierr = DMFEExtractElements(dm,l,e,ne,ue);CHKERRQ(ierr);
     ierr = PetscMemzero(du,3*Q*Q*Q*ne*sizeof(*du));CHKERRQ(ierr);
     ierr = TensorContract(ne,1,P,Q,D,B,B,TENSOR_EVAL,ue,&du[0*Q*Q*Q*ne]);CHKERRQ(ierr);
     ierr = TensorContract(ne,1,P,Q,B,D,B,TENSOR_EVAL,ue,&du[1*Q*Q*Q*ne]);CHKERRQ(ierr);
@@ -151,7 +151,7 @@ static PetscErrorCode TestFEGrad()
   ierr = VecRestoreArrayRead(L,&l);CHKERRQ(ierr);
   ierr = PetscFree2(ue,du);CHKERRQ(ierr);
   ierr = VecDestroy(&L);CHKERRQ(ierr);
-  ierr = DMDestroyFESpace(&dm);CHKERRQ(ierr);
+  ierr = DMDestroyFE(&dm);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
