@@ -47,7 +47,8 @@ $(libfefas) : $(libfefas-y.c:%.c=$(OBJDIR)/%.o)
 # gcc/gfortran style dependency flags; these are set in petscvariables starting with petsc-3.5
 C_DEPFLAGS ?= -MMD -MP
 
-FEFAS_COMPILE.c = $(call quiet,$(cc_name)) -c $(PCC_FLAGS) $(CCPPFLAGS) $(CFLAGS) $(C_DEPFLAGS)
+C99FLAGS := $(if $(filter c99,$(PCC_FLAGS)),,-std=c99)
+FEFAS_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLAGS) $(CFLAGS) $(C_DEPFLAGS)
 
 fefas = $(BINDIR)/fefas
 fefas : $(fefas)
