@@ -86,7 +86,7 @@ static PetscErrorCode TestFESpace()
   ierr = VecView(L,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
   ierr = VecDestroy(&G);CHKERRQ(ierr);
   ierr = VecDestroy(&L);CHKERRQ(ierr);
-  ierr = DMDestroyFE(&dm);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -151,7 +151,7 @@ static PetscErrorCode TestFEGrad()
   ierr = VecRestoreArrayRead(L,&l);CHKERRQ(ierr);
   ierr = PetscFree2(ue,du);CHKERRQ(ierr);
   ierr = VecDestroy(&L);CHKERRQ(ierr);
-  ierr = DMDestroyFE(&dm);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

@@ -21,7 +21,6 @@ struct Grid_private {
 typedef struct FE_private *FE;
 struct FE_private {
   Grid grid;
-  FE fecoords;     // Dirty hack to work around application contexts not being destroyed
   PetscInt degree;      // Finite element polynomial degree
   PetscInt dof;         // Number of degrees of freedom per vertex
   PetscInt om[3];       // Array dimensions of owned part of global vectors
@@ -389,7 +388,6 @@ PetscErrorCode DMFESetUniformCoordinates(DM dm,const PetscReal L[])
   ierr = VecRestoreArray(X,&x);CHKERRQ(ierr);
   ierr = DMSetCoordinateDM(dm,dmc);CHKERRQ(ierr);
   ierr = DMSetCoordinatesLocal(dm,X);CHKERRQ(ierr);
-  ierr = DMGetApplicationContext(dmc,&fe->fecoords);CHKERRQ(ierr); // Dirty hack so we can free it
   ierr = DMDestroy(&dmc);CHKERRQ(ierr);
   ierr = VecDestroy(&X);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -524,6 +522,22 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
   PetscFunctionReturn(0);
 }
 
+static PetscErrorCode FEDestroy(void **ctx)
+{
+  PetscErrorCode ierr;
+  FE fe = (FE)*ctx;
+
+  PetscFunctionBegin;
+  if (!fe) PetscFunctionReturn(0);
+  ierr = GridDestroy(&fe->grid);CHKERRQ(ierr);
+  ierr = MPI_Type_free(&fe->unit);CHKERRQ(ierr);
+  ierr = PetscSFDestroy(&fe->sf);CHKERRQ(ierr);
+  ierr = PetscFree4(fe->ref.B,fe->ref.D,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
+  ierr = PetscSegBufferDestroy(&fe->seg);CHKERRQ(ierr);
+  ierr = PetscFree(*ctx);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 // Each process always owns the nodes in the negative direction (lower left).  The last process in each direction also
 // owns its outer boundary.
 PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
@@ -574,32 +588,11 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
 
   ierr = DMShellCreate(grid->comm,&dm);CHKERRQ(ierr);
   ierr = DMSetApplicationContext(dm,fe);CHKERRQ(ierr);
+  ierr = DMSetApplicationContextDestroy(dm,FEDestroy);CHKERRQ(ierr);
   ierr = DMShellSetLocalToGlobal(dm,DMLocalToGlobalBegin_FE,DMLocalToGlobalEnd_FE);CHKERRQ(ierr);
   ierr = DMShellSetGlobalToLocal(dm,DMGlobalToLocalBegin_FE,DMGlobalToLocalEnd_FE);CHKERRQ(ierr);
   ierr = DMShellSetCreateGlobalVector(dm,DMCreateGlobalVector_FE);CHKERRQ(ierr);
   ierr = DMShellSetCreateLocalVector(dm,DMCreateLocalVector_FE);CHKERRQ(ierr);
   *dmfe = dm;
-  PetscFunctionReturn(0);
-}
-
-PetscErrorCode DMDestroyFE(DM *dm)
-{
-  PetscErrorCode ierr;
-  FE fe;
-
-  PetscFunctionBegin;
-  ierr = DMGetApplicationContext(*dm,&fe);CHKERRQ(ierr);
-  while (fe) {
-    FE fetmp;
-    ierr = GridDestroy(&fe->grid);CHKERRQ(ierr);
-    ierr = MPI_Type_free(&fe->unit);CHKERRQ(ierr);
-    ierr = PetscSFDestroy(&fe->sf);CHKERRQ(ierr);
-    ierr = PetscFree4(fe->ref.B,fe->ref.D,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
-    ierr = PetscSegBufferDestroy(&fe->seg);CHKERRQ(ierr);
-    fetmp = fe;
-    fe = fe->fecoords;
-    ierr = PetscFree(fetmp);CHKERRQ(ierr);
-  }
-  ierr = DMDestroy(dm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
