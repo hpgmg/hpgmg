@@ -1,6 +1,7 @@
 static const char help[] = "Geometric multigrid solver for finite-element elasticity.\n\n";
 
 #include "fefas.h"
+#include "tensor.h"
 
 typedef struct Options_private *Options;
 struct Options_private {
@@ -8,6 +9,7 @@ struct Options_private {
   PetscInt M[3];
   PetscInt p[3];
   PetscInt cmax;
+  PetscReal L[3];
 };
 
 static PetscErrorCode TestGrid(Options opt)
@@ -51,6 +53,68 @@ static PetscErrorCode TestFESpace(Options opt)
   PetscFunctionReturn(0);
 }
 
+static PetscErrorCode TestFEGrad(Options opt)
+{
+  PetscErrorCode ierr;
+  Grid grid;
+  DM dm;
+  Vec X,L;
+  PetscInt fedegree = 1,P,Q,ne = 2,m,nelems;
+  const PetscReal *B,*D,TestGrad[] = {2,3,5};
+  PetscScalar *u,*ue,*du;
+  const PetscScalar *l,*x;
+
+  PetscFunctionBegin;
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = DMCreateFESpace(grid,fedegree,1,&dm);CHKERRQ(ierr);
+  ierr = GridDestroy(&grid);CHKERRQ(ierr);
+  ierr = DMFESpaceSetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
+
+  ierr = DMCreateLocalVector(dm,&L);CHKERRQ(ierr);
+  ierr = DMGetCoordinatesLocal(dm,&X);CHKERRQ(ierr);
+  ierr = VecGetLocalSize(L,&m);CHKERRQ(ierr);
+  ierr = VecGetArray(L,&u);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
+  for (PetscInt i=0; i<m; i++) {
+    u[i] = TestGrad[0]*x[i*3+0] + TestGrad[1]*x[i*3+1] + TestGrad[2]*x[i*3+2];
+  }
+  ierr = VecRestoreArray(L,&u);CHKERRQ(ierr);
+  ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
+
+  ierr = DMFESpaceGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL);CHKERRQ(ierr);
+  ierr = DMFESpaceGetNumElements(dm,&nelems);CHKERRQ(ierr);
+  ierr = PetscMalloc2(P*P*P*ne,&ue,3*Q*Q*Q*ne,&du);CHKERRQ(ierr);
+
+  ierr = VecGetArrayRead(L,&l);CHKERRQ(ierr);
+  for (PetscInt e=0; e<nelems; e+=ne) {
+    ierr = DMFESpaceExtractElements(dm,l,e,ne,ue);CHKERRQ(ierr);
+    ierr = PetscMemzero(du,3*Q*Q*Q*ne*sizeof(*du));CHKERRQ(ierr);
+    ierr = TensorContract(ne,1,P,Q,D,B,B,TENSOR_EVAL,ue,&du[0*Q*Q*Q*ne]);CHKERRQ(ierr);
+    ierr = TensorContract(ne,1,P,Q,B,D,B,TENSOR_EVAL,ue,&du[1*Q*Q*Q*ne]);CHKERRQ(ierr);
+    ierr = TensorContract(ne,1,P,Q,B,B,D,TENSOR_EVAL,ue,&du[2*Q*Q*Q*ne]);CHKERRQ(ierr);
+    for (PetscInt ee=0; ee<ne; ee++) {
+      for (PetscInt i=0; i<Q; i++) {
+        for (PetscInt j=0; j<Q; j++) {
+          for (PetscInt k=0; k<Q; k++) {
+            PetscInt q = ((i*Q+j)*Q+k)*ne+ee;
+            for (PetscInt d=0; d<3; d++) {
+              PetscScalar dux = du[d*Q*Q*Q*ne+q]*2*opt->M[d]/opt->L[d];
+              if (PetscAbs(dux - TestGrad[d]) > 1e-12) {
+                ierr = PetscPrintf(PETSC_COMM_WORLD,"GradU[elem %D][qp %D,%D,%D][%D] = %f expected %f\n",e+ee,i,j,k,d,(double)dux,(double)TestGrad[d]);CHKERRQ(ierr);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ierr = VecRestoreArrayRead(L,&l);CHKERRQ(ierr);
+  ierr = PetscFree2(ue,du);CHKERRQ(ierr);
+  ierr = VecDestroy(&L);CHKERRQ(ierr);
+  ierr = DMDestroyFESpace(&dm);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action)(Options))
 {
   PetscFunctionList actionlist = NULL;
@@ -61,6 +125,7 @@ static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action
 
   ierr = PetscFunctionListAdd(&actionlist,"test-grid",TestGrid);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"test-fespace",TestFESpace);CHKERRQ(ierr);
+  ierr = PetscFunctionListAdd(&actionlist,"test-fegrad",TestFEGrad);CHKERRQ(ierr);
 
   if (argc < 2 || !argv[1] || argv[1][0] == '-') {
     ierr = PetscViewerASCIIPrintf(PETSC_VIEWER_STDERR_WORLD,"First argument '%s' must be an action:",argc>=2&&argv[1]?argv[1]:"");CHKERRQ(ierr);
@@ -82,7 +147,7 @@ static PetscErrorCode OptionsParse(Options *opt)
 {
   PetscErrorCode ierr;
   Options o;
-  PetscInt three;
+  PetscInt three,M_max;
 
   PetscFunctionBegin;
   ierr = PetscNew(&o);CHKERRQ(ierr);
@@ -99,6 +164,12 @@ static PetscErrorCode OptionsParse(Options *opt)
   three = 3;
   ierr = PetscOptionsIntArray("-p","Process grid dimensions","",o->p,&three,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsInt("-cmax","Max coarse grid size","",o->cmax,&o->cmax,NULL);CHKERRQ(ierr);
+  M_max = PetscMax(o->M[0],PetscMax(o->M[1],o->M[2]));
+  o->L[0] = o->M[0]*1./M_max;
+  o->L[1] = o->M[1]*1./M_max;
+  o->L[2] = o->M[2]*1./M_max;
+  three = 3;
+  ierr = PetscOptionsRealArray("-L","Grid dimensions","",o->L,&three,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
   *opt = o;
   PetscFunctionReturn(0);

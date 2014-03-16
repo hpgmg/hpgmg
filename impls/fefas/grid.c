@@ -1,6 +1,7 @@
 #include "fefas.h"
 #include <petscsf.h>
 #include <petscdmshell.h>
+#include <petscdt.h>
 #include <stdint.h>
 
 typedef uint64_t zcode;
@@ -20,12 +21,20 @@ struct Grid_private {
 typedef struct FESpace_private *FESpace;
 struct FESpace_private {
   Grid grid;
+  FESpace fecoords;     // Dirty hack to work around application contexts not being destroyed
   PetscInt degree;      // Finite element polynomial degree
   PetscInt dof;         // Number of degrees of freedom per vertex
   PetscInt om[3];       // Array dimensions of owned part of global vectors
   PetscInt lm[3];       // Array dimensions of local vectors
   MPI_Datatype unit;
   PetscSF sf;
+  PetscSegBuffer seg;
+  struct {
+    PetscReal *B;
+    PetscReal *D;
+    PetscReal *x;
+    PetscReal *w;
+  } ref;
 };
 
 static PetscInt FEIdxO(FESpace fe,PetscInt i,PetscInt j,PetscInt k) { return (i*fe->om[1] + j)*fe->om[2] + k; }
@@ -299,13 +308,18 @@ static PetscErrorCode DMLocalToGlobalBegin_FE(DM dm,Vec L,InsertMode imode,Vec G
   FESpace fe;
   const PetscScalar *l;
   PetscScalar *g;
+  MPI_Op op;
 
   PetscFunctionBegin;
-  if (imode != ADD_VALUES) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"InsertMode");
+  switch (imode) {
+  case ADD_VALUES: op = MPIU_SUM; break;
+  case INSERT_VALUES: op = MPI_REPLACE; break;
+  default: SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"InsertMode");
+  }
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
   ierr = VecGetArrayRead(L,&l);CHKERRQ(ierr);
   ierr = VecGetArray(G,&g);CHKERRQ(ierr);
-  ierr = PetscSFReduceBegin(fe->sf,fe->unit,l,g,MPIU_SUM);CHKERRQ(ierr);
+  ierr = PetscSFReduceBegin(fe->sf,fe->unit,l,g,op);CHKERRQ(ierr);
   ierr = VecRestoreArrayRead(L,&l);CHKERRQ(ierr);
   ierr = VecRestoreArray(G,&g);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -318,9 +332,14 @@ static PetscErrorCode DMLocalToGlobalEnd_FE(DM dm,Vec L,InsertMode imode,Vec G)
   PetscInt i,j,k,d;
   const PetscScalar *l;
   PetscScalar *g;
+  MPI_Op op;
 
   PetscFunctionBegin;
-  if (imode != ADD_VALUES) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"InsertMode");
+  switch (imode) {
+  case ADD_VALUES: op = MPIU_SUM; break;
+  case INSERT_VALUES: op = MPI_REPLACE; break;
+  default: SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"InsertMode");
+  }
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
   ierr = VecGetArrayRead(L,&l);CHKERRQ(ierr);
   ierr = VecGetArray(G,&g);CHKERRQ(ierr);
@@ -330,14 +349,178 @@ static PetscErrorCode DMLocalToGlobalEnd_FE(DM dm,Vec L,InsertMode imode,Vec G)
     for (j=0; j<fe->om[1]; j++) {
       for (k=0; k<fe->om[2]; k++) {
         for (d=0; d<fe->dof; d++) {
-          g[FEIdxO(fe,i,j,k)*fe->dof+d] += l[FEIdxL(fe,i,j,k)*fe->dof+d];
+          PetscInt src = FEIdxL(fe,i,j,k)*fe->dof+d;
+          PetscInt dst = FEIdxO(fe,i,j,k)*fe->dof+d;
+          if (imode == ADD_VALUES) g[dst] += l[src];
+          else                     g[dst]  = l[src];
         }
       }
     }
   }
-  ierr = PetscSFReduceEnd(fe->sf,fe->unit,l,g,MPIU_SUM);CHKERRQ(ierr);
+  ierr = PetscSFReduceEnd(fe->sf,fe->unit,l,g,op);CHKERRQ(ierr);
   ierr = VecRestoreArrayRead(L,&l);CHKERRQ(ierr);
   ierr = VecRestoreArray(G,&g);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode DMFESpaceSetUniformCoordinates(DM dm,const PetscReal L[])
+{
+  PetscErrorCode ierr;
+  DM dmc;
+  FESpace fe;
+  Vec X;
+  PetscScalar *x;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (fe->degree > 2) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"fe->degree %D > 2",fe->degree);
+  ierr = DMCreateFESpace(fe->grid,fe->degree,3,&dmc);CHKERRQ(ierr);
+  ierr = DMCreateLocalVector(dmc,&X);CHKERRQ(ierr);
+  ierr = VecGetArray(X,&x);CHKERRQ(ierr);
+  for (PetscInt i=0; i<fe->lm[0]; i++) {
+    for (PetscInt j=0; j<fe->lm[1]; j++) {
+      for (PetscInt k=0; k<fe->lm[2]; k++) {
+        x[FEIdxL(fe,i,j,k)*3+0] = L[0]*(fe->grid->s[0] + (PetscReal)i/fe->degree)/fe->grid->M[0];
+        x[FEIdxL(fe,i,j,k)*3+1] = L[1]*(fe->grid->s[1] + (PetscReal)j/fe->degree)/fe->grid->M[1];
+        x[FEIdxL(fe,i,j,k)*3+2] = L[2]*(fe->grid->s[2] + (PetscReal)k/fe->degree)/fe->grid->M[2];
+      }
+    }
+  }
+  ierr = VecRestoreArray(X,&x);CHKERRQ(ierr);
+  ierr = DMSetCoordinateDM(dm,dmc);CHKERRQ(ierr);
+  ierr = DMSetCoordinatesLocal(dm,X);CHKERRQ(ierr);
+  ierr = DMGetApplicationContext(dmc,&fe->fecoords);CHKERRQ(ierr); // Dirty hack so we can free it
+  ierr = DMDestroy(&dmc);CHKERRQ(ierr);
+  ierr = VecDestroy(&X);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode DMFESpaceGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal **B,const PetscReal **D,const PetscReal **x,PetscReal **w)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+
+  *P = fe->degree + 1;
+  *Q = fe->degree + 1;
+  if (!fe->ref.B) {
+    PetscInt i;
+    ierr = PetscMalloc4(*P * *Q,&fe->ref.B,*P * *Q,&fe->ref.D,*Q,&fe->ref.x,*Q,&fe->ref.w);CHKERRQ(ierr);
+    ierr = PetscDTGaussQuadrature(*Q,-1,1,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
+    for (i=0; i<*Q; i++) {
+      const PetscReal q = fe->ref.x[i];
+      switch (fe->degree) {
+      case 1:
+        fe->ref.B[i*(*P)+0] = (1 - q)/2;
+        fe->ref.D[i*(*P)+0] = -1./2;
+        fe->ref.B[i*(*P)+1] = (1 + q)/2;
+        fe->ref.D[i*(*P)+1] = 1./2;
+        break;
+      case 2:
+        fe->ref.B[i*(*P)+0] = .5*(PetscSqr(q) - q);
+	fe->ref.D[i*(*P)+0] = q - .5;
+	fe->ref.B[i*(*P)+1] = 1 - PetscSqr(q);
+	fe->ref.D[i*(*P)+1] = -2*q;
+	fe->ref.B[i*(*P)+2] = .5*(PetscSqr(q) + q);
+	fe->ref.D[i*(*P)+2] = q + .5;
+        break;
+      default: SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"fe->degree %D",fe->degree);
+      }
+    }
+  }
+  if (B) *B = fe->ref.B;
+  if (D) *D = fe->ref.D;
+  if (x) *x = fe->ref.x;
+  if (w) *w = fe->ref.w;
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode DMFESpaceGetNumElements(DM dm,PetscInt *nelems)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+  const PetscInt *m;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  m = fe->grid->m;
+  *nelems = m[0]*m[1]*m[2];
+  PetscFunctionReturn(0);
+}
+
+// Extract elements elem to elem+ne from local array u[grid i,j,k][0:dof], returning the result in y.
+// y is padded by replicating last element in case of irregular ending
+// vectorization-friendly ordering: y [0:dof] [0:(2*fedegree+1)^3] [0:ne]
+PetscErrorCode DMFESpaceExtractElements(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+  PetscInt P,fedegree,e;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  fedegree = fe->degree;
+  P = fedegree + 1;
+  if (!fe->seg) {ierr = PetscSegBufferCreate(sizeof(PetscScalar),ne*fe->dof*P*P*P,&fe->seg);CHKERRQ(ierr);}
+
+  for (e=elem; e<elem+ne; e++) {
+    const PetscInt *m = fe->grid->m,*lm = fe->lm;
+    PetscInt E = PetscMin(e,m[0]*m[1]*m[2]-1); // Last element replicated if we spill out of owned subdomain
+    PetscInt i = E / (m[1]*m[2]);
+    PetscInt j = (E - i*m[1]*m[2]) / m[2];
+    PetscInt k = E - (i*m[1] + j)*m[2];
+    PetscInt ii,jj,kk,d;
+    for (d=0; d<fe->dof; d++) {
+      for (ii=0; ii<P; ii++) {
+        for (jj=0; jj<P; jj++) {
+          for (kk=0; kk<P; kk++) {
+            y[(((d*P+ii)*P+jj)*P+kk)*ne+(e-elem)] = u[(((i*fedegree+ii)*lm[1]+j*fedegree+jj)*lm[2]+k*fedegree+kk)*fe->dof+d];
+          }
+        }
+      }
+    }
+  }
+  PetscFunctionReturn(0);
+}
+
+// Sum/insert into elements elem:elem+ne in local vector u, using element contributions from y
+// Any "elements" beyond the locally-owned part are ignored
+PetscErrorCode DMFESpaceSetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,const PetscScalar *y)
+{
+  PetscErrorCode ierr;
+  FESpace fe;
+  PetscInt P,fedegree,e;
+  const PetscInt *m;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+
+  fedegree = fe->degree;
+  P = 2*fedegree + 1;
+  m = fe->grid->m;
+
+  for (e=elem; e<PetscMin(elem+ne,m[0]*m[1]*m[2]); e++) {
+    const PetscInt *lm = fe->lm;
+    PetscInt E = e;
+    PetscInt i = E / (m[1]*m[2]);
+    PetscInt j = (E - i*m[1]*m[2]) / m[2];
+    PetscInt k = E - (i*m[1] + j)*m[2];
+    PetscInt ii,jj,kk,d;
+    for (d=0; d<fe->dof; d++) {
+      for (ii=0; ii<P; ii++) {
+        for (jj=0; jj<P; jj++) {
+          for (kk=0; kk<P; kk++) {
+            PetscInt src = (((d*P+ii)*P+jj)*P+kk) + e-elem;
+            PetscInt dst = (((i*fedegree+ii)*lm[1]+j*fedegree+jj)*lm[2]+k*fedegree+kk)*fe->dof+d;
+            if (imode == ADD_VALUES) u[dst] += y[src];
+            else                     u[dst]  = y[src];
+          }
+        }
+      }
+    }
+  }
   PetscFunctionReturn(0);
 }
 
@@ -406,10 +589,17 @@ PetscErrorCode DMDestroyFESpace(DM *dm)
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(*dm,&fe);CHKERRQ(ierr);
-  ierr = GridDestroy(&fe->grid);CHKERRQ(ierr);
-  ierr = MPI_Type_free(&fe->unit);CHKERRQ(ierr);
-  ierr = PetscSFDestroy(&fe->sf);CHKERRQ(ierr);
-  ierr = PetscFree(fe);CHKERRQ(ierr);
+  while (fe) {
+    FESpace fetmp;
+    ierr = GridDestroy(&fe->grid);CHKERRQ(ierr);
+    ierr = MPI_Type_free(&fe->unit);CHKERRQ(ierr);
+    ierr = PetscSFDestroy(&fe->sf);CHKERRQ(ierr);
+    ierr = PetscFree4(fe->ref.B,fe->ref.D,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
+    ierr = PetscSegBufferDestroy(&fe->seg);CHKERRQ(ierr);
+    fetmp = fe;
+    fe = fe->fecoords;
+    ierr = PetscFree(fetmp);CHKERRQ(ierr);
+  }
   ierr = DMDestroy(dm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

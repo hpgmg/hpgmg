@@ -36,4 +36,7 @@ Vec Object: 1 MPI processes
 50
 '
 
+test_expect_stdout 'FESpace Gradient/coordinates fedegree=1' 4 'fefas test-fegrad -M 6,2,10 -p 2,1,2 -L 7,11,13' '
+'
+
 test_done
