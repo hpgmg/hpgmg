@@ -14,6 +14,8 @@ PetscErrorCode DMFESetUniformCoordinates(DM dm,const PetscReal L[]);
 PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal **B,const PetscReal **D,const PetscReal **x,PetscReal **w);
 PetscErrorCode DMFEGetNumElements(DM dm,PetscInt *nelems);
 PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y);
-PetscErrorCode DMFESpaceSetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,const PetscScalar *y);
+PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,const PetscScalar *y);
+PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse);
+PetscErrorCode DMFEInject(DM dm,Vec Uf,Vec Uc);
 
 #endif

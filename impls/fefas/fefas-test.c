@@ -153,3 +153,65 @@ PetscErrorCode TestFEGrad()
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
+
+PetscErrorCode TestFEInject()
+{
+  PetscErrorCode ierr;
+  Grid grid;
+  DM dm,dmcoarse;
+  Vec X,L,G;
+  PetscInt fedegree = 1,m;
+  const PetscReal TestGrad[] = {1000000,1000,1};
+  PetscScalar *u;
+  const PetscScalar *x;
+  Options opt;
+
+  PetscFunctionBegin;
+  ierr = OptionsParse("Finite Element FAS Test Injection (state restriction)",&opt);CHKERRQ(ierr);
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,1,&dm);CHKERRQ(ierr);
+  ierr = GridDestroy(&grid);CHKERRQ(ierr);
+  ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
+
+  ierr = DMCreateLocalVector(dm,&L);CHKERRQ(ierr);
+  ierr = DMGetCoordinatesLocal(dm,&X);CHKERRQ(ierr);
+  ierr = VecGetLocalSize(L,&m);CHKERRQ(ierr);
+  ierr = VecGetArray(L,&u);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
+  for (PetscInt i=0; i<m; i++) {
+    u[i] = TestGrad[0]*x[i*3+0] + TestGrad[1]*x[i*3+1] + TestGrad[2]*x[i*3+2];
+  }
+  ierr = VecRestoreArray(L,&u);CHKERRQ(ierr);
+  ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
+
+  ierr = DMCreateGlobalVector(dm,&G);CHKERRQ(ierr);
+  ierr = DMLocalToGlobalBegin(dm,L,INSERT_VALUES,G);CHKERRQ(ierr);
+  ierr = DMLocalToGlobalEnd(dm,L,INSERT_VALUES,G);CHKERRQ(ierr);
+
+  ierr = DMFECoarsen(dm,&dmcoarse);CHKERRQ(ierr);
+  if (dmcoarse) {
+    Vec Gc;
+    const PetscScalar *u;
+    ierr = DMCreateGlobalVector(dmcoarse,&Gc);CHKERRQ(ierr);
+    ierr = DMFEInject(dm,G,Gc);CHKERRQ(ierr);
+    ierr = DMGetCoordinates(dmcoarse,&X);CHKERRQ(ierr);
+    ierr = VecGetLocalSize(Gc,&m);CHKERRQ(ierr);
+    ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
+    ierr = VecGetArrayRead(Gc,&u);CHKERRQ(ierr);
+    for (PetscInt i=0; i<m; i++) {
+      ierr = PetscPrintf(PetscObjectComm((PetscObject)dmcoarse),"coarse u[%2D] = %10.1f at %4.1f %4.1f %4.1f\n",i,u[i],x[i*3+0],x[i*3+1],x[i*3+2]);CHKERRQ(ierr);
+    }
+    ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
+    ierr = VecRestoreArrayRead(Gc,&u);CHKERRQ(ierr);
+    // ierr = VecView(Gc,NULL);CHKERRQ(ierr);
+    ierr = VecDestroy(&Gc);CHKERRQ(ierr);
+  } else {
+    ierr = DMFEInject(dm,G,NULL);CHKERRQ(ierr);
+  }
+  ierr = VecDestroy(&G);CHKERRQ(ierr);
+  ierr = VecDestroy(&L);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
+  ierr = DMDestroy(&dmcoarse);CHKERRQ(ierr);
+  ierr = PetscFree(opt);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}

@@ -13,7 +13,8 @@ struct Grid_private {
   Grid coarse;
   PetscInt M[3],p[3];
   PetscInt s[3],m[3];   // Owned cells of global grid
-  PetscInt cs[3],cm[3]; // My cells of coarse grid
+  PetscInt cs[3],cm[3]; // My cells of global coarse grid
+  PetscInt Cs[3],Cm[3]; // Parent's ownership on global coarse grid
   PetscMPIInt neighborranks[3][3][3];
 };
 
@@ -21,12 +22,18 @@ struct Grid_private {
 typedef struct FE_private *FE;
 struct FE_private {
   Grid grid;
+  DM dmcoarse;
   PetscInt degree;      // Finite element polynomial degree
   PetscInt dof;         // Number of degrees of freedom per vertex
   PetscInt om[3];       // Array dimensions of owned part of global vectors
   PetscInt lm[3];       // Array dimensions of local vectors
+  PetscInt Clm[3];      // Array dimensions of local coarse grid that we contribute to
+  PetscInt Com[3];      // Array dimensions of owned coarse grid that we contribute to
+  PetscInt cls[3];      // Start of array part that we contribute to coarse grid
+  PetscBool hascoordinates;
   MPI_Datatype unit;
   PetscSF sf;
+  PetscSF sfinject;
   PetscSegBuffer seg;
   struct {
     PetscReal *B;
@@ -36,8 +43,9 @@ struct FE_private {
   } ref;
 };
 
-static PetscInt FEIdxO(FE fe,PetscInt i,PetscInt j,PetscInt k) { return (i*fe->om[1] + j)*fe->om[2] + k; }
-static PetscInt FEIdxL(FE fe,PetscInt i,PetscInt j,PetscInt k) { return (i*fe->lm[1] + j)*fe->lm[2] + k; }
+static PetscInt Idx3(const PetscInt m[],PetscInt i,PetscInt j,PetscInt k) { return (i*m[1]+j)*m[2]+k; }
+static PetscInt FEIdxO(FE fe,PetscInt i,PetscInt j,PetscInt k) { return Idx3(fe->om,i,j,k); }
+static PetscInt FEIdxL(FE fe,PetscInt i,PetscInt j,PetscInt k) { return Idx3(fe->lm,i,j,k); }
 static PetscInt FENeighborDim(FE fe,PetscInt l) {
   return fe->grid->s[l] + 2*fe->grid->m[l] < fe->grid->M[l] // Can we fit another domain the same size as mine without reaching boundary?
     ? fe->om[l]
@@ -160,6 +168,8 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
       g->cs[j] = csm[2*j+0] + jbit*ms[0];
       g->s[j] = 2*g->cs[j];
       g->m[j] = 2*g->cm[j];
+      g->Cs[j] = csm[2*j+0];
+      g->Cm[j] = csm[2*j+1];
     }
     ZCodeSplit(z,ri);
 
@@ -388,8 +398,114 @@ PetscErrorCode DMFESetUniformCoordinates(DM dm,const PetscReal L[])
   ierr = VecRestoreArray(X,&x);CHKERRQ(ierr);
   ierr = DMSetCoordinateDM(dm,dmc);CHKERRQ(ierr);
   ierr = DMSetCoordinatesLocal(dm,X);CHKERRQ(ierr);
+  fe->hascoordinates = PETSC_TRUE;
   ierr = DMDestroy(&dmc);CHKERRQ(ierr);
   ierr = VecDestroy(&X);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+// Injection: state restriction
+//   primary order zero: high-frequency harmonics on fine grid alias at full amplitude
+//   secondary order infinite: low-frequencies are exact on coarse grid
+//
+// All fine-grid processes must call this function.  Those not participating in coarse grid should pass Uc=NULL.
+PetscErrorCode DMFEInject(DM dm,Vec Uf,Vec Uc)
+{
+  PetscErrorCode ierr;
+  const PetscScalar *uf;
+  PetscScalar *uc = NULL;
+  FE fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (fe->degree > 2) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"fe->degree %D > 2",fe->degree);
+  ierr = VecGetArrayRead(Uf,&uf);CHKERRQ(ierr);
+  if (Uc) {ierr = VecGetArray(Uc,&uc);CHKERRQ(ierr);}
+
+  if (fe->sfinject) { // Communicate to parent process (data size expected to be relatively small)
+    ierr = PetscSFReduceBegin(fe->sfinject,fe->unit,uf,uc,MPI_REPLACE);CHKERRQ(ierr);
+    ierr = PetscSFReduceEnd(fe->sfinject,fe->unit,uf,uc,MPI_REPLACE);CHKERRQ(ierr);
+  } else { // in-place coarsening on same process set
+    FE fecoarse;
+    ierr = DMGetApplicationContext(fe->dmcoarse,&fecoarse);CHKERRQ(ierr);
+    for (PetscInt i=0; i<fecoarse->om[0]; i++) {
+      for (PetscInt j=0; j<fecoarse->om[1]; j++) {
+        for (PetscInt k=0; k<fecoarse->om[2]; k++) {
+          for (PetscInt d=0; d<fe->dof; d++) {
+            uc[FEIdxO(fecoarse,i,j,k)*fe->dof+d] = uf[FEIdxO(fe,i*2,j*2,k*2)*fe->dof+d];
+          }
+        }
+      }
+    }
+  }
+
+  ierr = VecRestoreArrayRead(Uf,&uf);CHKERRQ(ierr);
+  if (Uc) {ierr = VecRestoreArray(Uc,&uc);CHKERRQ(ierr);}
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
+{
+  PetscErrorCode ierr;
+  FE fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (fe->grid->coarse) {       /* My process participates in the coarse grid */
+    FE fecoarse;
+    ierr = DMCreateFE(fe->grid->coarse,fe->degree,fe->dof,&fe->dmcoarse);CHKERRQ(ierr);
+    ierr = DMGetApplicationContext(fe->dmcoarse,&fecoarse);CHKERRQ(ierr);
+    for (PetscInt i=0; i<3; i++) {
+      fe->Clm[i] = fecoarse->lm[i];
+      fe->Com[i] = fecoarse->om[i];
+    }
+  }
+  if (fe->grid->pcomm != MPI_COMM_NULL) {
+    ierr = MPI_Bcast(fe->Clm,3,MPIU_INT,0,fe->grid->pcomm);CHKERRQ(ierr);
+    ierr = MPI_Bcast(fe->Com,3,MPIU_INT,0,fe->grid->pcomm);CHKERRQ(ierr);
+  }
+  for (PetscInt i=0; i<3; i++) fe->cls[i] = (fe->grid->s[i]/2 - fe->grid->Cs[i])*fe->degree;
+
+  if (fe->grid->pcomm != MPI_COMM_NULL) { // Coarsening is not in-place so we need to build sfinject
+    PetscInt nleaves,leaf,*ilocal,i,j,k;
+    PetscSFNode *iremote;
+    nleaves = CeilDiv(fe->om[0],2) * CeilDiv(fe->om[1],2) * CeilDiv(fe->om[2],2);
+    ierr = PetscMalloc1(nleaves,&ilocal);CHKERRQ(ierr);
+    ierr = PetscMalloc1(nleaves,&iremote);CHKERRQ(ierr);
+    for (i=0,leaf=0; 2*i<fe->om[0]; i++) {
+      for (j=0; 2*j<fe->om[1]; j++) {
+        for (k=0; 2*k<fe->om[2]; k++) {
+          ilocal[leaf] = FEIdxO(fe,2*i,2*j,2*k);
+          iremote[leaf].rank = 0;  // rank 0 of pcomm always owns all of my coarse nodes
+          iremote[leaf].index = Idx3(fe->Com,fe->cls[0]+i,fe->cls[1]+j,fe->cls[2]+k);
+          leaf++;
+        }
+      }
+    }
+    ierr = PetscSFCreate(fe->grid->pcomm,&fe->sfinject);CHKERRQ(ierr);
+    ierr = PetscSFSetGraph(fe->sfinject,fe->grid->coarse?fe->Com[0]*fe->Com[1]*fe->Com[2]:0,nleaves,ilocal,PETSC_OWN_POINTER,iremote,PETSC_OWN_POINTER);CHKERRQ(ierr);
+  }
+
+  if (fe->hascoordinates) {
+    DM dmc,dmc_coarse;
+    Vec Xf,Xc;
+    ierr = DMGetCoordinateDM(dm,&dmc);CHKERRQ(ierr);
+    ierr = DMGetCoordinates(dm,&Xf);CHKERRQ(ierr);
+    ierr = DMFECoarsen(dmc,&dmc_coarse);CHKERRQ(ierr);
+    if (dmc_coarse) {
+      ierr = DMCreateGlobalVector(dmc_coarse,&Xc);CHKERRQ(ierr);
+    } else Xc = NULL;
+    ierr = DMFEInject(dmc,Xf,Xc);CHKERRQ(ierr);
+    if (dmc_coarse) {
+      ierr = DMSetCoordinateDM(fe->dmcoarse,dmc_coarse);CHKERRQ(ierr);
+      ierr = DMSetCoordinates(fe->dmcoarse,Xc);CHKERRQ(ierr);
+    }
+    ierr = DMDestroy(&dmc_coarse);CHKERRQ(ierr);
+    ierr = VecDestroy(&Xc);CHKERRQ(ierr);
+  }
+
+  ierr = PetscObjectReference((PetscObject)fe->dmcoarse);CHKERRQ(ierr);
+  *dmcoarse = fe->dmcoarse;
   PetscFunctionReturn(0);
 }
 
@@ -532,6 +648,8 @@ static PetscErrorCode FEDestroy(void **ctx)
   ierr = GridDestroy(&fe->grid);CHKERRQ(ierr);
   ierr = MPI_Type_free(&fe->unit);CHKERRQ(ierr);
   ierr = PetscSFDestroy(&fe->sf);CHKERRQ(ierr);
+  ierr = PetscSFDestroy(&fe->sfinject);CHKERRQ(ierr);
+  ierr = DMDestroy(&fe->dmcoarse);CHKERRQ(ierr);
   ierr = PetscFree4(fe->ref.B,fe->ref.D,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
   ierr = PetscSegBufferDestroy(&fe->seg);CHKERRQ(ierr);
   ierr = PetscFree(*ctx);CHKERRQ(ierr);
@@ -561,7 +679,11 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
     } else {                    // I own my high boundary
       fe->om[i] = fe->lm[i];
     }
+    fe->Com[i] = -1;
+    fe->Clm[i] = -1;
   }
+
+  // Create neighbor scatter (roots=global, leaves=local)
   nleaves = fe->lm[0]*fe->lm[1]*fe->lm[2] - fe->om[0]*fe->om[1]*fe->om[2];
   ierr = PetscMalloc1(nleaves,&ilocal);CHKERRQ(ierr);
   ierr = PetscMalloc1(nleaves,&iremote);CHKERRQ(ierr);
