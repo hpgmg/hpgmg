@@ -509,6 +509,34 @@ PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
   PetscFunctionReturn(0);
 }
 
+static PetscErrorCode FEBasisEval(FE fe,PetscReal q,PetscReal B[],PetscReal D[])
+{
+
+  PetscFunctionBegin;
+  switch (fe->degree) {
+  case 1:
+    B[0] = (1 - q)/2;
+    B[1] = (1 + q)/2;
+    if (D) {
+      D[0] = -1./2;
+      D[1] = 1./2;
+    }
+    break;
+  case 2:
+    B[0] = .5*(PetscSqr(q) - q);
+    B[1] = 1 - PetscSqr(q);
+    B[2] = .5*(PetscSqr(q) + q);
+    if (D) {
+      D[0] = q - .5;
+      D[1] = -2*q;
+      D[2] = q + .5;
+    }
+    break;
+  default: SETERRQ1(fe->grid->comm,PETSC_ERR_SUP,"fe->degree %D",fe->degree);
+  }
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal **B,const PetscReal **D,const PetscReal **x,PetscReal **w)
 {
   PetscErrorCode ierr;
@@ -525,23 +553,7 @@ PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal *
     ierr = PetscDTGaussQuadrature(*Q,-1,1,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
     for (i=0; i<*Q; i++) {
       const PetscReal q = fe->ref.x[i];
-      switch (fe->degree) {
-      case 1:
-        fe->ref.B[i*(*P)+0] = (1 - q)/2;
-        fe->ref.D[i*(*P)+0] = -1./2;
-        fe->ref.B[i*(*P)+1] = (1 + q)/2;
-        fe->ref.D[i*(*P)+1] = 1./2;
-        break;
-      case 2:
-        fe->ref.B[i*(*P)+0] = .5*(PetscSqr(q) - q);
-	fe->ref.D[i*(*P)+0] = q - .5;
-	fe->ref.B[i*(*P)+1] = 1 - PetscSqr(q);
-	fe->ref.D[i*(*P)+1] = -2*q;
-	fe->ref.B[i*(*P)+2] = .5*(PetscSqr(q) + q);
-	fe->ref.D[i*(*P)+2] = q + .5;
-        break;
-      default: SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"fe->degree %D",fe->degree);
-      }
+      ierr = FEBasisEval(fe,q,&fe->ref.B[i*(*P)],&fe->ref.D[i*(*P)]);CHKERRQ(ierr);
     }
   }
   if (B) *B = fe->ref.B;
