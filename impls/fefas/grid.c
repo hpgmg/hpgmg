@@ -537,6 +537,24 @@ static PetscErrorCode FEBasisEval(FE fe,PetscReal q,PetscReal B[],PetscReal D[])
   PetscFunctionReturn(0);
 }
 
+static PetscErrorCode FESetUp(FE fe)
+{
+  PetscErrorCode ierr;
+  PetscInt i,P,Q;
+
+  PetscFunctionBegin;
+  // Create reference element evaluation
+  P = fe->degree+1;
+  Q = fe->degree+1;
+  ierr = PetscMalloc4(P*Q,&fe->ref.B,P*Q,&fe->ref.D,Q,&fe->ref.x,Q,&fe->ref.w);CHKERRQ(ierr);
+  ierr = PetscDTGaussQuadrature(Q,-1,1,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
+  for (i=0; i<Q; i++) {
+    const PetscReal q = fe->ref.x[i];
+    ierr = FEBasisEval(fe,q,&fe->ref.B[i*P],&fe->ref.D[i*P]);CHKERRQ(ierr);
+  }
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal **B,const PetscReal **D,const PetscReal **x,PetscReal **w)
 {
   PetscErrorCode ierr;
@@ -547,15 +565,6 @@ PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal *
 
   *P = fe->degree + 1;
   *Q = fe->degree + 1;
-  if (!fe->ref.B) {
-    PetscInt i;
-    ierr = PetscMalloc4(*P * *Q,&fe->ref.B,*P * *Q,&fe->ref.D,*Q,&fe->ref.x,*Q,&fe->ref.w);CHKERRQ(ierr);
-    ierr = PetscDTGaussQuadrature(*Q,-1,1,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
-    for (i=0; i<*Q; i++) {
-      const PetscReal q = fe->ref.x[i];
-      ierr = FEBasisEval(fe,q,&fe->ref.B[i*(*P)],&fe->ref.D[i*(*P)]);CHKERRQ(ierr);
-    }
-  }
   if (B) *B = fe->ref.B;
   if (D) *D = fe->ref.D;
   if (x) *x = fe->ref.x;
@@ -719,6 +728,8 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
   ierr = PetscSFSetGraph(fe->sf,fe->om[0]*fe->om[1]*fe->om[2],nleaves,ilocal,PETSC_OWN_POINTER,iremote,PETSC_OWN_POINTER);CHKERRQ(ierr);
   ierr = MPI_Type_contiguous(dof,MPIU_SCALAR,&fe->unit);CHKERRQ(ierr);
   ierr = MPI_Type_commit(&fe->unit);CHKERRQ(ierr);
+
+  ierr = FESetUp(fe);CHKERRQ(ierr);
 
   ierr = DMShellCreate(grid->comm,&dm);CHKERRQ(ierr);
   ierr = DMSetApplicationContext(dm,fe);CHKERRQ(ierr);
