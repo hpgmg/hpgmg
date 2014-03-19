@@ -246,6 +246,7 @@ static PetscErrorCode DMCreateGlobalVector_FE(DM dm,Vec *G)
   ierr = VecSetBlockSize(*G,fe->dof);CHKERRQ(ierr);
   ierr = VecSetSizes(*G,fe->om[0]*fe->om[1]*fe->om[2]*fe->dof,PETSC_DETERMINE);CHKERRQ(ierr);
   ierr = VecSetUp(*G);CHKERRQ(ierr);
+  ierr = VecSetDM(*G,dm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -260,6 +261,7 @@ static PetscErrorCode DMCreateLocalVector_FE(DM dm,Vec *G)
   ierr = VecSetBlockSize(*G,fe->dof);CHKERRQ(ierr);
   ierr = VecSetSizes(*G,fe->lm[0]*fe->lm[1]*fe->lm[2]*fe->dof,PETSC_DETERMINE);CHKERRQ(ierr);
   ierr = VecSetUp(*G);CHKERRQ(ierr);
+  ierr = VecSetDM(*G,dm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
