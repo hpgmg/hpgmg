@@ -6,6 +6,7 @@ PetscErrorCode TestGrid(void);
 PetscErrorCode TestFESpace(void);
 PetscErrorCode TestFEGrad(void);
 PetscErrorCode TestFEInject(void);
+PetscErrorCode TestFEInterp(void);
 
 static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action)(void))
 {
@@ -19,6 +20,7 @@ static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action
   ierr = PetscFunctionListAdd(&actionlist,"test-fespace",TestFESpace);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"test-fegrad",TestFEGrad);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"test-feinject",TestFEInject);CHKERRQ(ierr);
+  ierr = PetscFunctionListAdd(&actionlist,"test-feinterp",TestFEInterp);CHKERRQ(ierr);
 
   if (argc < 2 || !argv[1] || argv[1][0] == '-') {
     ierr = PetscViewerASCIIPrintf(PETSC_VIEWER_STDERR_WORLD,"First argument '%s' must be an action:",argc>=2&&argv[1]?argv[1]:"");CHKERRQ(ierr);

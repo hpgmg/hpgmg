@@ -215,3 +215,66 @@ PetscErrorCode TestFEInject()
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
+
+PetscErrorCode TestFEInterp()
+{
+  PetscErrorCode ierr;
+  Grid grid;
+  DM dm,dmcoarse;
+  Vec X,G,G2,Gc;
+  PetscInt fedegree = 1,m;
+  const PetscReal TestGrad[] = {1000000,1000,1};
+  PetscScalar *u;
+  PetscReal norm;
+  const PetscScalar *x;
+  Options opt;
+
+  PetscFunctionBegin;
+  ierr = OptionsParse("Finite Element FAS Test Interpolation",&opt);CHKERRQ(ierr);
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,1,&dm);CHKERRQ(ierr);
+  ierr = GridDestroy(&grid);CHKERRQ(ierr);
+  ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
+
+  ierr = DMCreateGlobalVector(dm,&G);CHKERRQ(ierr);
+  ierr = DMGetCoordinates(dm,&X);CHKERRQ(ierr);
+  ierr = VecGetLocalSize(G,&m);CHKERRQ(ierr);
+  ierr = VecGetArray(G,&u);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
+  for (PetscInt i=0; i<m; i++) {
+    u[i] = TestGrad[0]*x[i*3+0] + TestGrad[1]*x[i*3+1] + TestGrad[2]*x[i*3+2];
+  }
+  ierr = VecRestoreArray(G,&u);CHKERRQ(ierr);
+  ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
+
+  ierr = DMCreateGlobalVector(dm,&G2);CHKERRQ(ierr);
+  ierr = DMFECoarsen(dm,&dmcoarse);CHKERRQ(ierr);
+  if (dmcoarse) {
+    ierr = DMCreateGlobalVector(dmcoarse,&Gc);CHKERRQ(ierr);
+  } else Gc = NULL;
+  ierr = DMFEInject(dm,G,Gc);CHKERRQ(ierr);
+  ierr = DMFEInterpolate(dm,Gc,G2);CHKERRQ(ierr);
+  if (0) {
+    const PetscScalar *u,*v;
+    ierr = VecGetArrayRead(G,&u);CHKERRQ(ierr);
+    ierr = VecGetArrayRead(G2,&v);CHKERRQ(ierr);
+    ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
+    for (PetscInt i=0; i<m; i++) {
+      ierr = PetscPrintf(PETSC_COMM_WORLD,"u[%2d] = %10.1f vs %10.1f at %4.1f %4.1f %4.1f\n",i,u[i],v[i],x[i*3+0],x[i*3+1],x[i*3+2]);CHKERRQ(ierr);
+    }
+    ierr = VecRestoreArrayRead(G,&u);CHKERRQ(ierr);
+    ierr = VecRestoreArrayRead(G2,&v);CHKERRQ(ierr);
+    ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
+  }
+  ierr = VecAXPY(G2,-1.,G);CHKERRQ(ierr);
+  ierr = VecNorm(G2,NORM_MAX,&norm);CHKERRQ(ierr);
+  ierr = PetscPrintf(PETSC_COMM_WORLD,"|u - I Ihat u|_max = %5.1g\n",norm);CHKERRQ(ierr);
+
+  ierr = VecDestroy(&Gc);CHKERRQ(ierr);
+  ierr = VecDestroy(&G);CHKERRQ(ierr);
+  ierr = VecDestroy(&G2);CHKERRQ(ierr);
+  ierr = DMDestroy(&dmcoarse);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
+  ierr = PetscFree(opt);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}

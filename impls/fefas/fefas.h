@@ -17,5 +17,6 @@ PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,Pets
 PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,const PetscScalar *y);
 PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse);
 PetscErrorCode DMFEInject(DM dm,Vec Uf,Vec Uc);
+PetscErrorCode DMFEInterpolate(DM dm,Vec Uc,Vec Uf);
 
 #endif

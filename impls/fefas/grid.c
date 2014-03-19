@@ -34,12 +34,14 @@ struct FE_private {
   MPI_Datatype unit;
   PetscSF sf;
   PetscSF sfinject;
+  PetscSF sfinjectLocal;
   PetscSegBuffer seg;
   struct {
     PetscReal *B;
     PetscReal *D;
     PetscReal *x;
     PetscReal *w;
+    PetscReal *interp;
   } ref;
 };
 
@@ -446,6 +448,101 @@ PetscErrorCode DMFEInject(DM dm,Vec Uf,Vec Uc)
   PetscFunctionReturn(0);
 }
 
+// Interpolation: embedding of coarse space in fine space
+//
+// Processers not involved in coarse grid should pass Uc=NULL
+PetscErrorCode DMFEInterpolate(DM dm,Vec Uc,Vec Uf)
+{
+  PetscErrorCode ierr;
+  PetscScalar *uf;
+  const PetscScalar *uc = NULL;
+  const PetscInt *lm;
+  FE fe;
+  Vec Ucl,Ufl;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (fe->degree > 2) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"fe->degree %D > 2",fe->degree);
+
+  ierr = DMGetLocalVector(dm,&Ufl);CHKERRQ(ierr);
+  ierr = VecZeroEntries(Ufl);CHKERRQ(ierr);
+  ierr = VecGetArray(Ufl,&uf);CHKERRQ(ierr);
+  if (Uc) {
+    ierr = DMGetLocalVector(fe->dmcoarse,&Ucl);CHKERRQ(ierr);
+    ierr = DMGlobalToLocalBegin(fe->dmcoarse,Uc,INSERT_VALUES,Ucl);CHKERRQ(ierr);
+    ierr = DMGlobalToLocalEnd(fe->dmcoarse,Uc,INSERT_VALUES,Ucl);CHKERRQ(ierr);
+    ierr = VecGetArrayRead(Ucl,&uc);CHKERRQ(ierr);
+  }
+
+  // Transpose of injection to populate C-points in fine grid
+  if (fe->sfinject) { // Communicate from parent process (data size expected to be relatively small)
+    ierr = PetscSFBcastBegin(fe->sfinjectLocal,fe->unit,uc,uf);CHKERRQ(ierr);
+    ierr = PetscSFBcastEnd(fe->sfinjectLocal,fe->unit,uc,uf);CHKERRQ(ierr);
+  } else { // in-place on same process set
+    FE fecoarse;
+    ierr = DMGetApplicationContext(fe->dmcoarse,&fecoarse);CHKERRQ(ierr);
+    for (PetscInt i=0; i<fecoarse->lm[0]; i++) {
+      for (PetscInt j=0; j<fecoarse->lm[1]; j++) {
+        for (PetscInt k=0; k<fecoarse->lm[2]; k++) {
+          for (PetscInt d=0; d<fe->dof; d++) {
+            uf[FEIdxL(fe,i*2,j*2,k*2)*fe->dof+d] = uc[FEIdxL(fecoarse,i,j,k)*fe->dof+d];
+          }
+        }
+      }
+    }
+  }
+  if (Uc) {
+    ierr = VecRestoreArrayRead(Ucl,&uc);CHKERRQ(ierr);
+    ierr = DMRestoreLocalVector(fe->dmcoarse,&Ucl);CHKERRQ(ierr);
+  }
+
+  // Fill in missing entries in k
+  lm = fe->lm;
+  for (PetscInt i=0; i<lm[0]; i+=2) {
+    for (PetscInt j=0; j<lm[1]; j+=2) {
+      for (PetscInt k=1; k<lm[2]; k+=2*fe->degree) {
+        for (PetscInt kk=0; kk<fe->degree; kk++) {
+          for (PetscInt l=0; l<fe->degree+1; l++) {
+            for (PetscInt d=0; d<fe->dof; d++) {
+              uf[FEIdxL(fe,i,j,k+2*kk)*fe->dof+d] += fe->ref.interp[kk*(fe->degree+1)+l] * uf[FEIdxL(fe,i,j,k-1+2*l)*fe->dof+d];
+            }
+          }
+        }
+      }
+    }
+    for (PetscInt j=1; j<lm[1]; j+=2*fe->degree) {
+      for (PetscInt jj=0; jj<fe->degree; jj++) {
+        for (PetscInt k=0; k<lm[2]; k++) {
+          for (PetscInt l=0; l<fe->degree+1; l++) {
+            for (PetscInt d=0; d<fe->dof; d++) {
+              uf[FEIdxL(fe,i,j+2*jj,k)*fe->dof+d] += fe->ref.interp[jj*(fe->degree+1)+l] * uf[FEIdxL(fe,i,j-1+2*l,k)*fe->dof+d];
+            }
+          }
+        }
+      }
+    }
+  }
+  for (PetscInt i=1; i<lm[0]; i+=2*fe->degree) {
+    for (PetscInt ii=0; ii<fe->degree; ii++) {
+      for (PetscInt j=0; j<lm[1]; j++) {
+        for (PetscInt k=0; k<lm[2]; k++) {
+          for (PetscInt l=0; l<fe->degree+1; l++) {
+            for (PetscInt d=0; d<fe->dof; d++) {
+              uf[FEIdxL(fe,i+2*ii,j,k)*fe->dof+d] += fe->ref.interp[ii*(fe->degree+1)+l] * uf[FEIdxL(fe,i-1+2*l,j,k)*fe->dof+d];
+            }
+          }
+        }
+      }
+    }
+  }
+  ierr = VecRestoreArray(Ufl,&uf);CHKERRQ(ierr);
+
+  ierr = DMLocalToGlobalBegin(dm,Ufl,INSERT_VALUES,Uf);CHKERRQ(ierr);
+  ierr = DMLocalToGlobalEnd(dm,Ufl,INSERT_VALUES,Uf);CHKERRQ(ierr);
+  ierr = DMRestoreLocalVector(dm,&Ufl);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
 {
   PetscErrorCode ierr;
@@ -471,6 +568,8 @@ PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
   if (fe->grid->pcomm != MPI_COMM_NULL) { // Coarsening is not in-place so we need to build sfinject
     PetscInt nleaves,leaf,*ilocal,i,j,k;
     PetscSFNode *iremote;
+
+    // Build injection for global spaces (only uses owned values)
     nleaves = CeilDiv(fe->om[0],2) * CeilDiv(fe->om[1],2) * CeilDiv(fe->om[2],2);
     ierr = PetscMalloc1(nleaves,&ilocal);CHKERRQ(ierr);
     ierr = PetscMalloc1(nleaves,&iremote);CHKERRQ(ierr);
@@ -486,6 +585,23 @@ PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
     }
     ierr = PetscSFCreate(fe->grid->pcomm,&fe->sfinject);CHKERRQ(ierr);
     ierr = PetscSFSetGraph(fe->sfinject,fe->grid->coarse?fe->Com[0]*fe->Com[1]*fe->Com[2]:0,nleaves,ilocal,PETSC_OWN_POINTER,iremote,PETSC_OWN_POINTER);CHKERRQ(ierr);
+
+    // Injection between local spaces (could/should be fused with local neighbor update)
+    nleaves = CeilDiv(fe->lm[0],2) * CeilDiv(fe->lm[1],2) * CeilDiv(fe->lm[2],2);
+    ierr = PetscMalloc1(nleaves,&ilocal);CHKERRQ(ierr);
+    ierr = PetscMalloc1(nleaves,&iremote);CHKERRQ(ierr);
+    for (i=0,leaf=0; 2*i<fe->lm[0]; i++) {
+      for (j=0; 2*j<fe->lm[1]; j++) {
+        for (k=0; 2*k<fe->lm[2]; k++) {
+          ilocal[leaf] = FEIdxL(fe,2*i,2*j,2*k);
+          iremote[leaf].rank = 0;  // rank 0 of pcomm always owns all of my coarse nodes
+          iremote[leaf].index = Idx3(fe->Clm,fe->cls[0]+i,fe->cls[1]+j,fe->cls[2]+k);
+          leaf++;
+        }
+      }
+    }
+    ierr = PetscSFCreate(fe->grid->pcomm,&fe->sfinjectLocal);CHKERRQ(ierr);
+    ierr = PetscSFSetGraph(fe->sfinjectLocal,fe->grid->coarse?fe->Clm[0]*fe->Clm[1]*fe->Clm[2]:0,nleaves,ilocal,PETSC_OWN_POINTER,iremote,PETSC_OWN_POINTER);CHKERRQ(ierr);
   }
 
   if (fe->hascoordinates) {
@@ -548,11 +664,19 @@ static PetscErrorCode FESetUp(FE fe)
   // Create reference element evaluation
   P = fe->degree+1;
   Q = fe->degree+1;
-  ierr = PetscMalloc4(P*Q,&fe->ref.B,P*Q,&fe->ref.D,Q,&fe->ref.x,Q,&fe->ref.w);CHKERRQ(ierr);
+  ierr = PetscMalloc5(P*Q,&fe->ref.B,P*Q,&fe->ref.D,Q,&fe->ref.x,Q,&fe->ref.w,fe->degree*(fe->degree+1),&fe->ref.interp);CHKERRQ(ierr);
   ierr = PetscDTGaussQuadrature(Q,-1,1,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
   for (i=0; i<Q; i++) {
     const PetscReal q = fe->ref.x[i];
     ierr = FEBasisEval(fe,q,&fe->ref.B[i*P],&fe->ref.D[i*P]);CHKERRQ(ierr);
+  }
+  // Interpolation to fill in nodes not nested in coarse grid
+  // p=1: C0 -- f1 -- C2
+  // p=2: C0 -- f1 -- C2 -- f3 -- C4
+  for (i=0; i<fe->degree; i++) {
+    const PetscReal floc[][2] = {{0.,0.},{0.,0.},{-.5,.5}};
+    PetscReal q = floc[fe->degree][i];
+    ierr = FEBasisEval(fe,q,&fe->ref.interp[i*(fe->degree+1)],NULL);CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);
 }
@@ -672,8 +796,9 @@ static PetscErrorCode FEDestroy(void **ctx)
   ierr = MPI_Type_free(&fe->unit);CHKERRQ(ierr);
   ierr = PetscSFDestroy(&fe->sf);CHKERRQ(ierr);
   ierr = PetscSFDestroy(&fe->sfinject);CHKERRQ(ierr);
+  ierr = PetscSFDestroy(&fe->sfinjectLocal);CHKERRQ(ierr);
   ierr = DMDestroy(&fe->dmcoarse);CHKERRQ(ierr);
-  ierr = PetscFree4(fe->ref.B,fe->ref.D,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
+  ierr = PetscFree5(fe->ref.B,fe->ref.D,fe->ref.x,fe->ref.w,fe->ref.interp);CHKERRQ(ierr);
   ierr = PetscSegBufferDestroy(&fe->seg);CHKERRQ(ierr);
   ierr = PetscFree(*ctx);CHKERRQ(ierr);
   PetscFunctionReturn(0);
