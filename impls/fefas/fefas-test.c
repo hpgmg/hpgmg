@@ -1,5 +1,6 @@
 #include "fefas.h"
 #include "tensor.h"
+#include "pointwise.h"
 
 typedef struct Options_private *Options;
 struct Options_private {
@@ -273,6 +274,118 @@ PetscErrorCode TestFEInterp()
   ierr = VecDestroy(&Gc);CHKERRQ(ierr);
   ierr = VecDestroy(&G);CHKERRQ(ierr);
   ierr = VecDestroy(&G2);CHKERRQ(ierr);
+  ierr = DMDestroy(&dmcoarse);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
+  ierr = PetscFree(opt);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode IntegrateTestFunction(DM dm,Vec G)
+{
+  PetscErrorCode ierr;
+  Vec L,X;
+  PetscScalar *u;
+  const PetscScalar *x;
+  const PetscReal *B,*D,*w3;
+  PetscInt nelem,ne = 2,P,Q,P3,Q3;
+  DM dmx;
+
+  PetscFunctionBegin;
+  ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,&w3);CHKERRQ(ierr);
+  P3 = P*P*P;
+  Q3 = Q*Q*Q;
+
+  ierr = DMGetLocalVector(dm,&L);CHKERRQ(ierr);
+  ierr = DMGetCoordinatesLocal(dm,&X);CHKERRQ(ierr);
+  ierr = DMGetCoordinateDM(dm,&dmx);CHKERRQ(ierr);
+  ierr = DMFEGetNumElements(dm,&nelem);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
+  ierr = VecZeroEntries(L);CHKERRQ(ierr);
+  ierr = VecGetArray(L,&u);CHKERRQ(ierr);
+  for (PetscInt e=0; e<nelem; e+=ne) {
+    PetscScalar ue[P3*ne],uq[Q3][ne],xe[3*P3*ne],xq[3][Q3][ne],dx[3][3][Q3][ne],wdxdet[Q3][ne];
+    ierr = DMFEExtractElements(dmx,x,e,ne,xe);CHKERRQ(ierr);
+    ierr = PetscMemzero(xq,sizeof xq);CHKERRQ(ierr);
+    ierr = TensorContract(ne,3,P,Q,B,B,B,TENSOR_EVAL,xe,xq[0][0]);CHKERRQ(ierr);
+    ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);
+    ierr = TensorContract(ne,3,P,Q,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(ne,3,P,Q,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(ne,3,P,Q,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
+
+    ierr = PointwiseJacobianInvert(ne,Q*Q*Q,w3,dx,wdxdet);CHKERRQ(ierr);
+    for (PetscInt i=0; i<Q3; i++) {
+      for (PetscInt e=0; e<ne; e++) {
+        uq[i][e] = wdxdet[i][e] * (2.*xq[0][i][e] + 3.*xq[1][i][e] + 5.*xq[2][i][e]);
+      }
+    }
+
+    ierr = PetscMemzero(ue,sizeof ue);CHKERRQ(ierr);
+    ierr = TensorContract(ne,1,P,Q,B,B,B,TENSOR_TRANSPOSE,uq[0],ue);CHKERRQ(ierr);
+    ierr = DMFESetElements(dm,u,e,ne,ADD_VALUES,ue);CHKERRQ(ierr);
+  }
+  ierr = VecRestoreArray(L,&u);CHKERRQ(ierr);
+  ierr = VecZeroEntries(G);CHKERRQ(ierr);
+  ierr = DMLocalToGlobalBegin(dm,L,ADD_VALUES,G);CHKERRQ(ierr);
+  ierr = DMLocalToGlobalEnd(dm,L,ADD_VALUES,G);CHKERRQ(ierr);
+  ierr = DMRestoreLocalVector(dm,&L);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode TestFERestrict()
+{
+  PetscErrorCode ierr;
+  Grid grid;
+  DM dm,dmcoarse;
+  Vec G,Gc;
+  PetscInt fedegree = 1;
+  Options opt;
+
+  PetscFunctionBegin;
+  ierr = OptionsParse("Finite Element FAS Test Restriction",&opt);CHKERRQ(ierr);
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,1,&dm);CHKERRQ(ierr);
+  ierr = GridDestroy(&grid);CHKERRQ(ierr);
+  ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
+
+  ierr = DMCreateGlobalVector(dm,&G);CHKERRQ(ierr);
+  ierr = IntegrateTestFunction(dm,G);CHKERRQ(ierr);
+
+  ierr = DMFECoarsen(dm,&dmcoarse);CHKERRQ(ierr);
+  if (dmcoarse) {
+    ierr = DMCreateGlobalVector(dmcoarse,&Gc);CHKERRQ(ierr);
+  } else Gc = NULL;
+  ierr = DMFERestrict(dm,G,Gc);CHKERRQ(ierr);
+  if (dmcoarse) {
+    PetscReal norm;
+    Vec Gc2;
+    ierr = DMCreateGlobalVector(dmcoarse,&Gc2);CHKERRQ(ierr);
+    ierr = IntegrateTestFunction(dmcoarse,Gc2);CHKERRQ(ierr);
+    if (0) {
+      Vec X;
+      const PetscScalar *u,*u2,*x;
+      PetscInt m;
+      ierr = DMGetCoordinates(dmcoarse,&X);CHKERRQ(ierr);
+      ierr = VecGetLocalSize(Gc,&m);CHKERRQ(ierr);
+      ierr = VecGetArrayRead(Gc,&u);CHKERRQ(ierr);
+      ierr = VecGetArrayRead(Gc2,&u2);CHKERRQ(ierr);
+      ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
+      for (PetscInt i=0; i<m; i++) {
+        ierr = PetscPrintf(PETSC_COMM_WORLD,"u[%2d] = %10.3f vs %10.3f at %4.1f %4.1f %4.1f\n",i,u[i],u2[i],x[i*3+0],x[i*3+1],x[i*3+2]);CHKERRQ(ierr);
+      }
+      ierr = VecRestoreArrayRead(Gc,&u);CHKERRQ(ierr);
+      ierr = VecRestoreArrayRead(Gc2,&u2);CHKERRQ(ierr);
+      ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
+    }
+
+    ierr = VecAXPY(Gc2,-1.,Gc);CHKERRQ(ierr);
+    ierr = VecNorm(Gc2,NORM_MAX,&norm);CHKERRQ(ierr);
+    if (PetscAbs(norm) < 1e-10) norm = 0;
+    ierr = PetscPrintf(PETSC_COMM_WORLD,"|u_c - I_h^H u_f|_max = %5.1g\n",norm);CHKERRQ(ierr);
+    ierr = VecDestroy(&Gc2);CHKERRQ(ierr);
+  }
+
+  ierr = VecDestroy(&Gc);CHKERRQ(ierr);
+  ierr = VecDestroy(&G);CHKERRQ(ierr);
   ierr = DMDestroy(&dmcoarse);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);

@@ -18,5 +18,6 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
 PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse);
 PetscErrorCode DMFEInject(DM dm,Vec Uf,Vec Uc);
 PetscErrorCode DMFEInterpolate(DM dm,Vec Uc,Vec Uf);
+PetscErrorCode DMFERestrict(DM dm,Vec Uf,Vec Uc);
 
 #endif

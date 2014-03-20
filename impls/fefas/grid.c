@@ -544,6 +544,116 @@ PetscErrorCode DMFEInterpolate(DM dm,Vec Uc,Vec Uf)
   PetscFunctionReturn(0);
 }
 
+// Residual Restriction: integration of fine points over coarse elements
+//
+// Processers not involved in coarse grid should pass Uc=NULL
+PetscErrorCode DMFERestrict(DM dm,Vec Uf,Vec Uc)
+{
+  PetscErrorCode ierr;
+  PetscScalar *ufl,*uc;
+  const PetscScalar *uf;
+  const PetscInt *lm;
+  FE fe;
+  Vec Ucl,Ufl;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (fe->degree > 2) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"fe->degree %D > 2",fe->degree);
+
+  // Embed global space in local space (with zeros in ghost regions)
+  ierr = DMGetLocalVector(dm,&Ufl);CHKERRQ(ierr);
+  ierr = VecZeroEntries(Ufl);CHKERRQ(ierr);
+  ierr = VecGetArray(Ufl,&ufl);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(Uf,&uf);CHKERRQ(ierr);
+  for (PetscInt i=0; i<fe->om[0]; i++) {
+    for (PetscInt j=0; j<fe->om[1]; j++) {
+      for (PetscInt k=0; k<fe->om[2]; k++) {
+        for (PetscInt d=0; d<fe->dof; d++) {
+          ufl[FEIdxL(fe,i,j,k)*fe->dof+d] = uf[FEIdxO(fe,i,j,k)*fe->dof+d];
+        }
+      }
+    }
+  }
+  ierr = VecRestoreArrayRead(Uf,&uf);CHKERRQ(ierr);
+
+  // Integrate using transpose of interpolation in each direction
+
+  // Fill in missing entries in k
+  lm = fe->lm;
+  for (PetscInt i=1; i<lm[0]; i+=2*fe->degree) {
+    for (PetscInt ii=0; ii<fe->degree; ii++) {
+      for (PetscInt j=0; j<lm[1]; j++) {
+        for (PetscInt k=0; k<lm[2]; k++) {
+          for (PetscInt l=0; l<fe->degree+1; l++) {
+            for (PetscInt d=0; d<fe->dof; d++) {
+              ufl[FEIdxL(fe,i-1+2*l,j,k)*fe->dof+d] += ufl[FEIdxL(fe,i+2*ii,j,k)*fe->dof+d] * fe->ref.interp[ii*(fe->degree+1)+l];
+            }
+          }
+        }
+      }
+    }
+  }
+  for (PetscInt i=0; i<lm[0]; i+=2) {
+    for (PetscInt j=1; j<lm[1]; j+=2*fe->degree) {
+      for (PetscInt jj=0; jj<fe->degree; jj++) {
+        for (PetscInt k=0; k<lm[2]; k++) {
+          for (PetscInt l=0; l<fe->degree+1; l++) {
+            for (PetscInt d=0; d<fe->dof; d++) {
+              ufl[FEIdxL(fe,i,j-1+2*l,k)*fe->dof+d] += ufl[FEIdxL(fe,i,j+2*jj,k)*fe->dof+d] * fe->ref.interp[jj*(fe->degree+1)+l];
+            }
+          }
+        }
+      }
+    }
+    for (PetscInt j=0; j<lm[1]; j+=2) {
+      for (PetscInt k=1; k<lm[2]; k+=2*fe->degree) {
+        for (PetscInt kk=0; kk<fe->degree; kk++) {
+          for (PetscInt l=0; l<fe->degree+1; l++) {
+            for (PetscInt d=0; d<fe->dof; d++) {
+              ufl[FEIdxL(fe,i,j,k-1+2*l)*fe->dof+d] += ufl[FEIdxL(fe,i,j,k+2*kk)*fe->dof+d] * fe->ref.interp[kk*(fe->degree+1)+l];
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (Uc) {
+    ierr = DMGetLocalVector(fe->dmcoarse,&Ucl);CHKERRQ(ierr);
+    ierr = VecZeroEntries(Ucl);CHKERRQ(ierr);
+    ierr = VecGetArray(Ucl,&uc);CHKERRQ(ierr);
+  } else uc = NULL;
+
+  // Transpose of injection to populate C-points in fine grid
+  if (fe->sfinject) { // Communicate from parent process (data size expected to be relatively small)
+    ierr = PetscSFReduceBegin(fe->sfinjectLocal,fe->unit,ufl,uc,MPIU_SUM);CHKERRQ(ierr);
+    ierr = PetscSFReduceEnd(fe->sfinjectLocal,fe->unit,ufl,uc,MPIU_SUM);CHKERRQ(ierr);
+  } else { // in-place on same process set
+    FE fecoarse;
+    ierr = DMGetApplicationContext(fe->dmcoarse,&fecoarse);CHKERRQ(ierr);
+    for (PetscInt i=0; i<fecoarse->lm[0]; i++) {
+      for (PetscInt j=0; j<fecoarse->lm[1]; j++) {
+        for (PetscInt k=0; k<fecoarse->lm[2]; k++) {
+          for (PetscInt d=0; d<fe->dof; d++) {
+            uc[FEIdxL(fecoarse,i,j,k)*fe->dof+d] += ufl[FEIdxL(fe,i*2,j*2,k*2)*fe->dof+d];
+          }
+        }
+      }
+    }
+  }
+  ierr = VecRestoreArray(Ufl,&ufl);CHKERRQ(ierr);
+  ierr = DMRestoreLocalVector(dm,&Ufl);CHKERRQ(ierr);
+
+  if (Uc) {
+    ierr = VecRestoreArray(Ucl,&uc);CHKERRQ(ierr);
+    ierr = DMLocalToGlobalBegin(fe->dmcoarse,Ucl,ADD_VALUES,Uc);CHKERRQ(ierr);
+    ierr = DMLocalToGlobalEnd(fe->dmcoarse,Ucl,ADD_VALUES,Uc);CHKERRQ(ierr);
+    ierr = DMRestoreLocalVector(fe->dmcoarse,&Ucl);CHKERRQ(ierr);
+  }
+
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
 {
   PetscErrorCode ierr;
