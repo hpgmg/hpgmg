@@ -4,7 +4,6 @@
 
 typedef struct Options_private *Options;
 struct Options_private {
-  char command[256];
   PetscInt M[3];
   PetscInt p[3];
   PetscInt cmax;
