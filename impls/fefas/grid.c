@@ -768,7 +768,7 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
 
   fedegree = fe->degree;
-  P = 2*fedegree + 1;
+  P = fedegree + 1;
   m = fe->grid->m;
 
   for (e=elem; e<PetscMin(elem+ne,m[0]*m[1]*m[2]); e++) {
@@ -782,7 +782,7 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
       for (ii=0; ii<P; ii++) {
         for (jj=0; jj<P; jj++) {
           for (kk=0; kk<P; kk++) {
-            PetscInt src = (((d*P+ii)*P+jj)*P+kk) + e-elem;
+            PetscInt src = (((d*P+ii)*P+jj)*P+kk)*ne + e-elem;
             PetscInt dst = (((i*fedegree+ii)*lm[1]+j*fedegree+jj)*lm[2]+k*fedegree+kk)*fe->dof+d;
             if (imode == ADD_VALUES) u[dst] += y[src];
             else                     u[dst]  = y[src];
