@@ -661,6 +661,10 @@ PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (fe->dmcoarse) {
+    *dmcoarse = fe->dmcoarse;
+    PetscFunctionReturn(0);
+  }
   if (fe->grid->coarse) {       /* My process participates in the coarse grid */
     FE fecoarse;
     ierr = DMCreateFE(fe->grid->coarse,fe->degree,fe->dof,&fe->dmcoarse);CHKERRQ(ierr);
@@ -729,11 +733,9 @@ PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
       ierr = DMSetCoordinateDM(fe->dmcoarse,dmc_coarse);CHKERRQ(ierr);
       ierr = DMSetCoordinates(fe->dmcoarse,Xc);CHKERRQ(ierr);
     }
-    ierr = DMDestroy(&dmc_coarse);CHKERRQ(ierr);
     ierr = VecDestroy(&Xc);CHKERRQ(ierr);
   }
 
-  ierr = PetscObjectReference((PetscObject)fe->dmcoarse);CHKERRQ(ierr);
   *dmcoarse = fe->dmcoarse;
   PetscFunctionReturn(0);
 }

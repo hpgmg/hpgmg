@@ -211,7 +211,6 @@ PetscErrorCode TestFEInject()
   ierr = VecDestroy(&G);CHKERRQ(ierr);
   ierr = VecDestroy(&L);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
-  ierr = DMDestroy(&dmcoarse);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -273,7 +272,6 @@ PetscErrorCode TestFEInterp()
   ierr = VecDestroy(&Gc);CHKERRQ(ierr);
   ierr = VecDestroy(&G);CHKERRQ(ierr);
   ierr = VecDestroy(&G2);CHKERRQ(ierr);
-  ierr = DMDestroy(&dmcoarse);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -385,7 +383,6 @@ PetscErrorCode TestFERestrict()
 
   ierr = VecDestroy(&Gc);CHKERRQ(ierr);
   ierr = VecDestroy(&G);CHKERRQ(ierr);
-  ierr = DMDestroy(&dmcoarse);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
