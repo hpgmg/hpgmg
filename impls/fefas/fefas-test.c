@@ -119,7 +119,7 @@ PetscErrorCode TestFEGrad()
   ierr = VecRestoreArray(L,&u);CHKERRQ(ierr);
   ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
 
-  ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL);CHKERRQ(ierr);
+  ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,NULL);CHKERRQ(ierr);
   ierr = DMFEGetNumElements(dm,&nelems);CHKERRQ(ierr);
   ierr = PetscMalloc2(P*P*P*ne,&ue,3*Q*Q*Q*ne,&du);CHKERRQ(ierr);
 

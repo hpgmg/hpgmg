@@ -42,6 +42,7 @@ struct FE_private {
     PetscReal *x;
     PetscReal *w;
     PetscReal *interp;
+    PetscReal *w3;
   } ref;
 };
 
@@ -664,8 +665,15 @@ static PetscErrorCode FESetUp(FE fe)
   // Create reference element evaluation
   P = fe->degree+1;
   Q = fe->degree+1;
-  ierr = PetscMalloc5(P*Q,&fe->ref.B,P*Q,&fe->ref.D,Q,&fe->ref.x,Q,&fe->ref.w,fe->degree*(fe->degree+1),&fe->ref.interp);CHKERRQ(ierr);
+  ierr = PetscMalloc6(P*Q,&fe->ref.B,P*Q,&fe->ref.D,Q,&fe->ref.x,Q,&fe->ref.w,fe->degree*(fe->degree+1),&fe->ref.interp,Q*Q*Q,&fe->ref.w3);CHKERRQ(ierr);
   ierr = PetscDTGaussQuadrature(Q,-1,1,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
+  for (PetscInt i=0; i<Q; i++) {
+    for (PetscInt j=0; j<Q; j++) {
+      for (PetscInt k=0; k<Q; k++) {
+        fe->ref.w3[(i*Q+j)*Q+k] = fe->ref.w[i] * fe->ref.w[j] * fe->ref.w[k];
+      }
+    }
+  }
   for (i=0; i<Q; i++) {
     const PetscReal q = fe->ref.x[i];
     ierr = FEBasisEval(fe,q,&fe->ref.B[i*P],&fe->ref.D[i*P]);CHKERRQ(ierr);
@@ -681,7 +689,7 @@ static PetscErrorCode FESetUp(FE fe)
   PetscFunctionReturn(0);
 }
 
-PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal **B,const PetscReal **D,const PetscReal **x,PetscReal **w)
+PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal **B,const PetscReal **D,const PetscReal **x,const PetscReal **w,const PetscReal **w3)
 {
   PetscErrorCode ierr;
   FE fe;
@@ -695,6 +703,7 @@ PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal *
   if (D) *D = fe->ref.D;
   if (x) *x = fe->ref.x;
   if (w) *w = fe->ref.w;
+  if (w3) *w3 = fe->ref.w3;
   PetscFunctionReturn(0);
 }
 
@@ -798,7 +807,7 @@ static PetscErrorCode FEDestroy(void **ctx)
   ierr = PetscSFDestroy(&fe->sfinject);CHKERRQ(ierr);
   ierr = PetscSFDestroy(&fe->sfinjectLocal);CHKERRQ(ierr);
   ierr = DMDestroy(&fe->dmcoarse);CHKERRQ(ierr);
-  ierr = PetscFree5(fe->ref.B,fe->ref.D,fe->ref.x,fe->ref.w,fe->ref.interp);CHKERRQ(ierr);
+  ierr = PetscFree6(fe->ref.B,fe->ref.D,fe->ref.x,fe->ref.w,fe->ref.interp,fe->ref.w3);CHKERRQ(ierr);
   ierr = PetscSegBufferDestroy(&fe->seg);CHKERRQ(ierr);
   ierr = PetscFree(*ctx);CHKERRQ(ierr);
   PetscFunctionReturn(0);
