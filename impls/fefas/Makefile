@@ -16,6 +16,8 @@ incsubdirs = $(addsuffix /local.mk,$(call thisdir,$(1)))
 libfefas-y.c :=
 fefas-y.c :=
 
+all : fefas
+
 # Recursively include files for all targets
 include local.mk
 
@@ -34,8 +36,6 @@ else
   cc_name := CC
 endif
 
-all : fefas
-
 libfefas = $(LIBDIR)/libfefas.$(AR_LIB_SUFFIX)
 libfefas : $(libfefas)
 $(libfefas) : $(libfefas-y.c:%.c=$(OBJDIR)/%.o)
@@ -52,8 +52,12 @@ FEFAS_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLA
 
 fefas = $(BINDIR)/fefas
 fefas : $(fefas)
-$(BINDIR)/fefas : $(fefas-y.c:%.c=$(OBJDIR)/%.o) $(libfefas) | $$(@D)/.DIR
+fefas-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(fefas-y.c))) $(patsubst %.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(fefas-y.c)))
+$(BINDIR)/fefas : $(fefas-y.o) $(libfefas) | $$(@D)/.DIR
 	$(call quiet,CLINKER) -o $@ $^ $(PETSC_SNES_LIB) $(LIBZ_LIB)
+
+$(OBJDIR)/%.o: $(OBJDIR)/%.c
+	$(FEFAS_COMPILE.c) -I. $(abspath $<) -o $@
 
 $(OBJDIR)/%.o: %.c | $$(@D)/.DIR
 	$(FEFAS_COMPILE.c) $(abspath $<) -o $@
