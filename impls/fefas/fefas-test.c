@@ -1,6 +1,7 @@
 #include "fefas.h"
 #include "tensor.h"
 #include "pointwise.h"
+#include "op/fefas-op.h"
 
 typedef struct Options_private *Options;
 struct Options_private {
@@ -384,6 +385,49 @@ PetscErrorCode TestFERestrict()
   ierr = VecDestroy(&Gc);CHKERRQ(ierr);
   ierr = VecDestroy(&G);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
+  ierr = PetscFree(opt);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode TestOpApply()
+{
+  PetscErrorCode ierr;
+  Grid grid;
+  Options opt;
+  Op op;
+  PetscInt fedegree,dof;
+  DM dm;
+  Vec U,Y,F;
+  PetscReal normF,norm;
+
+  PetscFunctionBegin;
+  ierr = OpCreateFromOptions(PETSC_COMM_WORLD,&op);CHKERRQ(ierr);
+  ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
+  ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+  ierr = OptionsParse("Finite Element FAS Test operator application",&opt);CHKERRQ(ierr);
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = GridView(grid);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
+
+  ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
+  ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);
+  ierr = DMCreateGlobalVector(dm,&Y);CHKERRQ(ierr);
+  ierr = OpSolution(op,dm,U);CHKERRQ(ierr);   // Nodally-exact solution represented in finite-element space
+  ierr = OpForcing(op,dm,F);CHKERRQ(ierr);    // Manufactured right hand side that makes U solve continuum equation
+  ierr = OpApply(op,dm,U,Y);CHKERRQ(ierr);    // Y <- A U
+
+  ierr = VecAXPY(Y,-1.,F);CHKERRQ(ierr);
+  ierr = VecNorm(Y,NORM_MAX,&norm);CHKERRQ(ierr);
+  ierr = VecNorm(F,NORM_MAX,&normF);CHKERRQ(ierr);
+  ierr = PetscPrintf(PETSC_COMM_WORLD,"|A u - F|_max/|F|_max = %g\n",(double)norm/normF);CHKERRQ(ierr);
+
+  ierr = VecDestroy(&U);CHKERRQ(ierr);
+  ierr = VecDestroy(&Y);CHKERRQ(ierr);
+  ierr = VecDestroy(&F);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
+  ierr = GridDestroy(&grid);CHKERRQ(ierr);
+  ierr = OpDestroy(&op);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
