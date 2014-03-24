@@ -323,7 +323,7 @@ static PetscErrorCode DMLocalToGlobalBegin_FE(DM dm,Vec L,InsertMode imode,Vec G
   PetscFunctionBegin;
   switch (imode) {
   case ADD_VALUES: op = MPIU_SUM; break;
-  case INSERT_VALUES: op = MPI_REPLACE; break;
+  case INSERT_VALUES: PetscFunctionReturn(0); // Local copy will be done in DMLocalToGlobalEnd_FE
   default: SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"InsertMode");
   }
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
@@ -342,14 +342,8 @@ static PetscErrorCode DMLocalToGlobalEnd_FE(DM dm,Vec L,InsertMode imode,Vec G)
   PetscInt i,j,k,d;
   const PetscScalar *l;
   PetscScalar *g;
-  MPI_Op op;
 
   PetscFunctionBegin;
-  switch (imode) {
-  case ADD_VALUES: op = MPIU_SUM; break;
-  case INSERT_VALUES: op = MPI_REPLACE; break;
-  default: SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"InsertMode");
-  }
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
   ierr = VecGetArrayRead(L,&l);CHKERRQ(ierr);
   ierr = VecGetArray(G,&g);CHKERRQ(ierr);
@@ -367,7 +361,9 @@ static PetscErrorCode DMLocalToGlobalEnd_FE(DM dm,Vec L,InsertMode imode,Vec G)
       }
     }
   }
-  ierr = PetscSFReduceEnd(fe->sf,fe->unit,l,g,op);CHKERRQ(ierr);
+  if (imode == ADD_VALUES) {
+    ierr = PetscSFReduceEnd(fe->sf,fe->unit,l,g,MPIU_SUM);CHKERRQ(ierr);
+  }
   ierr = VecRestoreArrayRead(L,&l);CHKERRQ(ierr);
   ierr = VecRestoreArray(G,&g);CHKERRQ(ierr);
   PetscFunctionReturn(0);
