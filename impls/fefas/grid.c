@@ -861,7 +861,7 @@ PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,Pets
 
 // Sum/insert into elements elem:elem+ne in local vector u, using element contributions from y
 // Any "elements" beyond the locally-owned part are ignored
-PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,const PetscScalar *y)
+PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,DomainMode dmode,const PetscScalar *y)
 {
   PetscErrorCode ierr;
   FE fe;
@@ -886,8 +886,14 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
       for (ii=0; ii<P; ii++) {
         for (jj=0; jj<P; jj++) {
           for (kk=0; kk<P; kk++) {
+            PetscInt iu = i*fedegree+ii,ju = j*fedegree+jj,ku = k*fedegree+kk;
             PetscInt src = (((d*P+ii)*P+jj)*P+kk)*ne + e-elem;
-            PetscInt dst = (((i*fedegree+ii)*lm[1]+j*fedegree+jj)*lm[2]+k*fedegree+kk)*fe->dof+d;
+            PetscInt dst = ((iu*lm[1]+ju)*lm[2]+ku)*fe->dof+d;
+            if ((0<iu && iu<m[0]-1) && (0<ju && ju<m[1]-1) && (0<ku && ku<m[2]-1)) {
+              if (PetscUnlikely((dmode & DOMAIN_INTERIOR) == 0)) continue;
+            } else {
+              if ((dmode & DOMAIN_EXTERIOR) == 0) continue;
+            }
             if (imode == ADD_VALUES) u[dst] += y[src];
             else                     u[dst]  = y[src];
           }

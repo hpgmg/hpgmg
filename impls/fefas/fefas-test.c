@@ -203,7 +203,6 @@ PetscErrorCode TestFEInject()
     }
     ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
     ierr = VecRestoreArrayRead(Gc,&u);CHKERRQ(ierr);
-    // ierr = VecView(Gc,NULL);CHKERRQ(ierr);
     ierr = VecDestroy(&Gc);CHKERRQ(ierr);
   } else {
     ierr = DMFEInject(dm,G,NULL);CHKERRQ(ierr);
@@ -318,8 +317,9 @@ static PetscErrorCode IntegrateTestFunction(DM dm,Vec G)
 
     ierr = PetscMemzero(ue,sizeof ue);CHKERRQ(ierr);
     ierr = TensorContract(ne,1,P,Q,B,B,B,TENSOR_TRANSPOSE,uq[0],ue);CHKERRQ(ierr);
-    ierr = DMFESetElements(dm,u,e,ne,ADD_VALUES,ue);CHKERRQ(ierr);
+    ierr = DMFESetElements(dm,u,e,ne,ADD_VALUES,DOMAIN_CLOSURE,ue);CHKERRQ(ierr);
   }
+  ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
   ierr = VecRestoreArray(L,&u);CHKERRQ(ierr);
   ierr = VecZeroEntries(G);CHKERRQ(ierr);
   ierr = DMLocalToGlobalBegin(dm,L,ADD_VALUES,G);CHKERRQ(ierr);
