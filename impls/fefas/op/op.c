@@ -11,12 +11,14 @@ struct Op_private {
   MPI_Comm comm;                /* Finest level comm (only for diagnostics at setup time) */
   PetscInt fedegree;
   PetscInt dof;
+  PetscInt ne;                  /* Preferred number of elements over which to vectorize */
   PetscErrorCode (*Apply)(Op,DM,Vec,Vec);
   PetscErrorCode (*RestrictState)(Op,DM,Vec,Vec);
   PetscErrorCode (*RestrictResidual)(Op,DM,Vec,Vec);
   PetscErrorCode (*Interpolate)(Op,DM,Vec,Vec);
   PetscErrorCode (*PointwiseSolution)(Op,const PetscReal[],PetscScalar[]);
   PetscErrorCode (*PointwiseForcing)(Op,const PetscReal[],PetscScalar[]);
+  PetscErrorCode (*PointwiseElement)(Op,PetscInt,PetscInt,const PetscScalar[],const PetscReal[],const PetscScalar[],PetscScalar[]);
   PetscErrorCode (*Destroy)(Op);
   void *ctx;
 };
@@ -59,6 +61,11 @@ PetscErrorCode OpSetPointwiseSolution(Op op,PetscErrorCode (*f)(Op,const PetscRe
 }
 PetscErrorCode OpSetPointwiseForcing(Op op,PetscErrorCode (*f)(Op,const PetscReal[],PetscScalar[])) {
   op->PointwiseForcing = f;
+  return 0;
+}
+PetscErrorCode OpSetPointwiseElement(Op op,OpPointwiseElementFunction f,PetscInt ne) {
+  op->PointwiseElement = f;
+  op->ne = ne;
   return 0;
 }
 
@@ -144,6 +151,66 @@ PetscErrorCode OpApply(Op op,DM dm,Vec U,Vec F) {
   PetscFunctionBegin;
   if (!op->Apply) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"No Apply implemented, use OpSetApply()");
   ierr = (*op->Apply)(op,dm,U,F);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode OpGetDiagonal(Op op,DM dm,Vec Diag) {
+  PetscErrorCode ierr;
+  Vec X,Vl;
+  PetscInt nelem,P,Q,P3,Q3,NE;
+  DM dmx;
+  const PetscScalar *x;
+  PetscScalar *diag;
+  const PetscReal *B,*D,*w3;
+
+  PetscFunctionBegin;
+  if (!op->PointwiseElement) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"No PointwiseElement implemented, use OpSetPointwiseElement()");
+  if (op->dof != 1) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"dof != 1");
+  ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,&w3);CHKERRQ(ierr);
+  P3 = P*P*P;
+  Q3 = Q*Q*Q;
+  NE = op->ne;
+
+  ierr = DMGetLocalVector(dm,&Vl);CHKERRQ(ierr);
+  ierr = VecZeroEntries(Vl);CHKERRQ(ierr);
+  ierr = DMGetCoordinateDM(dm,&dmx);CHKERRQ(ierr);
+  ierr = DMGetCoordinatesLocal(dm,&X);CHKERRQ(ierr);
+  ierr = DMFEGetNumElements(dm,&nelem);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
+  ierr = VecGetArray(Vl,&diag);CHKERRQ(ierr);
+
+  for (PetscInt e=0; e<nelem; e+=NE) {
+    PetscScalar diage[1*P3*NE],ve[1*P3*NE],dv[3][1][Q3][NE],ue[1*P3*NE],du[3][1][Q3][NE],xe[3*P3*NE],dx[3][3][Q3][NE],wdxdet[Q3][NE];
+
+    ierr = DMFEExtractElements(dmx,x,e,NE,xe);CHKERRQ(ierr);
+    ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);
+    ierr = TensorContract(NE,3,P,Q,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(NE,3,P,Q,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(NE,3,P,Q,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
+    ierr = PointwiseJacobianInvert(NE,Q*Q*Q,w3,dx,wdxdet);CHKERRQ(ierr);
+
+    for (PetscInt i=0; i<P3; i++) {
+      ierr = PetscMemzero(ue,sizeof ue);CHKERRQ(ierr);
+      for (PetscInt k=0; k<op->ne; k++) ue[i*NE+k] = 1;
+      ierr = PetscMemzero(du,sizeof du);CHKERRQ(ierr);
+      ierr = TensorContract(NE,1,P,Q,D,B,B,TENSOR_EVAL,ue,du[0][0][0]);CHKERRQ(ierr);
+      ierr = TensorContract(NE,1,P,Q,B,D,B,TENSOR_EVAL,ue,du[1][0][0]);CHKERRQ(ierr);
+      ierr = TensorContract(NE,1,P,Q,B,B,D,TENSOR_EVAL,ue,du[2][0][0]);CHKERRQ(ierr);
+      ierr = (*op->PointwiseElement)(op,NE,Q3,dx[0][0][0],wdxdet[0],du[0][0][0],dv[0][0][0]);CHKERRQ(ierr);
+      ierr = PetscMemzero(ve,sizeof ve);CHKERRQ(ierr);
+      ierr = TensorContract(NE,1,P,Q,D,B,B,TENSOR_TRANSPOSE,dv[0][0][0],ve);CHKERRQ(ierr);
+      ierr = TensorContract(NE,1,P,Q,B,D,B,TENSOR_TRANSPOSE,dv[1][0][0],ve);CHKERRQ(ierr);
+      ierr = TensorContract(NE,1,P,Q,B,B,D,TENSOR_TRANSPOSE,dv[2][0][0],ve);CHKERRQ(ierr);
+      for (PetscInt k=0; k<op->ne; k++) diage[i*NE+k] = ve[i*NE+k];
+    }
+    ierr = DMFESetElements(dm,diag,e,NE,ADD_VALUES,DOMAIN_INTERIOR,diage);CHKERRQ(ierr);
+  }
+  ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
+  ierr = VecRestoreArray(Vl,&diag);CHKERRQ(ierr);
+  ierr = VecZeroEntries(Diag);CHKERRQ(ierr);
+  ierr = DMLocalToGlobalBegin(dm,Vl,ADD_VALUES,Diag);CHKERRQ(ierr);
+  ierr = DMLocalToGlobalEnd(dm,Vl,ADD_VALUES,Diag);CHKERRQ(ierr);
+  ierr = DMRestoreLocalVector(dm,&Vl);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 

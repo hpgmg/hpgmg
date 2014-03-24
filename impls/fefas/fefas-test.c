@@ -431,3 +431,40 @@ PetscErrorCode TestOpApply()
   ierr = PetscFree(opt);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
+
+PetscErrorCode TestOpDiagonal()
+{
+  PetscErrorCode ierr;
+  Grid grid;
+  Options opt;
+  Op op;
+  PetscInt fedegree,dof;
+  DM dm;
+  Vec Diag;
+  PetscReal norm1,norm2,normMax;
+
+  PetscFunctionBegin;
+  ierr = OpCreateFromOptions(PETSC_COMM_WORLD,&op);CHKERRQ(ierr);
+  ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
+  ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+  ierr = OptionsParse("Finite Element FAS Test diagonal extraction",&opt);CHKERRQ(ierr);
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = GridView(grid);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
+  ierr = DMCreateGlobalVector(dm,&Diag);CHKERRQ(ierr);
+  ierr = OpGetDiagonal(op,dm,Diag);CHKERRQ(ierr);
+
+  ierr = VecNorm(Diag,NORM_1,&norm1);CHKERRQ(ierr);
+  ierr = VecNorm(Diag,NORM_2,&norm2);CHKERRQ(ierr);
+  ierr = VecNorm(Diag,NORM_MAX,&normMax);CHKERRQ(ierr);
+  ierr = PetscPrintf(PETSC_COMM_WORLD,"|D|_1 = %g  |D|_2 = %g  |D|_max = %g\n",(double)norm1,(double)norm2,(double)normMax);CHKERRQ(ierr);
+  // ierr = VecView(Diag,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+
+  ierr = VecDestroy(&Diag);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
+  ierr = GridDestroy(&grid);CHKERRQ(ierr);
+  ierr = OpDestroy(&op);CHKERRQ(ierr);
+  ierr = PetscFree(opt);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}

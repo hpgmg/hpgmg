@@ -21,7 +21,7 @@ static PetscErrorCode OpPointwiseForcing_Poisson1(Op op,const PetscReal x[],Pets
   return 0;
 }
 
-static PetscErrorCode PointwiseElement_Poisson1(PetscInt Q3,PetscScalar dx[3][3][Q3][NE],PetscReal wdxdet[Q3][NE],PetscScalar du[3][1][Q3][NE],PetscScalar dv[3][1][Q3][NE]) {
+static PetscErrorCode OpPointwiseElement_Poisson1(Op op,PetscInt ne,PetscInt Q3,PetscScalar dx[3][3][Q3][NE],PetscReal wdxdet[Q3][NE],PetscScalar du[3][1][Q3][NE],PetscScalar dv[3][1][Q3][NE]) {
   for (PetscInt i=0; i<Q3; i++) {
     for (PetscInt e=0; e<NE; e++) {
       PetscScalar dux[3][1],dvx[3][1];
@@ -79,7 +79,7 @@ static PetscErrorCode OpApply_Poisson1(Op op,DM dm,Vec U,Vec V)
     ierr = TensorContract(NE,1,P,Q,D,B,B,TENSOR_EVAL,ue,du[0][0][0]);CHKERRQ(ierr);
     ierr = TensorContract(NE,1,P,Q,B,D,B,TENSOR_EVAL,ue,du[1][0][0]);CHKERRQ(ierr);
     ierr = TensorContract(NE,1,P,Q,B,B,D,TENSOR_EVAL,ue,du[2][0][0]);CHKERRQ(ierr);
-    ierr = PointwiseElement_Poisson1(Q3,dx,wdxdet,du,dv);CHKERRQ(ierr);
+    ierr = OpPointwiseElement_Poisson1(op,NE,Q3,dx,wdxdet,du,dv);CHKERRQ(ierr);
     ierr = PetscMemzero(ve,sizeof ve);CHKERRQ(ierr);
     ierr = TensorContract(NE,1,P,Q,D,B,B,TENSOR_TRANSPOSE,dv[0][0][0],ve);CHKERRQ(ierr);
     ierr = TensorContract(NE,1,P,Q,B,D,B,TENSOR_TRANSPOSE,dv[1][0][0],ve);CHKERRQ(ierr);
@@ -120,6 +120,7 @@ PetscErrorCode OpCreate_Poisson1(Op op)
   ierr = OpSetContext(op,ctx);CHKERRQ(ierr);
   ierr = OpSetPointwiseSolution(op,OpPointwiseSolution_Poisson1);CHKERRQ(ierr);
   ierr = OpSetPointwiseForcing(op,OpPointwiseForcing_Poisson1);CHKERRQ(ierr);
+  ierr = OpSetPointwiseElement(op,(OpPointwiseElementFunction)OpPointwiseElement_Poisson1,NE);CHKERRQ(ierr);
   ierr = OpSetApply(op,OpApply_Poisson1);CHKERRQ(ierr);
   ierr = OpSetDestroy(op,OpDestroy_Poisson1);CHKERRQ(ierr);
   PetscFunctionReturn(0);
