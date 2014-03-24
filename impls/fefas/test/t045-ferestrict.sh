@@ -12,4 +12,8 @@ test_expect_stdout 'FE Interpolation fedegree=1 parallel' 4 'fefas test-feinterp
 |u - I Ihat u|_max =     0
 '
 
+test_expect_stdout 'FE Restriction fedegree=1 parallel ragged coarsening' 4 'fefas test-ferestrict -M 4,4,12 -L 1,1,1 -p 1,1,4' '
+|u_c - I_h^H u_f|_max =     0
+'
+
 test_done

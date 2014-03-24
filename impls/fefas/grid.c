@@ -30,6 +30,7 @@ struct FE_private {
   PetscInt Clm[3];      // Array dimensions of local coarse grid that we contribute to
   PetscInt Com[3];      // Array dimensions of owned coarse grid that we contribute to
   PetscInt cls[3];      // Start of array part that we contribute to coarse grid
+  PetscInt rneighbor_om[3][3];
   PetscBool hascoordinates;
   MPI_Datatype unit;
   PetscSF sf;
@@ -49,11 +50,6 @@ struct FE_private {
 static PetscInt Idx3(const PetscInt m[],PetscInt i,PetscInt j,PetscInt k) { return (i*m[1]+j)*m[2]+k; }
 static PetscInt FEIdxO(FE fe,PetscInt i,PetscInt j,PetscInt k) { return Idx3(fe->om,i,j,k); }
 static PetscInt FEIdxL(FE fe,PetscInt i,PetscInt j,PetscInt k) { return Idx3(fe->lm,i,j,k); }
-static PetscInt FENeighborDim(FE fe,PetscInt l) {
-  return fe->grid->s[l] + 2*fe->grid->m[l] < fe->grid->M[l] // Can we fit another domain the same size as mine without reaching boundary?
-    ? fe->om[l]
-    : fe->degree*(fe->grid->M[l] - (fe->grid->s[l]+fe->grid->m[l])) + 1;
-}
 
 static PetscInt CeilDiv(PetscInt a,PetscInt b) {return a/b + !!(a%b);}
 
@@ -934,6 +930,7 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
   PetscSFNode *iremote;
   FE     fe;
   DM          dm;
+  PetscMPIInt tag;
 
   PetscFunctionBegin;
   ierr = PetscNew(&fe);CHKERRQ(ierr);
@@ -951,6 +948,19 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
     fe->Com[i] = -1;
     fe->Clm[i] = -1;
   }
+  ierr = PetscCommGetNewTag(grid->comm,&tag);CHKERRQ(ierr);
+  for (i=0; i<3; i++) {
+    MPI_Request req = MPI_REQUEST_NULL;
+    PetscMPIInt rankR = grid->neighborranks[1+(i==0)][1+(i==1)][1+(i==2)];
+    PetscMPIInt rankL = grid->neighborranks[1-(i==0)][1-(i==1)][1-(i==2)];
+    if (rankR >= 0) {
+      ierr = MPI_Irecv(fe->rneighbor_om[i],3,MPIU_INT,rankR,tag,grid->comm,&req);CHKERRQ(ierr);
+    }
+    if (rankL >= 0) {
+      ierr = MPI_Send(fe->om,3,MPIU_INT,rankL,tag,grid->comm);CHKERRQ(ierr);
+    }
+    ierr = MPI_Wait(&req,MPI_STATUS_IGNORE);CHKERRQ(ierr);
+  }
 
   // Create neighbor scatter (roots=global, leaves=local)
   nleaves = fe->lm[0]*fe->lm[1]*fe->lm[2] - fe->om[0]*fe->om[1]*fe->om[2];
@@ -958,11 +968,11 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
   ierr = PetscMalloc1(nleaves,&iremote);CHKERRQ(ierr);
   leaf = 0;
   for (i=0; i<fe->lm[0]; i++) {
-    their_om[0] = i >= fe->om[0] ? FENeighborDim(fe,0) : fe->om[0];
+    their_om[0] = i >= fe->om[0] ? fe->rneighbor_om[0][0] : fe->om[0];
     for (j=0; j<fe->lm[1]; j++) {
-      their_om[1] = j >= fe->om[1] ? FENeighborDim(fe,1) : fe->om[1];
+      their_om[1] = j >= fe->om[1] ? fe->rneighbor_om[1][1] : fe->om[1];
       for (k=0; k<fe->lm[2]; k++) {
-        their_om[2] = k >= fe->om[2] ? FENeighborDim(fe,2) : fe->om[2];
+        their_om[2] = k >= fe->om[2] ? fe->rneighbor_om[2][2] : fe->om[2];
         if (i >= fe->om[0] || j >= fe->om[1] || k >= fe->om[2]) { // Someone else owns this vertex
           ilocal[leaf] = FEIdxL(fe,i,j,k);
           iremote[leaf].rank = grid->neighborranks[1+(i>=fe->om[0])][1+(j>=fe->om[1])][1+(k>=fe->om[2])];
