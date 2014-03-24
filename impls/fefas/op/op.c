@@ -214,6 +214,64 @@ PetscErrorCode OpGetDiagonal(Op op,DM dm,Vec Diag) {
   PetscFunctionReturn(0);
 }
 
+typedef struct {
+  Op op;
+  DM dm;
+} Mat_Op;
+
+static PetscErrorCode MatDestroy_Op(Mat A) {
+  PetscErrorCode ierr;
+  Mat_Op *ctx;
+
+  PetscFunctionBegin;
+  ierr = MatShellGetContext(A,&ctx);CHKERRQ(ierr);
+  ierr = PetscFree(ctx);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode MatMult_Op(Mat A,Vec X,Vec Y) {
+  PetscErrorCode ierr;
+  Mat_Op *ctx;
+
+  PetscFunctionBegin;
+  ierr = MatShellGetContext(A,&ctx);CHKERRQ(ierr);
+  ierr = OpApply(ctx->op,ctx->dm,X,Y);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode MatGetDiagonal_Op(Mat A,Vec D) {
+  PetscErrorCode ierr;
+  Mat_Op *ctx;
+
+  PetscFunctionBegin;
+  ierr = MatShellGetContext(A,&ctx);CHKERRQ(ierr);
+  ierr = OpGetDiagonal(ctx->op,ctx->dm,D);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode OpGetMat(Op op,DM dm,Mat *shell) {
+  PetscErrorCode ierr;
+  Mat A;
+  Vec U;
+  PetscInt m;
+  Mat_Op *ctx;
+
+  PetscFunctionBegin;
+  ierr = DMGetGlobalVector(dm,&U);CHKERRQ(ierr);
+  ierr = VecGetLocalSize(U,&m);CHKERRQ(ierr);
+  ierr = DMRestoreGlobalVector(dm,&U);CHKERRQ(ierr);
+  ierr = PetscMalloc1(1,&ctx);CHKERRQ(ierr);
+  // Danger: no reference counting
+  ctx->op = op;
+  ctx->dm = dm;
+  ierr = MatCreateShell(PetscObjectComm((PetscObject)dm),m,m,PETSC_DETERMINE,PETSC_DETERMINE,ctx,&A);CHKERRQ(ierr);
+  ierr = MatShellSetOperation(A,MATOP_DESTROY,(void(*)(void))MatDestroy_Op);CHKERRQ(ierr);
+  ierr = MatShellSetOperation(A,MATOP_MULT,(void(*)(void))MatMult_Op);CHKERRQ(ierr);
+  ierr = MatShellSetOperation(A,MATOP_GET_DIAGONAL,(void(*)(void))MatGetDiagonal_Op);CHKERRQ(ierr);
+  *shell = A;
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode OpRestrictState(Op op,DM dm,Vec Uf,Vec Uc) {
   PetscErrorCode ierr;
 

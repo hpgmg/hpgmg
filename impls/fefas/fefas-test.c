@@ -2,6 +2,7 @@
 #include "tensor.h"
 #include "pointwise.h"
 #include "op/fefas-op.h"
+#include <petscksp.h>
 
 typedef struct Options_private *Options;
 struct Options_private {
@@ -462,6 +463,57 @@ PetscErrorCode TestOpDiagonal()
   // ierr = VecView(Diag,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 
   ierr = VecDestroy(&Diag);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
+  ierr = GridDestroy(&grid);CHKERRQ(ierr);
+  ierr = OpDestroy(&op);CHKERRQ(ierr);
+  ierr = PetscFree(opt);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode TestKSPSolve()
+{
+  PetscErrorCode ierr;
+  Grid grid;
+  Options opt;
+  Op op;
+  PetscInt fedegree,dof;
+  DM dm;
+  Vec U,V,F;
+  Mat A;
+  KSP ksp;
+  PetscReal normU,normError;
+
+  PetscFunctionBegin;
+  ierr = OpCreateFromOptions(PETSC_COMM_WORLD,&op);CHKERRQ(ierr);
+  ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
+  ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+  ierr = OptionsParse("Finite Element FAS Test KSPSolve",&opt);CHKERRQ(ierr);
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = GridView(grid);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
+
+  ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
+  ierr = DMCreateGlobalVector(dm,&V);CHKERRQ(ierr);
+  ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);
+  ierr = OpSolution(op,dm,U);CHKERRQ(ierr);   // Nodally-exact solution represented in finite-element space
+  ierr = OpForcing(op,dm,F);CHKERRQ(ierr);    // Manufactured right hand side that makes U solve continuum equation
+
+  ierr = OpGetMat(op,dm,&A);CHKERRQ(ierr);
+  ierr = KSPCreate(PETSC_COMM_WORLD,&ksp);CHKERRQ(ierr);
+  ierr = KSPSetOperators(ksp,A,A);CHKERRQ(ierr);
+  ierr = KSPSetFromOptions(ksp);CHKERRQ(ierr);
+  ierr = KSPSolve(ksp,F,V);CHKERRQ(ierr);
+  ierr = VecAXPY(V,-1.,U);CHKERRQ(ierr);
+  ierr = VecNorm(U,NORM_2,&normU);CHKERRQ(ierr);
+  ierr = VecNorm(V,NORM_2,&normError);CHKERRQ(ierr);
+  ierr = PetscPrintf(PETSC_COMM_WORLD,"|v-u|_2/|u|_2 = %g\n",normError/normU);CHKERRQ(ierr);
+
+  ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
+  ierr = MatDestroy(&A);CHKERRQ(ierr);
+  ierr = VecDestroy(&U);CHKERRQ(ierr);
+  ierr = VecDestroy(&V);CHKERRQ(ierr);
+  ierr = VecDestroy(&F);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = GridDestroy(&grid);CHKERRQ(ierr);
   ierr = OpDestroy(&op);CHKERRQ(ierr);

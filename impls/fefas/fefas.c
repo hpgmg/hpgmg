@@ -10,6 +10,7 @@ PetscErrorCode TestFEInterp(void);
 PetscErrorCode TestFERestrict(void);
 PetscErrorCode TestOpApply(void);
 PetscErrorCode TestOpDiagonal(void);
+PetscErrorCode TestKSPSolve(void);
 PetscErrorCode FMG(void);
 
 static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action)(void))
@@ -28,6 +29,7 @@ static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action
   ierr = PetscFunctionListAdd(&actionlist,"test-ferestrict",TestFERestrict);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"test-opapply",TestOpApply);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"test-opdiagonal",TestOpDiagonal);CHKERRQ(ierr);
+  ierr = PetscFunctionListAdd(&actionlist,"test-kspsolve",TestKSPSolve);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"fmg",FMG);CHKERRQ(ierr);
 
   if (argc < 2 || !argv[1] || argv[1][0] == '-') {
