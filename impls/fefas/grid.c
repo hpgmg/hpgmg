@@ -867,6 +867,7 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
   FE fe;
   PetscInt P,fedegree,e;
   const PetscInt *m;
+  PetscInt gs[3],gM[3];
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
@@ -874,6 +875,10 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
   fedegree = fe->degree;
   P = fedegree + 1;
   m = fe->grid->m;
+  for (PetscInt i=0; i<3; i++) {
+    gs[i] = fe->grid->s[i]*fedegree;
+    gM[i] = fe->grid->M[i]*fedegree+1; // global boundaries
+  }
 
   for (e=elem; e<PetscMin(elem+ne,m[0]*m[1]*m[2]); e++) {
     const PetscInt *lm = fe->lm;
@@ -889,7 +894,7 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
             PetscInt iu = i*fedegree+ii,ju = j*fedegree+jj,ku = k*fedegree+kk;
             PetscInt src = (((d*P+ii)*P+jj)*P+kk)*ne + e-elem;
             PetscInt dst = ((iu*lm[1]+ju)*lm[2]+ku)*fe->dof+d;
-            if ((0<iu && iu<m[0]-1) && (0<ju && ju<m[1]-1) && (0<ku && ku<m[2]-1)) {
+            if ((0<gs[0]+iu && gs[0]+iu<gM[0]-1) && (0<gs[1]+ju && gs[1]+ju<gM[1]-1) && (0<gs[2]+ku && gs[2]+ku<gM[2]-1)) {
               if (PetscUnlikely((dmode & DOMAIN_INTERIOR) == 0)) continue;
             } else {
               if ((dmode & DOMAIN_EXTERIOR) == 0) continue;
