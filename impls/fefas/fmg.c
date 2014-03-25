@@ -155,6 +155,33 @@ static PetscErrorCode MGVCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
   PetscFunctionReturn(0);
 }
 
+static PetscErrorCode MGFCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmooths,Vec B,Vec U) {
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  if (mg->coarse) {
+    Vec Uc,Bc;
+    DM dmcoarse = mg->coarse->dm;
+    if (dmcoarse) {
+      ierr = DMGetGlobalVector(dmcoarse,&Bc);CHKERRQ(ierr);
+      ierr = VecZeroEntries(Bc);CHKERRQ(ierr);
+    } else Bc = NULL;
+    ierr = OpRestrictResidual(op,mg->dm,B,Bc);CHKERRQ(ierr);
+    if (dmcoarse) {
+      ierr = DMFEZeroBoundaries(dmcoarse,Bc);CHKERRQ(ierr);
+      ierr = DMGetGlobalVector(dmcoarse,&Uc);CHKERRQ(ierr);
+      ierr = MGFCycle(op,mg->coarse,presmooths,postsmooths,Bc,Uc);CHKERRQ(ierr);
+    } else Uc = NULL;
+    ierr = OpInterpolate(op,mg->dm,Uc,U);CHKERRQ(ierr);
+    if (dmcoarse) {
+      ierr = DMRestoreGlobalVector(dmcoarse,&Uc);CHKERRQ(ierr);
+      ierr = DMRestoreGlobalVector(dmcoarse,&Bc);CHKERRQ(ierr);
+    }
+  }
+  ierr = MGVCycle(op,mg,presmooths,postsmooths,B,U);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode RunMGV()
 {
   PetscErrorCode ierr;
@@ -200,6 +227,65 @@ PetscErrorCode RunMGV()
     ierr = VecAYPX(Y,-1,F);CHKERRQ(ierr);
     ierr = VecNorm(Y,NORM_2,&normResid);CHKERRQ(ierr);
     ierr = PetscPrintf(PETSC_COMM_WORLD,"V(%D,%D) %2D: |e|_2/|u|_2 %8.2e  |r|_2/|f|_2 %8.2e\n",presmooths,postsmooths,i,(double)(normError/normU0),(double)(normResid/normF));CHKERRQ(ierr);
+    ierr = DMRestoreGlobalVector(dm,&Y);CHKERRQ(ierr);
+  }
+
+  ierr = MGDestroy(&mg);CHKERRQ(ierr);
+  ierr = VecDestroy(&U0);CHKERRQ(ierr);
+  ierr = VecDestroy(&U);CHKERRQ(ierr);
+  ierr = VecDestroy(&F);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
+  ierr = GridDestroy(&grid);CHKERRQ(ierr);
+  ierr = OpDestroy(&op);CHKERRQ(ierr);
+  ierr = PetscFree(opt);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode RunFMG()
+{
+  PetscErrorCode ierr;
+  Grid grid;
+  Options opt;
+  Op op;
+  PetscInt fedegree,dof,nlevels;
+  DM dm;
+  Vec U0,U,F;
+  MG mg;
+  PetscReal normU0,normError,normF,normResid;
+
+  PetscFunctionBegin;
+  ierr = OpCreateFromOptions(PETSC_COMM_WORLD,&op);CHKERRQ(ierr);
+  ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
+  ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+  ierr = OptionsParse("Finite Element FAS FMG solver",&opt);CHKERRQ(ierr);
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = GridGetNumLevels(grid,&nlevels);CHKERRQ(ierr);
+
+  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
+
+  ierr = DMCreateGlobalVector(dm,&U0);CHKERRQ(ierr);
+  ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
+  ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);
+  ierr = OpForcing(op,dm,F);CHKERRQ(ierr);
+  ierr = OpSolution(op,dm,U0);CHKERRQ(ierr);
+  ierr = VecNorm(U0,NORM_2,&normU0);CHKERRQ(ierr);
+  ierr = VecNorm(F,NORM_2,&normF);CHKERRQ(ierr);
+
+  ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
+  for (PetscInt i=0; i<3; i++) {
+    PetscInt presmooths = 2,postsmooths = 2;
+    Vec Y;
+    if (!i) {ierr = MGFCycle(op,mg,presmooths,postsmooths,F,U);CHKERRQ(ierr);}
+    else    {ierr = MGVCycle(op,mg,presmooths,postsmooths,F,U);CHKERRQ(ierr);}
+    ierr = DMGetGlobalVector(dm,&Y);CHKERRQ(ierr);
+    ierr = VecCopy(U,Y);CHKERRQ(ierr);
+    ierr = VecAXPY(Y,-1,U0);CHKERRQ(ierr);
+    ierr = VecNorm(Y,NORM_2,&normError);CHKERRQ(ierr);
+    ierr = OpApply(op,dm,U,Y);CHKERRQ(ierr);
+    ierr = VecAYPX(Y,-1,F);CHKERRQ(ierr);
+    ierr = VecNorm(Y,NORM_2,&normResid);CHKERRQ(ierr);
+    ierr = PetscPrintf(PETSC_COMM_WORLD,"%s(%D,%D) %2D: |e|_2/|u|_2 %8.2e  |r|_2/|f|_2 %8.2e\n",i?"V":"F",presmooths,postsmooths,i,(double)(normError/normU0),(double)(normResid/normF));CHKERRQ(ierr);
     ierr = DMRestoreGlobalVector(dm,&Y);CHKERRQ(ierr);
   }
 
