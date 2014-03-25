@@ -234,6 +234,17 @@ PetscErrorCode GridView(Grid grid)
   PetscFunctionReturn(0);
 }
 
+PetscErrorCode GridGetNumLevels(Grid grid,PetscInt *nlevels) {
+  PetscErrorCode ierr;
+  Grid g;
+
+  PetscFunctionBegin;
+  *nlevels = 0;
+  for (g=grid; g; g=g->coarse,(*nlevels)++);
+  ierr = MPI_Allreduce(MPI_IN_PLACE,nlevels,1,MPIU_INT,MPI_MAX,grid->comm);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 static PetscErrorCode DMCreateGlobalVector_FE(DM dm,Vec *G)
 {
   PetscErrorCode ierr;
@@ -642,7 +653,34 @@ PetscErrorCode DMFERestrict(DM dm,Vec Uf,Vec Uc)
     ierr = DMLocalToGlobalEnd(fe->dmcoarse,Ucl,ADD_VALUES,Uc);CHKERRQ(ierr);
     ierr = DMRestoreLocalVector(fe->dmcoarse,&Ucl);CHKERRQ(ierr);
   }
+  PetscFunctionReturn(0);
+}
 
+PetscErrorCode DMFEZeroBoundaries(DM dm,Vec U) {
+  PetscErrorCode ierr;
+  PetscScalar *u;
+  PetscInt gs[3],gM[3],*om;
+  FE fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  om = fe->om;
+  for (PetscInt i=0; i<3; i++) {
+    gs[i] = fe->grid->s[i]*fe->degree;
+    gM[i] = fe->grid->M[i]*fe->degree+1; // global boundaries
+  }
+  ierr = VecGetArray(U,&u);CHKERRQ(ierr);
+  for (PetscInt i=gs[0]; i<gs[0]+om[0]; i++) {
+    for (PetscInt j=gs[1]; j<gs[1]+om[1]; j++) {
+      for (PetscInt k=gs[2]; k<gs[2]+om[2]; k++) {
+        if ((0<i && i<gM[0]-1) && (0<j && j<gM[1]-1) && (0<k && k<gM[2]-1)) continue;
+        for (PetscInt d=0; d<fe->dof; d++) {
+          u[FEIdxO(fe,i-gs[0],j-gs[1],k-gs[2])*fe->dof+d] = 0;
+        }
+      }
+    }
+  }
+  ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 

@@ -10,6 +10,7 @@ typedef enum {DOMAIN_INTERIOR=0x1,DOMAIN_EXTERIOR=0x2,DOMAIN_CLOSURE=0x3} Domain
 PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],const PetscInt pw[3],PetscInt cmax,Grid *grid);
 PetscErrorCode GridDestroy(Grid *grid);
 PetscErrorCode GridView(Grid grid);
+PetscErrorCode GridGetNumLevels(Grid grid,PetscInt *nlevels);
 PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe);
 PetscErrorCode DMDestroyFE(DM *dm);
 PetscErrorCode DMFESetUniformCoordinates(DM dm,const PetscReal L[]);
@@ -21,5 +22,6 @@ PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse);
 PetscErrorCode DMFEInject(DM dm,Vec Uf,Vec Uc);
 PetscErrorCode DMFEInterpolate(DM dm,Vec Uc,Vec Uf);
 PetscErrorCode DMFERestrict(DM dm,Vec Uf,Vec Uc);
+PetscErrorCode DMFEZeroBoundaries(DM dm,Vec U);
 
 #endif
