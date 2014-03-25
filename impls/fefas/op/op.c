@@ -16,8 +16,8 @@ struct Op_private {
   PetscErrorCode (*RestrictState)(Op,DM,Vec,Vec);
   PetscErrorCode (*RestrictResidual)(Op,DM,Vec,Vec);
   PetscErrorCode (*Interpolate)(Op,DM,Vec,Vec);
-  PetscErrorCode (*PointwiseSolution)(Op,const PetscReal[],PetscScalar[]);
-  PetscErrorCode (*PointwiseForcing)(Op,const PetscReal[],PetscScalar[]);
+  PetscErrorCode (*PointwiseSolution)(Op,const PetscReal[],const PetscReal[],PetscScalar[]);
+  PetscErrorCode (*PointwiseForcing)(Op,const PetscReal[],const PetscReal[],PetscScalar[]);
   PetscErrorCode (*PointwiseElement)(Op,PetscInt,PetscInt,const PetscScalar[],const PetscReal[],const PetscScalar[],PetscScalar[]);
   PetscErrorCode (*Destroy)(Op);
   void *ctx;
@@ -55,11 +55,11 @@ PetscErrorCode OpSetApply(Op op,PetscErrorCode (*f)(Op,DM,Vec,Vec)) {
   op->Apply = f;
   return 0;
 }
-PetscErrorCode OpSetPointwiseSolution(Op op,PetscErrorCode (*f)(Op,const PetscReal[],PetscScalar[])) {
+PetscErrorCode OpSetPointwiseSolution(Op op,PetscErrorCode (*f)(Op,const PetscReal[],const PetscReal[],PetscScalar[])) {
   op->PointwiseSolution = f;
   return 0;
 }
-PetscErrorCode OpSetPointwiseForcing(Op op,PetscErrorCode (*f)(Op,const PetscReal[],PetscScalar[])) {
+PetscErrorCode OpSetPointwiseForcing(Op op,PetscErrorCode (*f)(Op,const PetscReal[],const PetscReal[],PetscScalar[])) {
   op->PointwiseForcing = f;
   return 0;
 }
@@ -74,16 +74,20 @@ PetscErrorCode OpSolution(Op op,DM dm,Vec U) {
   Vec X;
   const PetscScalar *x;
   PetscScalar *u;
+  PetscReal L[3];
   PetscInt i,m,bs;
 
   PetscFunctionBegin;
   ierr = DMGetCoordinates(dm,&X);CHKERRQ(ierr);
+  ierr = VecStrideMax(X,0,NULL,&L[0]);CHKERRQ(ierr);
+  ierr = VecStrideMax(X,1,NULL,&L[1]);CHKERRQ(ierr);
+  ierr = VecStrideMax(X,2,NULL,&L[2]);CHKERRQ(ierr);
   ierr = VecGetLocalSize(U,&m);CHKERRQ(ierr);
   ierr = VecGetBlockSize(U,&bs);CHKERRQ(ierr);
   ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
   ierr = VecGetArray(U,&u);CHKERRQ(ierr);
   for (i=0; i<m/bs; i++) {
-    ierr = (op->PointwiseSolution)(op,&x[i*3],&u[i*bs]);CHKERRQ(ierr);
+    ierr = (op->PointwiseSolution)(op,&x[i*3],L,&u[i*bs]);CHKERRQ(ierr);
   }
   ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
   ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
@@ -97,6 +101,7 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
   const PetscScalar *x;
   PetscScalar *f;
   const PetscReal *B,*D,*w3;
+  PetscReal L[3];
   PetscInt nelem,ne = 1,P,Q,P3,Q3;
 
   PetscFunctionBegin;
@@ -106,6 +111,10 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
 
   ierr = DMGetLocalVector(dm,&Floc);CHKERRQ(ierr);
   ierr = DMGetCoordinateDM(dm,&dmx);CHKERRQ(ierr);
+  ierr = DMGetCoordinates(dm,&X);CHKERRQ(ierr);
+  ierr = VecStrideMax(X,0,NULL,&L[0]);CHKERRQ(ierr);
+  ierr = VecStrideMax(X,1,NULL,&L[1]);CHKERRQ(ierr);
+  ierr = VecStrideMax(X,2,NULL,&L[2]);CHKERRQ(ierr);
   ierr = DMGetCoordinatesLocal(dm,&X);CHKERRQ(ierr);
   ierr = DMFEGetNumElements(dm,&nelem);CHKERRQ(ierr);
   ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
@@ -128,7 +137,7 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
       for (PetscInt l=0; l<ne; l++) {
         PetscReal xx[] = {xq[0][i][l],xq[1][i][l],xq[2][i][l]};
         PetscScalar fql[op->dof];
-        ierr = (op->PointwiseForcing)(op,xx,fql);CHKERRQ(ierr);
+        ierr = (op->PointwiseForcing)(op,xx,L,fql);CHKERRQ(ierr);
         for (PetscInt d=0; d<op->dof; d++) fq[d][i][l] = wdxdet[i][l] * fql[d];
       }
     }

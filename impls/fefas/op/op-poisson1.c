@@ -9,15 +9,15 @@ struct Ctx_private {
   int dummy;
 };
 
-static PetscErrorCode OpPointwiseSolution_Poisson1(Op op,const PetscReal x[],PetscScalar u[]) {
-  u[0] = PetscSinReal(1*PETSC_PI*x[0]) * PetscSinReal(2*PETSC_PI*x[1]) * PetscSinReal(3*PETSC_PI*x[2]);
+static PetscErrorCode OpPointwiseSolution_Poisson1(Op op,const PetscReal x[],const PetscReal L[],PetscScalar u[]) {
+  u[0] = PetscSinReal(1*PETSC_PI*x[0]/L[0]) * PetscSinReal(2*PETSC_PI*x[1]/L[1]) * PetscSinReal(3*PETSC_PI*x[2]/L[2]);
   return 0;
 }
 
-static PetscErrorCode OpPointwiseForcing_Poisson1(Op op,const PetscReal x[],PetscScalar f[]) {
-  f[0] = (  PetscSqr(1*PETSC_PI)*PetscSinReal(1*PETSC_PI*x[0]) * PetscSinReal(2*PETSC_PI*x[1]) * PetscSinReal(3*PETSC_PI*x[2])
-          + PetscSqr(2*PETSC_PI)*PetscSinReal(1*PETSC_PI*x[0]) * PetscSinReal(2*PETSC_PI*x[1]) * PetscSinReal(3*PETSC_PI*x[2])
-          + PetscSqr(3*PETSC_PI)*PetscSinReal(1*PETSC_PI*x[0]) * PetscSinReal(2*PETSC_PI*x[1]) * PetscSinReal(3*PETSC_PI*x[2]));
+static PetscErrorCode OpPointwiseForcing_Poisson1(Op op,const PetscReal x[],const PetscReal L[],PetscScalar f[]) {
+  f[0] = (  PetscSqr(1*PETSC_PI/L[0])*PetscSinReal(1*PETSC_PI*x[0]/L[0]) * PetscSinReal(2*PETSC_PI*x[1]/L[1]) * PetscSinReal(3*PETSC_PI*x[2]/L[2])
+          + PetscSqr(2*PETSC_PI/L[1])*PetscSinReal(1*PETSC_PI*x[0]/L[0]) * PetscSinReal(2*PETSC_PI*x[1]/L[1]) * PetscSinReal(3*PETSC_PI*x[2]/L[2])
+          + PetscSqr(3*PETSC_PI/L[2])*PetscSinReal(1*PETSC_PI*x[0]/L[0]) * PetscSinReal(2*PETSC_PI*x[1]/L[1]) * PetscSinReal(3*PETSC_PI*x[2]/L[2]));
   return 0;
 }
 
