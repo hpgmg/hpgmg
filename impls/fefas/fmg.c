@@ -150,7 +150,7 @@ static PetscErrorCode MGVCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
   }
   ierr = DMRestoreGlobalVector(dm,&V);CHKERRQ(ierr);
 
-  ierr = KSPSetTolerances(mg->ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,presmooths);CHKERRQ(ierr);
+  ierr = KSPSetTolerances(mg->ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,postsmooths);CHKERRQ(ierr);
   ierr = KSPSolve(mg->ksp,B,U);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
