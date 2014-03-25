@@ -649,7 +649,7 @@ PetscErrorCode DMFERestrict(DM dm,Vec Uf,Vec Uc)
 PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
 {
   PetscErrorCode ierr;
-  FE fe;
+  FE fe,fecoarse = NULL;
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
@@ -658,7 +658,6 @@ PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
     PetscFunctionReturn(0);
   }
   if (fe->grid->coarse) {       /* My process participates in the coarse grid */
-    FE fecoarse;
     ierr = DMCreateFE(fe->grid->coarse,fe->degree,fe->dof,&fe->dmcoarse);CHKERRQ(ierr);
     ierr = DMGetApplicationContext(fe->dmcoarse,&fecoarse);CHKERRQ(ierr);
     for (PetscInt i=0; i<3; i++) {
@@ -724,6 +723,7 @@ PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
     if (dmc_coarse) {
       ierr = DMSetCoordinateDM(fe->dmcoarse,dmc_coarse);CHKERRQ(ierr);
       ierr = DMSetCoordinates(fe->dmcoarse,Xc);CHKERRQ(ierr);
+      fecoarse->hascoordinates = PETSC_TRUE;
     }
     ierr = VecDestroy(&Xc);CHKERRQ(ierr);
   }
