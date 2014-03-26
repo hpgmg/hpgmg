@@ -332,6 +332,7 @@ PetscErrorCode OpCreateFromOptions(MPI_Comm comm,Op *op)
   ierr = PetscOptionsBegin(comm,NULL,"Operator options",NULL);CHKERRQ(ierr);
   ierr = PetscOptionsFList("-op_type","Operator type","",OpList,opname,opname,sizeof opname,NULL);CHKERRQ(ierr);
   ierr = PetscFunctionListFind(OpList,opname,&f);CHKERRQ(ierr);
+  if (!f) SETERRQ1(comm,PETSC_ERR_USER,"Operator type '%s' not found",opname);
   ierr = (*f)(o);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
   *op = o;
