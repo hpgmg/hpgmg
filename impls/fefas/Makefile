@@ -53,7 +53,7 @@ FEFAS_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLA
 fefas = $(BINDIR)/fefas
 fefas : $(fefas)
 fefas-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(fefas-y.c))) $(patsubst %.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(fefas-y.c)))
-$(BINDIR)/fefas : $(fefas-y.o) $(libfefas) | $$(@D)/.DIR
+$(BINDIR)/fefas : $(fefas-y.o) | $$(@D)/.DIR
 	$(call quiet,CLINKER) -o $@ $^ $(PETSC_SNES_LIB) $(LIBZ_LIB)
 
 $(OBJDIR)/%.o: $(OBJDIR)/%.c
