@@ -8,6 +8,7 @@ struct Options_private {
   PetscInt p[3];
   PetscInt cmax;
   PetscReal L[3];
+  PetscInt  smooth[2];
 };
 
 typedef struct MG_private *MG;
@@ -21,7 +22,7 @@ static PetscErrorCode OptionsParse(const char *header,Options *opt)
 {
   PetscErrorCode ierr;
   Options o;
-  PetscInt three,M_max;
+  PetscInt three,two,M_max;
 
   PetscFunctionBegin;
   *opt = NULL;
@@ -45,6 +46,10 @@ static PetscErrorCode OptionsParse(const char *header,Options *opt)
   o->L[2] = o->M[2]*1./M_max;
   three = 3;
   ierr = PetscOptionsRealArray("-L","Grid dimensions","",o->L,&three,NULL);CHKERRQ(ierr);
+  o->smooth[0] = 2;
+  o->smooth[1] = 3;
+  two = 2;
+  ierr = PetscOptionsIntArray("-smooth","V- and F-cycle pre,post smoothing","",o->smooth,&two,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
   *opt = o;
   PetscFunctionReturn(0);
@@ -53,8 +58,16 @@ static PetscErrorCode OptionsParse(const char *header,Options *opt)
 static PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
   PetscErrorCode ierr;
   MG mg;
+  PetscInt two;
+  PetscReal eig_target[2];
 
   PetscFunctionBegin;
+  ierr = PetscOptionsBegin(PetscObjectComm((PetscObject)dm),NULL,"MG Options",NULL);CHKERRQ(ierr);
+  two = 2;
+  eig_target[0] = 1.4;
+  eig_target[1] = 0.4;
+  ierr = PetscOptionsRealArray("-mg_eig_target","Target max,min eigenvalues on levels","",eig_target,&two,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
   ierr = PetscNew(&mg);CHKERRQ(ierr);
   mg->dm = dm;
   *newmg = mg;
@@ -65,12 +78,18 @@ static PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
       PC pc;
       char prefix[256];
       ierr = KSPCreate(PetscObjectComm((PetscObject)mg->dm),&mg->ksp);CHKERRQ(ierr);
-      ierr = KSPGetPC(mg->ksp,&pc);CHKERRQ(ierr);
-      ierr = KSPSetConvergenceTest(mg->ksp,KSPConvergedSkip,NULL,NULL);CHKERRQ(ierr);
-      ierr = KSPSetNormType(mg->ksp,KSP_NORM_NONE);CHKERRQ(ierr);
-      ierr = KSPSetType(mg->ksp,KSPCHEBYSHEV);CHKERRQ(ierr);
-      ierr = KSPChebyshevSetEigenvalues(mg->ksp,2,0.2);CHKERRQ(ierr);
+      if (lev) {
+        ierr = KSPSetConvergenceTest(mg->ksp,KSPConvergedSkip,NULL,NULL);CHKERRQ(ierr);
+        ierr = KSPSetNormType(mg->ksp,KSP_NORM_NONE);CHKERRQ(ierr);
+        ierr = KSPSetType(mg->ksp,KSPCHEBYSHEV);CHKERRQ(ierr);
+      } else {
+        ierr = KSPSetNormType(mg->ksp,KSP_NORM_NATURAL);CHKERRQ(ierr);
+        ierr = KSPSetType(mg->ksp,KSPCG);CHKERRQ(ierr);
+        ierr = KSPSetTolerances(mg->ksp,1e-10,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT);CHKERRQ(ierr);
+      }
+      ierr = KSPChebyshevSetEigenvalues(mg->ksp,eig_target[0],eig_target[1]);CHKERRQ(ierr);
       ierr = KSPSetInitialGuessNonzero(mg->ksp,PETSC_TRUE);CHKERRQ(ierr);
+      ierr = KSPGetPC(mg->ksp,&pc);CHKERRQ(ierr);
       ierr = PCSetType(pc,PCJACOBI);CHKERRQ(ierr);
       ierr = OpGetMat(op,mg->dm,&A);CHKERRQ(ierr);
       ierr = KSPSetOperators(mg->ksp,A,A);CHKERRQ(ierr);
@@ -112,7 +131,7 @@ static PetscErrorCode MGVCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
   Vec V,Vc,Uc;
 
   PetscFunctionBegin;
-  ierr = KSPSetTolerances(mg->ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,presmooths);CHKERRQ(ierr);
+  ierr = KSPSetTolerances(mg->ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,mg->coarse?presmooths:20);CHKERRQ(ierr);
   ierr = KSPSolve(mg->ksp,B,U);CHKERRQ(ierr);
   if (!mg->coarse) PetscFunctionReturn(0);
 
@@ -216,9 +235,8 @@ PetscErrorCode RunMGV()
 
   ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
   for (PetscInt i=0; i<5; i++) {
-    PetscInt presmooths = 1,postsmooths = 1;
     Vec Y;
-    ierr = MGVCycle(op,mg,presmooths,postsmooths,F,U);CHKERRQ(ierr);
+    ierr = MGVCycle(op,mg,opt->smooth[0],opt->smooth[1],F,U);CHKERRQ(ierr);
     ierr = DMGetGlobalVector(dm,&Y);CHKERRQ(ierr);
     ierr = VecCopy(U,Y);CHKERRQ(ierr);
     ierr = VecAXPY(Y,-1,U0);CHKERRQ(ierr);
@@ -226,7 +244,7 @@ PetscErrorCode RunMGV()
     ierr = OpApply(op,dm,U,Y);CHKERRQ(ierr);
     ierr = VecAYPX(Y,-1,F);CHKERRQ(ierr);
     ierr = VecNorm(Y,NORM_2,&normResid);CHKERRQ(ierr);
-    ierr = PetscPrintf(PETSC_COMM_WORLD,"V(%D,%D) %2D: |e|_2/|u|_2 %8.2e  |r|_2/|f|_2 %8.2e\n",presmooths,postsmooths,i,(double)(normError/normU0),(double)(normResid/normF));CHKERRQ(ierr);
+    ierr = PetscPrintf(PETSC_COMM_WORLD,"V(%D,%D) %2D: |e|_2/|u|_2 %8.2e  |r|_2/|f|_2 %8.2e\n",opt->smooth[0],opt->smooth[1],i,(double)(normError/normU0),(double)(normResid/normF));CHKERRQ(ierr);
     ierr = DMRestoreGlobalVector(dm,&Y);CHKERRQ(ierr);
   }
 
@@ -274,10 +292,9 @@ PetscErrorCode RunFMG()
 
   ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
   for (PetscInt i=0; i<3; i++) {
-    PetscInt presmooths = 2,postsmooths = 2;
     Vec Y;
-    if (!i) {ierr = MGFCycle(op,mg,presmooths,postsmooths,F,U);CHKERRQ(ierr);}
-    else    {ierr = MGVCycle(op,mg,presmooths,postsmooths,F,U);CHKERRQ(ierr);}
+    if (!i) {ierr = MGFCycle(op,mg,opt->smooth[0],opt->smooth[1],F,U);CHKERRQ(ierr);}
+    else    {ierr = MGVCycle(op,mg,opt->smooth[0],opt->smooth[1],F,U);CHKERRQ(ierr);}
     ierr = DMGetGlobalVector(dm,&Y);CHKERRQ(ierr);
     ierr = VecCopy(U,Y);CHKERRQ(ierr);
     ierr = VecAXPY(Y,-1,U0);CHKERRQ(ierr);
@@ -285,7 +302,7 @@ PetscErrorCode RunFMG()
     ierr = OpApply(op,dm,U,Y);CHKERRQ(ierr);
     ierr = VecAYPX(Y,-1,F);CHKERRQ(ierr);
     ierr = VecNorm(Y,NORM_2,&normResid);CHKERRQ(ierr);
-    ierr = PetscPrintf(PETSC_COMM_WORLD,"%s(%D,%D) %2D: |e|_2/|u|_2 %8.2e  |r|_2/|f|_2 %8.2e\n",i?"V":"F",presmooths,postsmooths,i,(double)(normError/normU0),(double)(normResid/normF));CHKERRQ(ierr);
+    ierr = PetscPrintf(PETSC_COMM_WORLD,"%s(%D,%D) %2D: |e|_2/|u|_2 %8.2e  |r|_2/|f|_2 %8.2e\n",i?"V":"F",opt->smooth[0],opt->smooth[1],i,(double)(normError/normU0),(double)(normResid/normF));CHKERRQ(ierr);
     ierr = DMRestoreGlobalVector(dm,&Y);CHKERRQ(ierr);
   }
 
