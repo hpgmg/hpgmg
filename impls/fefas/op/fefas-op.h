@@ -6,6 +6,7 @@
 
 typedef struct Op_private *Op;
 
+MPI_Comm OpComm(Op);
 PetscErrorCode OpCreateFromOptions(MPI_Comm,Op*);
 PetscErrorCode OpDestroy(Op*);
 PetscErrorCode OpSetDof(Op,PetscInt);

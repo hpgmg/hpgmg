@@ -23,6 +23,7 @@ struct Op_private {
   void *ctx;
 };
 
+PetscErrorCode OpComm(Op op) { return op->comm; }
 PetscErrorCode OpSetFEDegree(Op op,PetscInt degree) {
   op->fedegree = degree;
   return 0;
