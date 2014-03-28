@@ -110,12 +110,9 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
   P3 = P*P*P;
   Q3 = Q*Q*Q;
 
+  ierr = DMFEGetUniformCoordinates(dm,L);CHKERRQ(ierr);
   ierr = DMGetLocalVector(dm,&Floc);CHKERRQ(ierr);
   ierr = DMGetCoordinateDM(dm,&dmx);CHKERRQ(ierr);
-  ierr = DMGetCoordinates(dm,&X);CHKERRQ(ierr);
-  ierr = VecStrideMax(X,0,NULL,&L[0]);CHKERRQ(ierr);
-  ierr = VecStrideMax(X,1,NULL,&L[1]);CHKERRQ(ierr);
-  ierr = VecStrideMax(X,2,NULL,&L[2]);CHKERRQ(ierr);
   ierr = DMGetCoordinatesLocal(dm,&X);CHKERRQ(ierr);
   ierr = DMFEGetNumElements(dm,&nelem);CHKERRQ(ierr);
   ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);

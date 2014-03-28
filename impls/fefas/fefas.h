@@ -14,6 +14,7 @@ PetscErrorCode GridGetNumLevels(Grid grid,PetscInt *nlevels);
 PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe);
 PetscErrorCode DMDestroyFE(DM *dm);
 PetscErrorCode DMFESetUniformCoordinates(DM dm,const PetscReal L[]);
+PetscErrorCode DMFEGetUniformCoordinates(DM dm,PetscReal L[]);
 PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal **B,const PetscReal **D,const PetscReal **x,const PetscReal **w,const PetscReal **w3);
 PetscErrorCode DMFEGetNumElements(DM dm,PetscInt *nelems);
 PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y);

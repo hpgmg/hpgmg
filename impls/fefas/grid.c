@@ -31,6 +31,7 @@ struct FE_private {
   PetscInt Com[3];      // Array dimensions of owned coarse grid that we contribute to
   PetscInt cls[3];      // Start of array part that we contribute to coarse grid
   PetscInt rneighbor_om[3][3];
+  PetscReal Luniform[3];
   PetscBool hascoordinates;
   MPI_Datatype unit;
   PetscSF sf;
@@ -406,12 +407,23 @@ PetscErrorCode DMFESetUniformCoordinates(DM dm,const PetscReal L[])
   ierr = VecRestoreArray(X,&x);CHKERRQ(ierr);
   ierr = DMSetCoordinateDM(dm,dmc);CHKERRQ(ierr);
   ierr = DMSetCoordinatesLocal(dm,X);CHKERRQ(ierr);
+  ierr = PetscMemcpy(fe->Luniform,L,sizeof fe->Luniform);CHKERRQ(ierr);
   fe->hascoordinates = PETSC_TRUE;
   ierr = DMDestroy(&dmc);CHKERRQ(ierr);
   ierr = VecDestroy(&X);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
+PetscErrorCode DMFEGetUniformCoordinates(DM dm,PetscReal L[]) {
+  PetscErrorCode ierr;
+  FE fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (!fe->hascoordinates) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_WRONGSTATE,"Uniform coordinates not set");
+  ierr = PetscMemcpy(L,fe->Luniform,sizeof fe->Luniform);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
 // Injection: state restriction
 //   primary order zero: high-frequency harmonics on fine grid alias at full amplitude
 //   secondary order infinite: low-frequencies are exact on coarse grid
@@ -761,6 +773,7 @@ PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
     if (dmc_coarse) {
       ierr = DMSetCoordinateDM(fe->dmcoarse,dmc_coarse);CHKERRQ(ierr);
       ierr = DMSetCoordinates(fe->dmcoarse,Xc);CHKERRQ(ierr);
+      ierr = PetscMemcpy(fecoarse->Luniform,fe->Luniform,sizeof fe->Luniform);CHKERRQ(ierr);
       fecoarse->hascoordinates = PETSC_TRUE;
     }
     ierr = VecDestroy(&Xc);CHKERRQ(ierr);
