@@ -9,6 +9,7 @@ struct Options_private {
   PetscInt cmax;
   PetscReal L[3];
   PetscInt  smooth[2];
+  PetscBool coord_distort;
 };
 
 typedef struct MG_private *MG;
@@ -50,6 +51,7 @@ static PetscErrorCode OptionsParse(const char *header,Options *opt)
   o->smooth[1] = 3;
   two = 2;
   ierr = PetscOptionsIntArray("-smooth","V- and F-cycle pre,post smoothing","",o->smooth,&two,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsBool("-coord_distort","Distort coordinates within unit cube","",o->coord_distort,&o->coord_distort,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
   *opt = o;
   PetscFunctionReturn(0);
@@ -259,6 +261,31 @@ PetscErrorCode RunMGV()
   PetscFunctionReturn(0);
 }
 
+// Smooth 5% mesh distortion implemented by "swirling" the region inside |(x,y)|_2 < 1.
+static PetscErrorCode CoordDistort(DM dm,const PetscReal L[]) {
+  PetscErrorCode ierr;
+  PetscScalar *xx;
+  PetscInt m;
+  Vec X;
+
+  PetscFunctionBegin;
+  ierr = DMGetCoordinatesLocal(dm,&X);CHKERRQ(ierr);
+  ierr = VecGetLocalSize(X,&m);CHKERRQ(ierr);
+  ierr = VecGetArray(X,&xx);CHKERRQ(ierr);
+  for (PetscInt i=0; i<m; i+=3) {
+    PetscReal x = xx[i]/L[0],y = xx[i+1]/L[1],z = xx[i+2]/L[2],r2,theta,newx,newy;
+    r2 = PetscMin(PetscSqrtReal(PetscSqr(2*x-1) + PetscSqr(2*y-1)),1);
+    theta = 0.1*PetscSqr(PetscCosReal(PETSC_PI*r2/2)) * PetscSinReal(PETSC_PI*z);
+    newx = (.5 + PetscCosReal(theta)*(x-.5) - PetscSinReal(theta)*(y-.5))*L[0];
+    newy = (.5 + PetscSinReal(theta)*(x-.5) + PetscCosReal(theta)*(y-.5))*L[1];
+    if (0) printf("%6.3f %6.3f %6.3f:  r2 %6.3f  theta %6.3f  dx %6.3f %6.3f\n",xx[i+0],xx[i+1],xx[i+2],r2,theta,newx-xx[i],newy-xx[i+1]);
+    xx[i+0] = newx;
+    xx[i+1] = newy;
+  }
+  ierr = VecRestoreArray(X,&xx);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode RunFMG()
 {
   PetscErrorCode ierr;
@@ -281,6 +308,7 @@ PetscErrorCode RunFMG()
 
   ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
+  if (opt->coord_distort) {ierr = CoordDistort(dm,opt->L);CHKERRQ(ierr);}
 
   ierr = DMCreateGlobalVector(dm,&U0);CHKERRQ(ierr);
   ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
