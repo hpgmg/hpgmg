@@ -135,7 +135,7 @@ static PetscErrorCode OpApply_Poisson(Op op,DM dm,Vec U,Vec V,
   ierr = VecGetArray(Vl,&v);CHKERRQ(ierr);
 
   for (PetscInt e=0; e<nelem; e+=NE) {
-    PetscScalar ve[1*P3*NE],dv[3][1][Q3][NE],ue[1*P3*NE],du[3][1][Q3][NE],xe[3*P3*NE],dx[3][3][Q3][NE],wdxdet[Q3][NE];
+    PetscScalar ve[1*P3*NE]_align,dv[3][1][Q3][NE]_align,ue[1*P3*NE]_align,du[3][1][Q3][NE]_align,xe[3*P3*NE]_align,dx[3][3][Q3][NE]_align,wdxdet[Q3][NE]_align;
 
     ierr = DMFEExtractElements(dmx,x,e,NE,xe);CHKERRQ(ierr);
     ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);

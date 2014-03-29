@@ -3,6 +3,12 @@
 
 #include <petscsys.h>
 
+#ifdef __AVX__
+#  define _align __attribute__((aligned(32))) /* AVX packed instructions need 32-byte alignment */
+#else
+#  define _align
+#endif
+
 typedef enum {TENSOR_EVAL,TENSOR_TRANSPOSE} TensorMode;
 
 typedef struct Tensor_private *Tensor;

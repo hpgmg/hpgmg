@@ -125,7 +125,7 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
   ierr = VecGetArray(Floc,&f);CHKERRQ(ierr);
 
   for (PetscInt e=0; e<nelem; e+=ne) {
-    PetscScalar fe[op->dof*P3*ne],fq[op->dof][Q3][ne],xe[3*P3*ne],xq[3][Q3][ne],dx[3][3][Q3][ne],wdxdet[Q3][ne];
+    PetscScalar fe[op->dof*P3*ne]_align,fq[op->dof][Q3][ne]_align,xe[3*P3*ne]_align,xq[3][Q3][ne]_align,dx[3][3][Q3][ne]_align,wdxdet[Q3][ne]_align;
 
     ierr = DMFEExtractElements(dmx,x,e,ne,xe);CHKERRQ(ierr);
     ierr = PetscMemzero(xq,sizeof xq);CHKERRQ(ierr);
@@ -186,7 +186,7 @@ PetscErrorCode OpIntegrateNorms(Op op,DM dm,Vec U,PetscReal *normInfty,PetscReal
   ierr = VecGetArrayRead(Uloc,&u);CHKERRQ(ierr);
 
   for (PetscInt e=0; e<nelem; e+=ne) {
-    PetscScalar ue[op->dof*P3*ne],uq[op->dof][Q3][ne],xe[3*P3*ne],xq[3][Q3][ne],dx[3][3][Q3][ne],wdxdet[Q3][ne];
+    PetscScalar ue[op->dof*P3*ne]_align,uq[op->dof][Q3][ne]_align,xe[3*P3*ne]_align,xq[3][Q3][ne]_align,dx[3][3][Q3][ne]_align,wdxdet[Q3][ne]_align;
 
     ierr = DMFEExtractElements(dmx,x,e,ne,xe);CHKERRQ(ierr);
     ierr = PetscMemzero(xq,sizeof xq);CHKERRQ(ierr);
@@ -265,7 +265,7 @@ PetscErrorCode OpGetDiagonal(Op op,DM dm,Vec Diag) {
   ierr = VecGetArray(Vl,&diag);CHKERRQ(ierr);
 
   for (PetscInt e=0; e<nelem; e+=NE) {
-    PetscScalar diage[1*P3*NE],ve[1*P3*NE],dv[3][1][Q3][NE],ue[1*P3*NE],du[3][1][Q3][NE],xe[3*P3*NE],dx[3][3][Q3][NE],wdxdet[Q3][NE];
+    PetscScalar diage[1*P3*NE]_align,ve[1*P3*NE]_align,dv[3][1][Q3][NE]_align,ue[1*P3*NE]_align,du[3][1][Q3][NE]_align,xe[3*P3*NE]_align,dx[3][3][Q3][NE]_align,wdxdet[Q3][NE]_align;
 
     ierr = DMFEExtractElements(dmx,x,e,NE,xe);CHKERRQ(ierr);
     ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);
