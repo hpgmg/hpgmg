@@ -31,6 +31,7 @@ PetscErrorCode OpRestrictResidual(Op op,DM dm,Vec Uf,Vec Uc);
 PetscErrorCode OpInterpolate(Op op,DM dm,Vec Uc,Vec Uf);
 PetscErrorCode OpSolution(Op op,DM dm,Vec U);
 PetscErrorCode OpForcing(Op op,DM dm,Vec F);
+PetscErrorCode OpIntegrateNorms(Op op,DM dm,Vec U,PetscReal *normInfty,PetscReal *norm2);
 PetscErrorCode OpGetDiagonal(Op op,DM dm,Vec Diag);
 PetscErrorCode OpGetMat(Op op,DM dm,Mat *shell);
 

@@ -17,6 +17,9 @@ struct MG_private {
   DM dm;
   KSP ksp;
   MG coarse;
+  PetscReal enormInfty,enormL2;
+  PetscReal rnorm2,bnorm2;      // rnorm is normalized by bnorm
+  PetscBool monitor;
 };
 
 static PetscErrorCode OptionsParse(const char *header,Options *opt)
@@ -62,6 +65,7 @@ static PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
   MG mg;
   PetscInt two;
   PetscReal eig_target[2];
+  PetscBool monitor;
 
   PetscFunctionBegin;
   ierr = PetscOptionsBegin(PetscObjectComm((PetscObject)dm),NULL,"MG Options",NULL);CHKERRQ(ierr);
@@ -69,12 +73,15 @@ static PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
   eig_target[0] = 1.4;
   eig_target[1] = 0.4;
   ierr = PetscOptionsRealArray("-mg_eig_target","Target max,min eigenvalues on levels","",eig_target,&two,NULL);CHKERRQ(ierr);
+  monitor = PETSC_FALSE;
+  ierr = PetscOptionsBool("-mg_monitor","Monitor convergence at the end of each MG cycle","",monitor,&monitor,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
   ierr = PetscNew(&mg);CHKERRQ(ierr);
   mg->dm = dm;
   *newmg = mg;
   for (PetscInt lev=nlevels-1; ; lev--) {
     DM dmcoarse;
+    mg->monitor = monitor;
     if (mg->dm) { // I have some grid at this level
       Mat A;
       PC pc;
@@ -120,6 +127,46 @@ static PetscErrorCode MGDestroy(MG *mg) {
   ierr = MGDestroy(&(*mg)->coarse);CHKERRQ(ierr);
   ierr = KSPDestroy(&(*mg)->ksp);CHKERRQ(ierr);
   ierr = PetscFree(*mg);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscReal ConvergenceRate(PetscReal normCoarse,PetscReal normFine) {
+  // Try to avoid reporting noisy rates in pre-asymptotic regime
+  if (normCoarse < 1e3*PETSC_MACHINE_EPSILON && normFine > 1e3*PETSC_MACHINE_EPSILON) return 0;
+  return log2(normCoarse/normFine);
+}
+
+static PetscErrorCode MGRecordDiagnostics(Op op,MG mg,Vec B,Vec U) {
+  PetscErrorCode ierr;
+  Vec Y;
+
+  PetscFunctionBegin;
+  ierr = DMGetGlobalVector(mg->dm,&Y);CHKERRQ(ierr);
+  ierr = OpApply(op,mg->dm,U,Y);CHKERRQ(ierr);
+  ierr = VecAYPX(Y,-1.,B);CHKERRQ(ierr);
+  ierr = VecNorm(Y,NORM_2,&mg->rnorm2);CHKERRQ(ierr);
+  if (mg->bnorm2 > 1e3*PETSC_MACHINE_EPSILON && mg->rnorm2 > 1e3*PETSC_MACHINE_EPSILON) mg->rnorm2 /= mg->bnorm2;
+  ierr = DMRestoreGlobalVector(mg->dm,&Y);CHKERRQ(ierr);
+
+  ierr = OpIntegrateNorms(op,mg->dm,U,&mg->enormInfty,&mg->enormL2);CHKERRQ(ierr);
+  if (mg->monitor) {
+    PetscInt fedegree,level,mlocal[3],Mglobal[3],procs[3];
+    PetscReal erateInfty = 0,erateL2 = 0,rrate2 = 0;
+    ierr = DMFEGetInfo(mg->dm,&fedegree,&level,mlocal,Mglobal,procs);CHKERRQ(ierr);
+    if (mg->coarse) {
+      erateInfty = ConvergenceRate(mg->coarse->enormInfty,mg->enormInfty);
+      erateL2    = ConvergenceRate(mg->coarse->enormL2,mg->enormL2);
+      rrate2     = ConvergenceRate(mg->coarse->rnorm2,mg->rnorm2);
+    }
+    ierr = PetscPrintf(PetscObjectComm((PetscObject)mg->dm),"Q%D %2D e_∞ %8.2e(%3.1f) e_L2 %8.2e(%3.1f) r_2 %8.2e(%3.1f) G[%4D%4D%4D] L[%3D%3D%3D] P[%3D%3D%3D]\n",
+                       fedegree,level,
+                       mg->enormInfty,erateInfty,    // normalized by exact solution
+                       mg->enormL2,erateL2,          // normalized by exact solution
+                       mg->rnorm2,rrate2,            // algebraic, normalized by (non-tau-corrected) algebraic forcing
+                       Mglobal[0],Mglobal[1],Mglobal[2],
+                       mlocal[0],mlocal[1],mlocal[2],
+                       procs[0],procs[1],procs[2]);CHKERRQ(ierr);
+  }
   PetscFunctionReturn(0);
 }
 
@@ -180,6 +227,7 @@ static PetscErrorCode MGFCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  ierr = VecNorm(B,NORM_2,&mg->bnorm2);CHKERRQ(ierr);
   if (mg->coarse) {
     Vec Uc,Bc;
     DM dmcoarse = mg->coarse->dm;
@@ -200,6 +248,7 @@ static PetscErrorCode MGFCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
     }
   }
   ierr = MGVCycle(op,mg,presmooths,postsmooths,B,U);CHKERRQ(ierr);
+  ierr = MGRecordDiagnostics(op,mg,B,U);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 

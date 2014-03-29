@@ -152,6 +152,74 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
   PetscFunctionReturn(0);
 }
 
+// Approximates continuous L^\infty and L^2 norms of error, normalized by L^\infty and L^2 norms of analytic solution
+PetscErrorCode OpIntegrateNorms(Op op,DM dm,Vec U,PetscReal *normInfty,PetscReal *normL2) {
+  PetscErrorCode ierr;
+  Vec X,Uloc;
+  DM dmx;
+  const PetscScalar *x,*u;
+  const PetscReal *B,*D,*w3;
+  PetscReal L[3];
+  struct {PetscReal error,u;} sumInfty={},sum2={};
+  PetscInt nelem,ne = 1,P,Q,P3,Q3;
+
+  PetscFunctionBegin;
+  ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,&w3);CHKERRQ(ierr);
+  P3 = P*P*P;
+  Q3 = Q*Q*Q;
+
+  ierr = DMFEGetUniformCoordinates(dm,L);CHKERRQ(ierr);
+  ierr = DMGetCoordinateDM(dm,&dmx);CHKERRQ(ierr);
+  ierr = DMGetCoordinatesLocal(dm,&X);CHKERRQ(ierr);
+  ierr = DMGetLocalVector(dm,&Uloc);CHKERRQ(ierr);
+  ierr = DMGlobalToLocalBegin(dm,U,INSERT_VALUES,Uloc);CHKERRQ(ierr);
+  ierr = DMGlobalToLocalEnd(dm,U,INSERT_VALUES,Uloc);CHKERRQ(ierr);
+  ierr = DMFEGetNumElements(dm,&nelem);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(X,&x);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(Uloc,&u);CHKERRQ(ierr);
+
+  for (PetscInt e=0; e<nelem; e+=ne) {
+    PetscScalar ue[op->dof*P3*ne],uq[op->dof][Q3][ne],xe[3*P3*ne],xq[3][Q3][ne],dx[3][3][Q3][ne],wdxdet[Q3][ne];
+
+    ierr = DMFEExtractElements(dmx,x,e,ne,xe);CHKERRQ(ierr);
+    ierr = PetscMemzero(xq,sizeof xq);CHKERRQ(ierr);
+    ierr = TensorContract(ne,3,P,Q,B,B,B,TENSOR_EVAL,xe,xq[0][0]);CHKERRQ(ierr);
+    ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);
+    ierr = TensorContract(ne,3,P,Q,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(ne,3,P,Q,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(ne,3,P,Q,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
+    ierr = PointwiseJacobianInvert(ne,Q3,w3,dx,wdxdet);CHKERRQ(ierr);
+
+    ierr = DMFEExtractElements(dm,u,e,ne,ue);CHKERRQ(ierr);
+    ierr = PetscMemzero(uq,sizeof uq);CHKERRQ(ierr);
+    ierr = TensorContract(ne,1,P,Q,B,B,B,TENSOR_EVAL,ue,uq[0][0]);CHKERRQ(ierr);
+
+    for (PetscInt i=0; i<Q3; i++) {
+      for (PetscInt l=0; l<ne; l++) {
+        PetscReal xx[] = {xq[0][i][l],xq[1][i][l],xq[2][i][l]};
+        PetscScalar uql[op->dof],fql[op->dof];
+        ierr = (op->PointwiseSolution)(op,xx,L,uql);CHKERRQ(ierr);
+        ierr = (op->PointwiseForcing)(op,xx,L,fql);CHKERRQ(ierr);
+        for (PetscInt d=0; d<op->dof; d++) {
+          PetscReal error = uq[d][i][l] - uql[d];
+          sumInfty.error = PetscMax(sumInfty.error,PetscAbs(error));
+          sumInfty.u     = PetscMax(sumInfty.u    ,PetscAbs(uql[d]));
+          sum2.error    += PetscSqr(error) * wdxdet[i][l];
+          sum2.u        += PetscSqr(uql[d]) * wdxdet[i][l];
+        }
+      }
+    }
+  }
+  ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
+  ierr = VecRestoreArrayRead(Uloc,&u);CHKERRQ(ierr);
+  ierr = DMRestoreLocalVector(dm,&Uloc);CHKERRQ(ierr);
+  ierr = MPI_Allreduce(MPI_IN_PLACE,(void*)&sumInfty,2,MPIU_REAL,MPIU_MAX,PetscObjectComm((PetscObject)dm));CHKERRQ(ierr);
+  ierr = MPI_Allreduce(MPI_IN_PLACE,(void*)&sum2,2,MPIU_REAL,MPIU_SUM,PetscObjectComm((PetscObject)dm));CHKERRQ(ierr);
+  *normInfty = sumInfty.error/sumInfty.u;
+  *normL2    = PetscSqrtReal(sum2.error)/PetscSqrtReal(sum2.u);
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode OpApply(Op op,DM dm,Vec U,Vec F) {
   PetscErrorCode ierr;
 
