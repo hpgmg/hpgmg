@@ -382,6 +382,7 @@ static PetscErrorCode DMLocalToGlobalEnd_FE(DM dm,Vec L,InsertMode imode,Vec G)
     }
   }
   if (imode == ADD_VALUES) {
+    PetscLogFlops(fe->om[0]*fe->om[1]*fe->om[2]*fe->dof);
     ierr = PetscSFReduceEnd(fe->sf,fe->unit,l,g,MPIU_SUM);CHKERRQ(ierr);
   }
   ierr = VecRestoreArrayRead(L,&l);CHKERRQ(ierr);
@@ -576,6 +577,7 @@ PetscErrorCode DMFEInterpolate(DM dm,Vec Uc,Vec Uf)
       }
     }
   }
+  PetscLogFlops(lm[0]*lm[1]*lm[2]*fe->dof*(fe->degree+1)/8*2 + lm[0]*lm[1]*lm[2]*fe->dof*(fe->degree+1)/4*2 + lm[0]*lm[1]*lm[2]*fe->dof*(fe->degree+1)/2*2);
   ierr = VecRestoreArray(Ufl,&uf);CHKERRQ(ierr);
 
   ierr = DMLocalToGlobalBegin(dm,Ufl,INSERT_VALUES,Uf);CHKERRQ(ierr);
@@ -657,6 +659,7 @@ PetscErrorCode DMFERestrict(DM dm,Vec Uf,Vec Uc)
       }
     }
   }
+  PetscLogFlops(lm[0]*lm[1]*lm[2]*fe->dof*(fe->degree+1)/8*2 + lm[0]*lm[1]*lm[2]*fe->dof*(fe->degree+1)/4*2 + lm[0]*lm[1]*lm[2]*fe->dof*(fe->degree+1)/2*2);
 
   if (Uc) {
     ierr = DMGetLocalVector(fe->dmcoarse,&Ucl);CHKERRQ(ierr);
@@ -680,6 +683,7 @@ PetscErrorCode DMFERestrict(DM dm,Vec Uf,Vec Uc)
         }
       }
     }
+    PetscLogFlops(fecoarse->lm[0]*fecoarse->lm[1]*fecoarse->lm[2]*fe->dof);
   }
   ierr = VecRestoreArray(Ufl,&ufl);CHKERRQ(ierr);
   ierr = DMRestoreLocalVector(dm,&Ufl);CHKERRQ(ierr);
@@ -982,6 +986,7 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
       }
     }
   }
+  if (imode == ADD_VALUES) PetscLogFlops(m[0]*m[1]*m[2]*fe->dof*P*P*P);
   PetscFunctionReturn(0);
 }
 

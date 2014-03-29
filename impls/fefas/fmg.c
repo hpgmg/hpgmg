@@ -21,6 +21,7 @@ struct MG_private {
   PetscReal rnorm2,bnorm2;      // rnorm is normalized by bnorm
   PetscBool monitor;
   PetscLogStage stage;
+  PetscLogEvent V_Cycle;
 };
 
 static PetscErrorCode OptionsParse(const char *header,Options *opt)
@@ -81,11 +82,13 @@ static PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
   mg->dm = dm;
   *newmg = mg;
   for (PetscInt lev=nlevels-1; ; lev--) {
-    char stagename[256];
+    char name[256];
     DM dmcoarse;
     mg->monitor = monitor;
-    ierr = PetscSNPrintf(stagename,sizeof stagename,"FMG Level %D",lev);CHKERRQ(ierr);
-    ierr = PetscLogStageRegister(stagename,&mg->stage);CHKERRQ(ierr);
+    ierr = PetscSNPrintf(name,sizeof name,"FMG Level %D",lev);CHKERRQ(ierr);
+    ierr = PetscLogStageRegister(name,&mg->stage);CHKERRQ(ierr);
+    ierr = PetscSNPrintf(name,sizeof name,"MGVcycleLevel%D",lev);CHKERRQ(ierr);
+    ierr = PetscLogEventRegister(name,DM_CLASSID,&mg->V_Cycle);CHKERRQ(ierr);
     if (mg->dm) { // I have some grid at this level
       Mat A;
       PC pc;
@@ -184,6 +187,7 @@ static PetscErrorCode MGVCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
   Vec V,Vc,Uc;
 
   PetscFunctionBegin;
+  ierr = PetscLogEventBegin(mg->V_Cycle,mg->dm,B,U,0);CHKERRQ(ierr);
   ierr = KSPSetTolerances(mg->ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,mg->coarse?presmooths:20);CHKERRQ(ierr);
   ierr = KSPSolve(mg->ksp,B,U);CHKERRQ(ierr);
   if (!mg->coarse) PetscFunctionReturn(0);
@@ -224,6 +228,7 @@ static PetscErrorCode MGVCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
 
   ierr = KSPSetTolerances(mg->ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,postsmooths);CHKERRQ(ierr);
   ierr = KSPSolve(mg->ksp,B,U);CHKERRQ(ierr);
+  ierr = PetscLogEventEnd(mg->V_Cycle,mg->dm,B,U,0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
