@@ -6,7 +6,7 @@ PetscErrorCode OpRegisterAll_Generated(void);
 
 static PetscFunctionList OpList;
 static PetscBool OpPackageInitialized;
-static PetscLogEvent OP_Apply,OP_RestrictState,OP_RestrictResidual,OP_Interpolate;
+static PetscLogEvent OP_Apply,OP_RestrictState,OP_RestrictResidual,OP_Interpolate,OP_Solution,OP_Forcing,OP_IntegrateNorms;
 
 struct Op_private {
   MPI_Comm comm;                /* Finest level comm (only for diagnostics at setup time) */
@@ -80,6 +80,7 @@ PetscErrorCode OpSolution(Op op,DM dm,Vec U) {
   PetscInt i,m,bs;
 
   PetscFunctionBegin;
+  ierr = PetscLogEventBegin(OP_Solution,dm,U,0,0);CHKERRQ(ierr);
   ierr = DMGetCoordinates(dm,&X);CHKERRQ(ierr);
   ierr = VecStrideMax(X,0,NULL,&L[0]);CHKERRQ(ierr);
   ierr = VecStrideMax(X,1,NULL,&L[1]);CHKERRQ(ierr);
@@ -93,6 +94,7 @@ PetscErrorCode OpSolution(Op op,DM dm,Vec U) {
   }
   ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
   ierr = VecRestoreArray(U,&u);CHKERRQ(ierr);
+  ierr = PetscLogEventEnd(OP_Solution,dm,U,0,0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -107,6 +109,7 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
   PetscInt nelem,ne = 1,P,Q,P3,Q3;
 
   PetscFunctionBegin;
+  ierr = PetscLogEventBegin(OP_Forcing,dm,F,0,0);CHKERRQ(ierr);
   ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,&w3);CHKERRQ(ierr);
   P3 = P*P*P;
   Q3 = Q*Q*Q;
@@ -150,6 +153,7 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
   ierr = DMLocalToGlobalBegin(dm,Floc,ADD_VALUES,F);CHKERRQ(ierr);
   ierr = DMLocalToGlobalEnd(dm,Floc,ADD_VALUES,F);CHKERRQ(ierr);
   ierr = DMRestoreLocalVector(dm,&Floc);CHKERRQ(ierr);
+  ierr = PetscLogEventEnd(OP_Forcing,dm,F,0,0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -165,6 +169,7 @@ PetscErrorCode OpIntegrateNorms(Op op,DM dm,Vec U,PetscReal *normInfty,PetscReal
   PetscInt nelem,ne = 1,P,Q,P3,Q3;
 
   PetscFunctionBegin;
+  ierr = PetscLogEventBegin(OP_IntegrateNorms,dm,U,0,0);CHKERRQ(ierr);
   ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,&w3);CHKERRQ(ierr);
   P3 = P*P*P;
   Q3 = Q*Q*Q;
@@ -218,6 +223,7 @@ PetscErrorCode OpIntegrateNorms(Op op,DM dm,Vec U,PetscReal *normInfty,PetscReal
   ierr = MPI_Allreduce(MPI_IN_PLACE,(void*)&sum2,2,MPIU_REAL,MPIU_SUM,PetscObjectComm((PetscObject)dm));CHKERRQ(ierr);
   *normInfty = sumInfty.error/sumInfty.u;
   *normL2    = PetscSqrtReal(sum2.error)/PetscSqrtReal(sum2.u);
+  ierr = PetscLogEventEnd(OP_IntegrateNorms,dm,U,0,0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -458,6 +464,9 @@ PetscErrorCode OpInitializePackage()
   ierr = PetscLogEventRegister("OpRestrictState" ,DM_CLASSID,&OP_RestrictState);CHKERRQ(ierr);
   ierr = PetscLogEventRegister("OpRestrictResid" ,DM_CLASSID,&OP_RestrictResidual);CHKERRQ(ierr);
   ierr = PetscLogEventRegister("OpInterpolate"   ,DM_CLASSID,&OP_Interpolate);CHKERRQ(ierr);
+  ierr = PetscLogEventRegister("OpForcing"       ,DM_CLASSID,&OP_Forcing);CHKERRQ(ierr);
+  ierr = PetscLogEventRegister("OpSolution"      ,DM_CLASSID,&OP_Solution);CHKERRQ(ierr);
+  ierr = PetscLogEventRegister("OpIntegNorms"    ,DM_CLASSID,&OP_IntegrateNorms);CHKERRQ(ierr);
   ierr = PetscRegisterFinalize(OpFinalizePackage);CHKERRQ(ierr);
   OpPackageInitialized = PETSC_TRUE;
   PetscFunctionReturn(0);
