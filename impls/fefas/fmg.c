@@ -20,6 +20,7 @@ struct MG_private {
   PetscReal enormInfty,enormL2;
   PetscReal rnorm2,bnorm2;      // rnorm is normalized by bnorm
   PetscBool monitor;
+  PetscLogStage stage;
 };
 
 static PetscErrorCode OptionsParse(const char *header,Options *opt)
@@ -80,8 +81,11 @@ static PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
   mg->dm = dm;
   *newmg = mg;
   for (PetscInt lev=nlevels-1; ; lev--) {
+    char stagename[256];
     DM dmcoarse;
     mg->monitor = monitor;
+    ierr = PetscSNPrintf(stagename,sizeof stagename,"FMG Level %D",lev);CHKERRQ(ierr);
+    ierr = PetscLogStageRegister(stagename,&mg->stage);CHKERRQ(ierr);
     if (mg->dm) { // I have some grid at this level
       Mat A;
       PC pc;
@@ -227,6 +231,7 @@ static PetscErrorCode MGFCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  ierr = PetscLogStagePush(mg->stage);CHKERRQ(ierr);
   ierr = VecNorm(B,NORM_2,&mg->bnorm2);CHKERRQ(ierr);
   if (mg->coarse) {
     Vec Uc,Bc;
@@ -248,6 +253,7 @@ static PetscErrorCode MGFCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
     }
   }
   ierr = MGVCycle(op,mg,presmooths,postsmooths,B,U);CHKERRQ(ierr);
+  ierr = PetscLogStagePop();CHKERRQ(ierr);
   ierr = MGRecordDiagnostics(op,mg,B,U);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
