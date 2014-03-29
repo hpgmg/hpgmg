@@ -11,6 +11,7 @@ struct Grid_private {
   MPI_Comm comm;
   MPI_Comm pcomm; // Communicator to talk to parent.
   Grid coarse;
+  PetscInt level;
   PetscInt M[3],p[3];
   PetscInt s[3],m[3];   // Owned cells of global grid
   PetscInt cs[3],cm[3]; // My cells of global coarse grid
@@ -111,6 +112,7 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
       if (size != 1) SETERRQ4(comm,PETSC_ERR_ARG_INCOMP,"Grid %D,%D,%D exceeds cmax %D, but cannot be coarsened",M[0],M[1],M[2],cmax);
       // Coarsest grid, on a single process
       g->coarse = NULL;
+      g->level  = 0;
       for (j=0; j<3; j++) {
         g->m[j] = M[j];
         g->s[j] = 0;
@@ -120,6 +122,7 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
       for (j=0; j<27; j++) g->neighborranks[j/9%3][j/3%3][j%3] = -1;
     } else {
       ierr = GridCreate(comm,Mc,p,NULL,cmax,&g->coarse);CHKERRQ(ierr);
+      g->level = g->coarse->level + 1;
       for (j=0; j<3; j++) {
         g->m[j] = 2*g->coarse->m[j];
         g->s[j] = 2*g->coarse->s[j];
@@ -132,7 +135,7 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
     PetscMPIInt ri[3],prank,r;
     zcode t;
     MPI_Comm ccomm;
-    PetscInt mpw[3],cpw[3],csm[6],cnt,nneighbors;
+    PetscInt mpw[3],cpw[3],csm[6],cnt,nneighbors,clevel;
 
     if (M[0]%2 || M[1]%2 || M[2]%2) SETERRQ6(comm,PETSC_ERR_ARG_INCOMP,"Grid %D,%D,%D cannot be coarsened on process grid %D,%D,%D",M[0],M[1],M[2],p[0],p[1],p[2]);
     ierr = MPI_Comm_split(comm,z>>3,0,&g->pcomm);CHKERRQ(ierr);
@@ -171,6 +174,11 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
       g->Cs[j] = csm[2*j+0];
       g->Cm[j] = csm[2*j+1];
     }
+
+    clevel = prank ? -1 : g->coarse->level;
+    ierr = MPI_Bcast(&clevel,1,MPIU_INT,0,g->pcomm);CHKERRQ(ierr);
+    g->level = clevel + 1;
+
     ZCodeSplit(z,ri);
 
     for (cnt=0,nneighbors=0; cnt<27; cnt++) { // Count how many neighbors exist on grid
@@ -424,6 +432,23 @@ PetscErrorCode DMFEGetUniformCoordinates(DM dm,PetscReal L[]) {
   ierr = PetscMemcpy(L,fe->Luniform,sizeof fe->Luniform);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
+
+PetscErrorCode DMFEGetInfo(DM dm,PetscInt *fedegree,PetscInt *level,PetscInt mlocal[],PetscInt Mglobal[],PetscInt procs[]) {
+  PetscErrorCode ierr;
+  FE fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  *fedegree = fe->degree;
+  *level = fe->grid->level;
+  for (PetscInt i=0; i<3; i++) {
+    mlocal[i] = fe->grid->m[i];
+    Mglobal[i] = fe->grid->M[i];
+    procs[i] = fe->grid->p[i];
+  }
+  PetscFunctionReturn(0);
+}
+
 // Injection: state restriction
 //   primary order zero: high-frequency harmonics on fine grid alias at full amplitude
 //   secondary order infinite: low-frequencies are exact on coarse grid
