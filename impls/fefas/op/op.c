@@ -13,6 +13,7 @@ struct Op_private {
   PetscInt fedegree;
   PetscInt dof;
   PetscInt ne;                  /* Preferred number of elements over which to vectorize */
+  Tensor   TensorDOF,Tensor3;
   PetscErrorCode (*Apply)(Op,DM,Vec,Vec);
   PetscErrorCode (*RestrictState)(Op,DM,Vec,Vec);
   PetscErrorCode (*RestrictResidual)(Op,DM,Vec,Vec);
@@ -106,7 +107,7 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
   PetscScalar *f;
   const PetscReal *B,*D,*w3;
   PetscReal L[3];
-  PetscInt nelem,ne = 1,P,Q,P3,Q3;
+  PetscInt nelem,ne = op->ne,P,Q,P3,Q3;
 
   PetscFunctionBegin;
   ierr = PetscLogEventBegin(OP_Forcing,dm,F,0,0);CHKERRQ(ierr);
@@ -128,11 +129,11 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
 
     ierr = DMFEExtractElements(dmx,x,e,ne,xe);CHKERRQ(ierr);
     ierr = PetscMemzero(xq,sizeof xq);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,B,B,B,TENSOR_EVAL,xe,xq[0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,B,B,B,TENSOR_EVAL,xe,xq[0][0]);CHKERRQ(ierr);
     ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
     ierr = PointwiseJacobianInvert(ne,Q*Q*Q,w3,dx,wdxdet);CHKERRQ(ierr);
 
     for (PetscInt i=0; i<Q3; i++) {
@@ -144,7 +145,7 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F) {
       }
     }
     ierr = PetscMemzero(fe,sizeof fe);CHKERRQ(ierr);
-    ierr = TensorContract(ne,op->dof,P,Q,B,B,B,TENSOR_TRANSPOSE,fq[0][0],fe);CHKERRQ(ierr);
+    ierr = TensorContract(op->TensorDOF,B,B,B,TENSOR_TRANSPOSE,fq[0][0],fe);CHKERRQ(ierr);
     ierr = DMFESetElements(dm,f,e,ne,ADD_VALUES,DOMAIN_INTERIOR,fe);CHKERRQ(ierr);
   }
   ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
@@ -166,7 +167,7 @@ PetscErrorCode OpIntegrateNorms(Op op,DM dm,Vec U,PetscReal *normInfty,PetscReal
   const PetscReal *B,*D,*w3;
   PetscReal L[3];
   struct {PetscReal error,u;} sumInfty={},sum2={};
-  PetscInt nelem,ne = 1,P,Q,P3,Q3;
+  PetscInt nelem,ne = op->ne,P,Q,P3,Q3;
 
   PetscFunctionBegin;
   ierr = PetscLogEventBegin(OP_IntegrateNorms,dm,U,0,0);CHKERRQ(ierr);
@@ -189,16 +190,16 @@ PetscErrorCode OpIntegrateNorms(Op op,DM dm,Vec U,PetscReal *normInfty,PetscReal
 
     ierr = DMFEExtractElements(dmx,x,e,ne,xe);CHKERRQ(ierr);
     ierr = PetscMemzero(xq,sizeof xq);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,B,B,B,TENSOR_EVAL,xe,xq[0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,B,B,B,TENSOR_EVAL,xe,xq[0][0]);CHKERRQ(ierr);
     ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
     ierr = PointwiseJacobianInvert(ne,Q3,w3,dx,wdxdet);CHKERRQ(ierr);
 
     ierr = DMFEExtractElements(dm,u,e,ne,ue);CHKERRQ(ierr);
     ierr = PetscMemzero(uq,sizeof uq);CHKERRQ(ierr);
-    ierr = TensorContract(ne,1,P,Q,B,B,B,TENSOR_EVAL,ue,uq[0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->TensorDOF,B,B,B,TENSOR_EVAL,ue,uq[0][0]);CHKERRQ(ierr);
 
     for (PetscInt i=0; i<Q3; i++) {
       for (PetscInt l=0; l<ne; l++) {
@@ -268,23 +269,23 @@ PetscErrorCode OpGetDiagonal(Op op,DM dm,Vec Diag) {
 
     ierr = DMFEExtractElements(dmx,x,e,NE,xe);CHKERRQ(ierr);
     ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);
-    ierr = TensorContract(NE,3,P,Q,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(NE,3,P,Q,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(NE,3,P,Q,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(op->Tensor3,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
     ierr = PointwiseJacobianInvert(NE,Q*Q*Q,w3,dx,wdxdet);CHKERRQ(ierr);
 
     for (PetscInt i=0; i<P3; i++) {
       ierr = PetscMemzero(ue,sizeof ue);CHKERRQ(ierr);
       for (PetscInt k=0; k<op->ne; k++) ue[i*NE+k] = 1;
       ierr = PetscMemzero(du,sizeof du);CHKERRQ(ierr);
-      ierr = TensorContract(NE,1,P,Q,D,B,B,TENSOR_EVAL,ue,du[0][0][0]);CHKERRQ(ierr);
-      ierr = TensorContract(NE,1,P,Q,B,D,B,TENSOR_EVAL,ue,du[1][0][0]);CHKERRQ(ierr);
-      ierr = TensorContract(NE,1,P,Q,B,B,D,TENSOR_EVAL,ue,du[2][0][0]);CHKERRQ(ierr);
+      ierr = TensorContract(op->TensorDOF,D,B,B,TENSOR_EVAL,ue,du[0][0][0]);CHKERRQ(ierr);
+      ierr = TensorContract(op->TensorDOF,B,D,B,TENSOR_EVAL,ue,du[1][0][0]);CHKERRQ(ierr);
+      ierr = TensorContract(op->TensorDOF,B,B,D,TENSOR_EVAL,ue,du[2][0][0]);CHKERRQ(ierr);
       ierr = (*op->PointwiseElement)(op,NE,Q3,dx[0][0][0],wdxdet[0],du[0][0][0],dv[0][0][0]);CHKERRQ(ierr);
       ierr = PetscMemzero(ve,sizeof ve);CHKERRQ(ierr);
-      ierr = TensorContract(NE,1,P,Q,D,B,B,TENSOR_TRANSPOSE,dv[0][0][0],ve);CHKERRQ(ierr);
-      ierr = TensorContract(NE,1,P,Q,B,D,B,TENSOR_TRANSPOSE,dv[1][0][0],ve);CHKERRQ(ierr);
-      ierr = TensorContract(NE,1,P,Q,B,B,D,TENSOR_TRANSPOSE,dv[2][0][0],ve);CHKERRQ(ierr);
+      ierr = TensorContract(op->TensorDOF,D,B,B,TENSOR_TRANSPOSE,dv[0][0][0],ve);CHKERRQ(ierr);
+      ierr = TensorContract(op->TensorDOF,B,D,B,TENSOR_TRANSPOSE,dv[1][0][0],ve);CHKERRQ(ierr);
+      ierr = TensorContract(op->TensorDOF,B,B,D,TENSOR_TRANSPOSE,dv[2][0][0],ve);CHKERRQ(ierr);
       for (PetscInt k=0; k<op->ne; k++) diage[i*NE+k] = ve[i*NE+k];
     }
     ierr = DMFESetElements(dm,diag,e,NE,ADD_VALUES,DOMAIN_INTERIOR,diage);CHKERRQ(ierr);
@@ -356,6 +357,13 @@ PetscErrorCode OpGetMat(Op op,DM dm,Mat *shell) {
   PetscFunctionReturn(0);
 }
 
+PetscErrorCode OpGetTensors(Op op,Tensor *TensorDOF,Tensor *Tensor3) {
+  PetscFunctionBegin;
+  if (TensorDOF) *TensorDOF = op->TensorDOF;
+  if (Tensor3)   *Tensor3   = op->Tensor3;
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode OpRestrictState(Op op,DM dm,Vec Uf,Vec Uc) {
   PetscErrorCode ierr;
 
@@ -416,6 +424,8 @@ PetscErrorCode OpCreateFromOptions(MPI_Comm comm,Op *op)
   if (!f) SETERRQ1(comm,PETSC_ERR_USER,"Operator type '%s' not found",opname);
   ierr = (*f)(o);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
+  ierr = TensorCreate(o->ne,o->dof,o->fedegree+1,o->fedegree+1,&o->TensorDOF);CHKERRQ(ierr);
+  ierr = TensorCreate(o->ne,3,o->fedegree+1,o->fedegree+1,&o->Tensor3);CHKERRQ(ierr);
   *op = o;
   PetscFunctionReturn(0);
 }
@@ -429,6 +439,8 @@ PetscErrorCode OpDestroy(Op *op)
   if ((*op)->Destroy) {
     ierr = (*op)->Destroy(*op);CHKERRQ(ierr);
   }
+  ierr = TensorDestroy(&(*op)->TensorDOF);CHKERRQ(ierr);
+  ierr = TensorDestroy(&(*op)->Tensor3);CHKERRQ(ierr);
   ierr = PetscCommDestroy(&(*op)->comm);CHKERRQ(ierr);
   ierr = PetscFree(*op);CHKERRQ(ierr);
   PetscFunctionReturn(0);

@@ -5,6 +5,10 @@
 
 typedef enum {TENSOR_EVAL,TENSOR_TRANSPOSE} TensorMode;
 
-PetscErrorCode TensorContract(PetscInt ne,PetscInt dof,PetscInt P,PetscInt Q,const PetscReal Rf[],const PetscReal Sf[],const PetscReal Tf[],TensorMode tmode,const PetscScalar xx[],PetscScalar yy[]);
+typedef struct Tensor_private *Tensor;
+
+PetscErrorCode TensorCreate(PetscInt ne,PetscInt dof,PetscInt P,PetscInt Q,Tensor *ten);
+PetscErrorCode TensorDestroy(Tensor *ten);
+PetscErrorCode TensorContract(Tensor ten,const PetscReal Rf[],const PetscReal Sf[],const PetscReal Tf[],TensorMode tmode,const PetscScalar xx[],PetscScalar yy[]);
 
 #endif

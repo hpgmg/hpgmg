@@ -102,6 +102,7 @@ PetscErrorCode TestFEGrad()
   PetscScalar *u,*ue,*du;
   const PetscScalar *l,*x;
   Options opt;
+  Tensor Tensor1;
 
   PetscFunctionBegin;
   ierr = OptionsParse("Finite Element FAS Test Element Gradients",&opt);CHKERRQ(ierr);
@@ -122,6 +123,7 @@ PetscErrorCode TestFEGrad()
   ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
 
   ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,NULL);CHKERRQ(ierr);
+  ierr = TensorCreate(ne,1,P,Q,&Tensor1);CHKERRQ(ierr);
   ierr = DMFEGetNumElements(dm,&nelems);CHKERRQ(ierr);
   ierr = PetscMalloc2(P*P*P*ne,&ue,3*Q*Q*Q*ne,&du);CHKERRQ(ierr);
 
@@ -129,9 +131,9 @@ PetscErrorCode TestFEGrad()
   for (PetscInt e=0; e<nelems; e+=ne) {
     ierr = DMFEExtractElements(dm,l,e,ne,ue);CHKERRQ(ierr);
     ierr = PetscMemzero(du,3*Q*Q*Q*ne*sizeof(*du));CHKERRQ(ierr);
-    ierr = TensorContract(ne,1,P,Q,D,B,B,TENSOR_EVAL,ue,&du[0*Q*Q*Q*ne]);CHKERRQ(ierr);
-    ierr = TensorContract(ne,1,P,Q,B,D,B,TENSOR_EVAL,ue,&du[1*Q*Q*Q*ne]);CHKERRQ(ierr);
-    ierr = TensorContract(ne,1,P,Q,B,B,D,TENSOR_EVAL,ue,&du[2*Q*Q*Q*ne]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,D,B,B,TENSOR_EVAL,ue,&du[0*Q*Q*Q*ne]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,D,B,TENSOR_EVAL,ue,&du[1*Q*Q*Q*ne]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,B,D,TENSOR_EVAL,ue,&du[2*Q*Q*Q*ne]);CHKERRQ(ierr);
     for (PetscInt ee=0; ee<ne; ee++) {
       for (PetscInt i=0; i<Q; i++) {
         for (PetscInt j=0; j<Q; j++) {
@@ -150,6 +152,7 @@ PetscErrorCode TestFEGrad()
   }
   ierr = VecRestoreArrayRead(L,&l);CHKERRQ(ierr);
   ierr = PetscFree2(ue,du);CHKERRQ(ierr);
+  ierr = TensorDestroy(&Tensor1);CHKERRQ(ierr);
   ierr = VecDestroy(&L);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);
@@ -287,11 +290,14 @@ static PetscErrorCode IntegrateTestFunction(DM dm,Vec G)
   const PetscReal *B,*D,*w3;
   PetscInt nelem,ne = 2,P,Q,P3,Q3;
   DM dmx;
+  Tensor Tensor1,Tensor3;
 
   PetscFunctionBegin;
   ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,&w3);CHKERRQ(ierr);
   P3 = P*P*P;
   Q3 = Q*Q*Q;
+  ierr = TensorCreate(ne,1,P,Q,&Tensor1);CHKERRQ(ierr);
+  ierr = TensorCreate(ne,3,P,Q,&Tensor3);CHKERRQ(ierr);
 
   ierr = DMGetLocalVector(dm,&L);CHKERRQ(ierr);
   ierr = DMGetCoordinatesLocal(dm,&X);CHKERRQ(ierr);
@@ -304,11 +310,11 @@ static PetscErrorCode IntegrateTestFunction(DM dm,Vec G)
     PetscScalar ue[P3*ne],uq[Q3][ne],xe[3*P3*ne],xq[3][Q3][ne],dx[3][3][Q3][ne],wdxdet[Q3][ne];
     ierr = DMFEExtractElements(dmx,x,e,ne,xe);CHKERRQ(ierr);
     ierr = PetscMemzero(xq,sizeof xq);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,B,B,B,TENSOR_EVAL,xe,xq[0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor3,B,B,B,TENSOR_EVAL,xe,xq[0][0]);CHKERRQ(ierr);
     ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(ne,3,P,Q,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor3,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor3,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor3,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
 
     ierr = PointwiseJacobianInvert(ne,Q*Q*Q,w3,dx,wdxdet);CHKERRQ(ierr);
     for (PetscInt i=0; i<Q3; i++) {
@@ -318,11 +324,13 @@ static PetscErrorCode IntegrateTestFunction(DM dm,Vec G)
     }
 
     ierr = PetscMemzero(ue,sizeof ue);CHKERRQ(ierr);
-    ierr = TensorContract(ne,1,P,Q,B,B,B,TENSOR_TRANSPOSE,uq[0],ue);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,B,B,TENSOR_TRANSPOSE,uq[0],ue);CHKERRQ(ierr);
     ierr = DMFESetElements(dm,u,e,ne,ADD_VALUES,DOMAIN_CLOSURE,ue);CHKERRQ(ierr);
   }
   ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
   ierr = VecRestoreArray(L,&u);CHKERRQ(ierr);
+  ierr = TensorDestroy(&Tensor1);CHKERRQ(ierr);
+  ierr = TensorDestroy(&Tensor3);CHKERRQ(ierr);
   ierr = VecZeroEntries(G);CHKERRQ(ierr);
   ierr = DMLocalToGlobalBegin(dm,L,ADD_VALUES,G);CHKERRQ(ierr);
   ierr = DMLocalToGlobalEnd(dm,L,ADD_VALUES,G);CHKERRQ(ierr);

@@ -3,6 +3,7 @@
 
 #include <petscdm.h>
 #include "../fefas.h"
+#include "../tensor.h"
 
 typedef struct Op_private *Op;
 
@@ -34,5 +35,6 @@ PetscErrorCode OpForcing(Op op,DM dm,Vec F);
 PetscErrorCode OpIntegrateNorms(Op op,DM dm,Vec U,PetscReal *normInfty,PetscReal *norm2);
 PetscErrorCode OpGetDiagonal(Op op,DM dm,Vec Diag);
 PetscErrorCode OpGetMat(Op op,DM dm,Mat *shell);
+PetscErrorCode OpGetTensors(Op op,Tensor *TensorDOF,Tensor *Tensor3);
 
 #endif

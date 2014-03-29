@@ -1,6 +1,6 @@
-#include "tensor.h"
+#include "tensorimpl.h"
 
-PetscErrorCode TensorContract(PetscInt ne,PetscInt dof,PetscInt P,PetscInt Q,const PetscReal Rf[],const PetscReal Sf[],const PetscReal Tf[],TensorMode tmode,const PetscScalar xx[],PetscScalar yy[])
+static inline PetscErrorCode TensorContract_Inline(PetscInt ne,PetscInt dof,PetscInt P,PetscInt Q,const PetscReal Rf[],const PetscReal Sf[],const PetscReal Tf[],TensorMode tmode,const PetscScalar xx[],PetscScalar yy[])
 {
 
   PetscFunctionBegin;
@@ -58,4 +58,61 @@ PetscErrorCode TensorContract(PetscInt ne,PetscInt dof,PetscInt P,PetscInt Q,con
     PetscLogFlops(dof*(Q*P*P*P+Q*Q*P*P+Q*Q*Q*P)*ne*2);
   }
   PetscFunctionReturn(0);
+}
+
+static inline PetscErrorCode TensorContract_Ref(Tensor ten,const PetscReal Rf[],const PetscReal Sf[],const PetscReal Tf[],TensorMode tmode,const PetscScalar xx[],PetscScalar yy[]) {
+  PetscInt ne = ten->ne,dof = ten->dof,P = ten->P,Q = ten->Q;
+  return TensorContract_Inline(ne,dof,P,Q,Rf,Sf,Tf,tmode,xx,yy);
+}
+
+static PetscErrorCode TensorContract_Ref_4_1_2_2(Tensor ten,const PetscReal Rf[],const PetscReal Sf[],const PetscReal Tf[],TensorMode tmode,const PetscScalar xx[],PetscScalar yy[]) {
+  return TensorContract_Inline(4,1,2,2,Rf,Sf,Tf,tmode,xx,yy);
+}
+static PetscErrorCode TensorContract_Ref_4_3_2_2(Tensor ten,const PetscReal Rf[],const PetscReal Sf[],const PetscReal Tf[],TensorMode tmode,const PetscScalar xx[],PetscScalar yy[]) {
+  return TensorContract_Inline(4,3,2,2,Rf,Sf,Tf,tmode,xx,yy);
+}
+static PetscErrorCode TensorContract_Ref_4_1_3_3(Tensor ten,const PetscReal Rf[],const PetscReal Sf[],const PetscReal Tf[],TensorMode tmode,const PetscScalar xx[],PetscScalar yy[]) {
+  return TensorContract_Inline(4,1,3,3,Rf,Sf,Tf,tmode,xx,yy);
+}
+static PetscErrorCode TensorContract_Ref_4_3_3_3(Tensor ten,const PetscReal Rf[],const PetscReal Sf[],const PetscReal Tf[],TensorMode tmode,const PetscScalar xx[],PetscScalar yy[]) {
+  return TensorContract_Inline(4,3,3,3,Rf,Sf,Tf,tmode,xx,yy);
+}
+
+PetscErrorCode TensorCreate(PetscInt ne,PetscInt dof,PetscInt P,PetscInt Q,Tensor *ten) {
+  Tensor t;
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  ierr = PetscNew(&t);CHKERRQ(ierr);
+  t->ne  = ne;
+  t->dof = dof;
+  t->P   = P;
+  t->Q   = Q;
+  t->Contract = TensorContract_Ref;
+  if (ne == 4) {
+    switch (dof) {
+    case 1: // Scalar problems with Q1 or Q2 elements
+      if (P == 2 && Q == 2)      t->Contract = TensorContract_Ref_4_1_2_2;
+      else if (P == 3 && Q == 3) t->Contract = TensorContract_Ref_4_1_3_3;
+      break;
+    case 3: // Coordinates or elasticity
+      if (P == 2 && Q == 2)      t->Contract = TensorContract_Ref_4_3_2_2;
+      else if (P == 3 && Q == 3) t->Contract = TensorContract_Ref_4_3_3_3;
+      break;
+    }
+  }
+  *ten = t;
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode TensorDestroy(Tensor *ten) {
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  ierr = PetscFree(*ten);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode TensorContract(Tensor ten,const PetscReal Rf[],const PetscReal Sf[],const PetscReal Tf[],TensorMode tmode,const PetscScalar xx[],PetscScalar yy[]) {
+  return (*ten->Contract)(ten,Rf,Sf,Tf,tmode,xx,yy);
 }

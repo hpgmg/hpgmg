@@ -114,11 +114,13 @@ static PetscErrorCode OpApply_Poisson(Op op,DM dm,Vec U,Vec V,
   const PetscScalar *x,*u;
   PetscScalar *v;
   const PetscReal *B,*D,*w3;
+  Tensor Tensor1,Tensor3;
 
   PetscFunctionBegin;
   ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,&w3);CHKERRQ(ierr);
   P3 = P*P*P;
   Q3 = Q*Q*Q;
+  ierr = OpGetTensors(op,&Tensor1,&Tensor3);CHKERRQ(ierr);
 
   ierr = DMGetLocalVector(dm,&Ul);CHKERRQ(ierr);
   ierr = DMGetLocalVector(dm,&Vl);CHKERRQ(ierr);
@@ -137,20 +139,20 @@ static PetscErrorCode OpApply_Poisson(Op op,DM dm,Vec U,Vec V,
 
     ierr = DMFEExtractElements(dmx,x,e,NE,xe);CHKERRQ(ierr);
     ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);
-    ierr = TensorContract(NE,3,P,Q,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(NE,3,P,Q,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(NE,3,P,Q,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor3,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor3,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor3,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
     ierr = PointwiseJacobianInvert(NE,Q*Q*Q,w3,dx,wdxdet);CHKERRQ(ierr);
     ierr = DMFEExtractElements(dm,u,e,NE,ue);CHKERRQ(ierr);
     ierr = PetscMemzero(du,sizeof du);CHKERRQ(ierr);
-    ierr = TensorContract(NE,1,P,Q,D,B,B,TENSOR_EVAL,ue,du[0][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(NE,1,P,Q,B,D,B,TENSOR_EVAL,ue,du[1][0][0]);CHKERRQ(ierr);
-    ierr = TensorContract(NE,1,P,Q,B,B,D,TENSOR_EVAL,ue,du[2][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,D,B,B,TENSOR_EVAL,ue,du[0][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,D,B,TENSOR_EVAL,ue,du[1][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,B,D,TENSOR_EVAL,ue,du[2][0][0]);CHKERRQ(ierr);
     ierr = PointwiseElement(op,NE,Q3,dx,wdxdet,du,dv);CHKERRQ(ierr);
     ierr = PetscMemzero(ve,sizeof ve);CHKERRQ(ierr);
-    ierr = TensorContract(NE,1,P,Q,D,B,B,TENSOR_TRANSPOSE,dv[0][0][0],ve);CHKERRQ(ierr);
-    ierr = TensorContract(NE,1,P,Q,B,D,B,TENSOR_TRANSPOSE,dv[1][0][0],ve);CHKERRQ(ierr);
-    ierr = TensorContract(NE,1,P,Q,B,B,D,TENSOR_TRANSPOSE,dv[2][0][0],ve);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,D,B,B,TENSOR_TRANSPOSE,dv[0][0][0],ve);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,D,B,TENSOR_TRANSPOSE,dv[1][0][0],ve);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,B,D,TENSOR_TRANSPOSE,dv[2][0][0],ve);CHKERRQ(ierr);
     ierr = DMFESetElements(dm,v,e,NE,ADD_VALUES,DOMAIN_INTERIOR,ve);CHKERRQ(ierr);
   }
   ierr = VecRestoreArrayRead(X,&x);CHKERRQ(ierr);
