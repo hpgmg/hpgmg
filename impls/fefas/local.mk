@@ -4,6 +4,7 @@ fefas-y.c += $(call thisdir, \
 	fmg.c \
 	grid.c \
 	tensor.c \
+	tensor-fma.c \
 	)
 
 include $(call incsubdirs,op)
