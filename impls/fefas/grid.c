@@ -986,7 +986,7 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
       }
     }
   }
-  if (imode == ADD_VALUES) PetscLogFlops(m[0]*m[1]*m[2]*fe->dof*P*P*P);
+  if (imode == ADD_VALUES) PetscLogFlops(fe->dof*P*P*P*(PetscMin(elem+ne,m[0]*m[1]*m[2])-elem));
   PetscFunctionReturn(0);
 }
 
