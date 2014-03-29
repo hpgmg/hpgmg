@@ -6,6 +6,7 @@ PetscErrorCode OpRegisterAll_Generated(void);
 
 static PetscFunctionList OpList;
 static PetscBool OpPackageInitialized;
+static PetscLogEvent OP_Apply,OP_RestrictState,OP_RestrictResidual,OP_Interpolate;
 
 struct Op_private {
   MPI_Comm comm;                /* Finest level comm (only for diagnostics at setup time) */
@@ -225,7 +226,9 @@ PetscErrorCode OpApply(Op op,DM dm,Vec U,Vec F) {
 
   PetscFunctionBegin;
   if (!op->Apply) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"No Apply implemented, use OpSetApply()");
+  ierr = PetscLogEventBegin(OP_Apply,dm,U,F,0);CHKERRQ(ierr);
   ierr = (*op->Apply)(op,dm,U,F);CHKERRQ(ierr);
+  ierr = PetscLogEventEnd(OP_Apply,dm,U,F,0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -351,11 +354,13 @@ PetscErrorCode OpRestrictState(Op op,DM dm,Vec Uf,Vec Uc) {
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  ierr = PetscLogEventBegin(OP_RestrictState,dm,Uf,Uc,0);CHKERRQ(ierr);
   if (op->RestrictState) {
     ierr = (*op->RestrictState)(op,dm,Uf,Uc);CHKERRQ(ierr);
   } else {
     ierr = DMFEInject(dm,Uf,Uc);CHKERRQ(ierr);
   }
+  ierr = PetscLogEventEnd(OP_RestrictState,dm,Uf,Uc,0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -363,11 +368,13 @@ PetscErrorCode OpRestrictResidual(Op op,DM dm,Vec Uf,Vec Uc) {
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  ierr = PetscLogEventBegin(OP_RestrictResidual,dm,Uf,Uc,0);CHKERRQ(ierr);
   if (op->RestrictResidual) {
     ierr = (*op->RestrictResidual)(op,dm,Uf,Uc);CHKERRQ(ierr);
   } else {
     ierr = DMFERestrict(dm,Uf,Uc);CHKERRQ(ierr);
   }
+  ierr = PetscLogEventEnd(OP_RestrictResidual,dm,Uf,Uc,0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -375,11 +382,13 @@ PetscErrorCode OpInterpolate(Op op,DM dm,Vec Uc,Vec Uf) {
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  ierr = PetscLogEventBegin(OP_Interpolate,dm,Uc,Uf,0);CHKERRQ(ierr);
   if (op->Interpolate) {
     ierr = (*op->Interpolate)(op,dm,Uc,Uf);CHKERRQ(ierr);
   } else {
     ierr = DMFEInterpolate(dm,Uc,Uf);CHKERRQ(ierr);
   }
+  ierr = PetscLogEventEnd(OP_Interpolate,dm,Uc,Uf,0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -445,6 +454,10 @@ PetscErrorCode OpInitializePackage()
   PetscFunctionBegin;
   if (OpPackageInitialized) PetscFunctionReturn(0);
   ierr = OpRegisterAll_Generated();CHKERRQ(ierr);
+  ierr = PetscLogEventRegister("OpApply"         ,DM_CLASSID,&OP_Apply);CHKERRQ(ierr);
+  ierr = PetscLogEventRegister("OpRestrictState" ,DM_CLASSID,&OP_RestrictState);CHKERRQ(ierr);
+  ierr = PetscLogEventRegister("OpRestrictResid" ,DM_CLASSID,&OP_RestrictResidual);CHKERRQ(ierr);
+  ierr = PetscLogEventRegister("OpInterpolate"   ,DM_CLASSID,&OP_Interpolate);CHKERRQ(ierr);
   ierr = PetscRegisterFinalize(OpFinalizePackage);CHKERRQ(ierr);
   OpPackageInitialized = PETSC_TRUE;
   PetscFunctionReturn(0);
