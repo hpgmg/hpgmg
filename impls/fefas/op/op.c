@@ -6,7 +6,7 @@ PetscErrorCode OpRegisterAll_Generated(void);
 
 static PetscFunctionList OpList;
 static PetscBool OpPackageInitialized;
-static PetscLogEvent OP_Apply,OP_RestrictState,OP_RestrictResidual,OP_Interpolate,OP_Solution,OP_Forcing,OP_IntegrateNorms;
+static PetscLogEvent OP_Apply,OP_RestrictState,OP_RestrictResidual,OP_Interpolate,OP_Solution,OP_Forcing,OP_IntegrateNorms,OP_GetDiagonal;
 
 struct Op_private {
   MPI_Comm comm;                /* Finest level comm (only for diagnostics at setup time) */
@@ -251,6 +251,7 @@ PetscErrorCode OpGetDiagonal(Op op,DM dm,Vec Diag) {
   PetscFunctionBegin;
   if (!op->PointwiseElement) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"No PointwiseElement implemented, use OpSetPointwiseElement()");
   if (op->dof != 1) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"dof != 1");
+  ierr = PetscLogEventBegin(OP_GetDiagonal,dm,Diag,0,0);CHKERRQ(ierr);
   ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,&w3);CHKERRQ(ierr);
   P3 = P*P*P;
   Q3 = Q*Q*Q;
@@ -296,6 +297,7 @@ PetscErrorCode OpGetDiagonal(Op op,DM dm,Vec Diag) {
   ierr = DMLocalToGlobalBegin(dm,Vl,ADD_VALUES,Diag);CHKERRQ(ierr);
   ierr = DMLocalToGlobalEnd(dm,Vl,ADD_VALUES,Diag);CHKERRQ(ierr);
   ierr = DMRestoreLocalVector(dm,&Vl);CHKERRQ(ierr);
+  ierr = PetscLogEventEnd(OP_GetDiagonal,dm,Diag,0,0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -479,6 +481,7 @@ PetscErrorCode OpInitializePackage()
   ierr = PetscLogEventRegister("OpForcing"       ,DM_CLASSID,&OP_Forcing);CHKERRQ(ierr);
   ierr = PetscLogEventRegister("OpSolution"      ,DM_CLASSID,&OP_Solution);CHKERRQ(ierr);
   ierr = PetscLogEventRegister("OpIntegNorms"    ,DM_CLASSID,&OP_IntegrateNorms);CHKERRQ(ierr);
+  ierr = PetscLogEventRegister("OpGetDiagonal"   ,DM_CLASSID,&OP_GetDiagonal);CHKERRQ(ierr);
   ierr = PetscRegisterFinalize(OpFinalizePackage);CHKERRQ(ierr);
   OpPackageInitialized = PETSC_TRUE;
   PetscFunctionReturn(0);
