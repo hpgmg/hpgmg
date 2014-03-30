@@ -39,7 +39,17 @@ static PetscErrorCode OptionsParse(const char *header,Options *opt)
   o->p[0] = 1;
   o->p[1] = 1;
   o->p[2] = 1;
-  o->cmax = 3*4*4;
+  // cmax is an annoyingly tricky parameter.  The smallest coarse grid we want to deal with is 3x4x4=48 elements, which
+  // corresponds to 7x9x9=567 Q2 finite-element nodes.  That coarse grid size is critical because a non-multigrid method
+  // needs to be able to solve fast there (and everyone is waiting for it).  Given communication latency in the
+  // microsecond range, one refinement (6x8x8 elements) is sufficient to start distributing, so cmax should be smaller
+  // than 3x4x4*2^3=384.
+  //
+  // Meanwhile, we want to support process grids like 1x1x3 for cases where the total number of processes has such a
+  // factor.  The coarsening semantic requires that a 2x2x2 grid resides one process, so the grid sizes are 4x4x4 on
+  // 1x1x2 and 8x8x8 on 1x1x3.  In the latter case, each process in the 1x1x3 grid will own 8*8*ceil(8/3)=192 elements.
+  // We intend to ensure that no process grids be more anisotropic than 1x1x3.
+  o->cmax = 192;
   ierr = PetscOptionsBegin(PETSC_COMM_WORLD,NULL,header,NULL);CHKERRQ(ierr);
   three = 3;
   ierr = PetscOptionsIntArray("-M","Fine grid dimensions","",o->M,&three,NULL);CHKERRQ(ierr);
