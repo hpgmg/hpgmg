@@ -205,6 +205,8 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
     }
   } else SETERRQ3(comm,PETSC_ERR_SUP,"Multiprocess coarse grid %D,%D,%D",M[0],M[1],M[2]);
 
+  if (g->m[0]*g->m[1]*g->m[2] <= 0) SETERRQ7(PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Invalid grid L[%D,%D,%D] of G[%D,%D,%D] on level %D",g->m[0],g->m[1],g->m[2],g->M[0],g->M[1],g->M[2],g->level);
+
   g->refct = 1;
   *grid = g;
   PetscFunctionReturn(0);
