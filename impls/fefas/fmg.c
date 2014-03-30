@@ -39,7 +39,7 @@ static PetscErrorCode OptionsParse(const char *header,Options *opt)
   o->p[0] = 1;
   o->p[1] = 1;
   o->p[2] = 1;
-  o->cmax = 100;
+  o->cmax = 3*4*4;
   ierr = PetscOptionsBegin(PETSC_COMM_WORLD,NULL,header,NULL);CHKERRQ(ierr);
   three = 3;
   ierr = PetscOptionsIntArray("-M","Fine grid dimensions","",o->M,&three,NULL);CHKERRQ(ierr);
