@@ -106,7 +106,12 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
   // Find ownership
   z = ZCodeFromRank(rank,p);
 
-  if (CeilDiv(M[0],p[0])*CeilDiv(M[1],p[1])*CeilDiv(M[2],p[2]) > cmax || size == 1) {
+  // Check whether the coarsened global grid will fit on coarsened process set.  This is not a perfect measure because
+  // members of the current process set could have a different number of shares, thus the coarse grid would be
+  // distributed unevenly.  Since that information is still distributed, we are punting.
+  if (CeilDiv(M[0]/2,CeilDiv(p[0],2))
+      *CeilDiv(M[1]/2,CeilDiv(p[1],2))
+      *CeilDiv(M[2]/2,CeilDiv(p[2],2)) > cmax || size == 1) {
     // Coarse grid is on same process set, in-place
     if (M[0]%2 || M[1]%2 || M[2]%2) {
       if (size != 1) SETERRQ4(comm,PETSC_ERR_ARG_INCOMP,"Grid %D,%D,%D exceeds cmax %D, but cannot be coarsened",M[0],M[1],M[2],cmax);

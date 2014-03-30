@@ -20,7 +20,7 @@ test_expect_stdout 'FE Poisson fedegree=1 serial refined' 1 'fefas test-opapply 
 |A u - F|_max/|F|_max = 0.0253888
 '
 
-test_expect_stdout 'FE Poisson fedegree=1 parallel refined' 4 'fefas test-opapply -op_type poisson1 -M 8,16,24 -L 1,1,1 -p 1,2,2 -poisson_solution sine' '
+test_expect_stdout 'FE Poisson fedegree=1 parallel refined' 4 'fefas test-opapply -op_type poisson1 -M 8,16,24 -L 1,1,1 -p 1,2,2 -cmax 48 -poisson_solution sine' '
 [0] Level 3: [   0:   8,   0:   8,   0:  12] of [   8,  16,  24] on [  1,  2,  2]
 [0] Level 2: [   0:   4,   0:   4,   0:   6] of [   4,   8,  12] on [  1,  2,  2]
 [0] Level 1: [   0:   2,   0:   4,   0:   6] of [   2,   4,   6] on [  1,  1,  1]
