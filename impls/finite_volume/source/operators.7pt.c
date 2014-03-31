@@ -15,7 +15,7 @@
 #include "level.h"
 #include "operators.h"
 //------------------------------------------------------------------------------------------------------------------------------
-#define __FUSE_BCs 
+#define __STENCIL_FUSE_BCs 
 #define __STENCIL_STAR_SHAPED 1
 #define __STENCIL_RADIUS      1
 //------------------------------------------------------------------------------------------------------------------------------
@@ -24,13 +24,13 @@
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 void apply_BCs(level_type * level, int x_id){
-  #ifndef __FUSE_BCs 
+  #ifndef __STENCIL_FUSE_BCs 
   // This is a failure mode if (trying to do communication-avoiding) && (BC!=__BC_PERIODIC)
   apply_BCs_linear(level,x_id);
   #endif
 }
 //------------------------------------------------------------------------------------------------------------------------------
-#ifdef __FUSE_BCs                        
+#ifdef __STENCIL_FUSE_BCs                        
 #define __apply_op(x)                                                                        \
 (                                                                                            \
   a*alpha[ijk]*x[ijk] -b*h2inv*(                                                             \
