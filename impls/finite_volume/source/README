@@ -57,15 +57,14 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 -D__USE_VCYCLES                         // use true distributed V-Cycles in the multigrid solver
 -D__USE_FCYCLES                         // use the Full Multigrid (FMG) solver.  Note, the choice of FMG is orthogonal from U-Cycles and V-Cycles
 
--D__USE_GSRB				// use the GSRB smoother (the number of pre/posts smooths is specified by __NUM_SMOOTHS)
 -D__USE_CHEBY				// use a Chebyshev Polynomial smoother (degree is specified with __CHEBYSHEV_DEGREE)
+-D__USE_GSRB				// use the GSRB smoother (the number of pre/posts smooths is specified by __NUM_SMOOTHS)
 -D__USE_JACOBI				// use a weighted Jacobi smoother with a weight of 2/3
 -D__USE_L1JACOBI			// use a L1 Jacobi smoother (each row's weight is the L1 norm of that row)
 
 
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
-cc -O3 -fno-alias -fno-fnalias -xAVX   -openmp hpgmg.c mg.c box.c solver.c operators.ompif.c timer.x86.c -D__MPI -D__USE_BICGSTAB -o run.hpgmg
-This compiles the baseline code.  Any box>=64^3 will be threaded.  
+cc -O3 -fno-alias -fno-fnalias -xAVX level.c operators.7pt.c mg.c solvers.c hpgmg.c -D__MPI  timer.x86.c -openmp  -D__USE_SUBCOMM -D__USE_FCYCLES -D__USE_CHEBY -D__USE_BICGSTAB
 
 
 
