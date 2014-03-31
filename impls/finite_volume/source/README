@@ -99,6 +99,9 @@ The benchmark takes 2 arguments.
 - the target number of boxes per process is a loose bound on memory per process
 Given these constraints, the benchmark will then calculate the largest cubical domain it can run.
 
+The code supports nested OpenMP parallelism which can be enabled by setting
+OMP_NESTED=true.  At each multigrid level, the code will try and determine
+the best balance between coarse and fine-frained parallelism.
 
 On edison, (the Cray XC30 at nersc), one uses aprun to invoke mpi jobs.  A job script may include the following...
 #PBS -l mppwidth=96
@@ -110,6 +113,13 @@ appropriate NUMA controls (-ss  -cc numa_node).  Moreover, the dimension of each
 box is 2^6 on a side (64^3) and there is a target of 8 boxes per process on the
 finest grid.  The resultant problem is thus 256^3 on the finest grid.
 
+On Mira (the IBM Blue Gene/Q at Argonne), one may use qsub to directly queue
+the benchmark.  For example...
+qsub -t 00:10:00 -n  64 --proccount   64 --mode c1  -A [ALLOCATION] --env BG_SHAREDMEMSIZE=32MB:PAMID_VERBOSE=1:BG_COREDUMPDISABLED=1:BG_SMP_FAST_WAKEUP=YES:BG_THREADLAYOUT=2:OMP_PROC_BIND=TRUE:OMP_NUM_THREADS=64:OMP_WAIT_POLICY=active:OMP_NESTED=true ./run.bgq 6 8
+Will run the benchmark on 64 processes spread over 64 nodes with 1 process per 
+node (c1) and 64 threads per process.  Each process is allocated 8 64^3 boxes. 
+At one point, the additional environment variables listed were found to 
+accelerate performance.
 
 
 Understanding the Results
