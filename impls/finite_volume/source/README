@@ -26,21 +26,35 @@ permit others to do so.
 
 About
 =====
-HPGMG is a compact benchmark designed to proxy the geometric MG solves found in applications built from AMR MG frameworks like CHOMBO or BoxLib.
-At a high level, the benchmark solves Au=f where u and f are cell-centered (finite volume) 3D structured grids.
-The operator A is a 2nd order finite volume discretization of the helmholtz operator (a*alpha[]*u[] - b* div beta[] grad u[]), where a and b are scalar constants and alpha[] and beta[] are spatially varying coefficients.  HPGMG supports both periodic and homogeneous dirichlet boundary conditions.  
-The benchmark generates a u_exact[] for a large cubical 3D grid partitioned into subdomains(boxes) which are distributed across the supercomputer.
-It then manually differentiates u[] for form f[], then uses a multigrid solver to calculate a u[].  It may then use u_exact[] to test correctness and order.
-By default, HPGMG solves a poisson equation (a==0) with homogeneous dirichlet boundary conditions.
+HPGMG is a compact benchmark designed to proxy the geometric MG solves found in
+applications built from AMR MG frameworks like CHOMBO or BoxLib.  At a high 
+level, the benchmark solves Au=f where u and f are cell-centered (finite volume) 
+3D structured grids. The operator A is a 2nd order finite volume discretization 
+of the helmholtz operator (a*alpha[]*u[] - b* div beta[] grad u[]), where a and 
+b are scalar constants and alpha[] and beta[] are spatially varyingcoefficients.
+HPGMG supports both periodic and homogeneous dirichlet boundary conditions.  
+The benchmark generates a u_exact[] for a large cubical 3D grid partitioned into
+subdomains(boxes) which are distributed across the supercomputer.  It then 
+manually differentiates u[] for form f[], then uses a multigrid solver to 
+calculate a u[].  It may then use u_exact[] to test correctness and order.  
+By default, HPGMG solves a poisson equation (a==0) with homogeneous dirichlet 
+boundary conditions.
 
-The basic relaxation operator is Gauss-Seidel Red-Black (GSRB) which is applied twice (red/black/red/black) at every level up and and down the v-cycle.
-HPGMG also includes Jacobi, L1Jacobi, and Chebyshev Polynomial smoothers.
-HPGMG implements both a truncated v-cycle (u-cycle) in which boxes are restricted locally and a true distributed v-cycle in which restriction and interpolation(prolongation) become true distributed operations.  
-The latter allows the global problem to be restricted to as little as one cell.
-At the bottom of the v-cycle, HPGMG switches to one of a few bottom solvers (BiCGStab is used often used in codes like BoxLib).
-Once a sufficiently accurate solution is obtained on this coarse grid, it is interpolated back up the v-cycle.
+The basic relaxation operator is Gauss-Seidel Red-Black (GSRB) which is applied 
+twice (red/black/red/black) at every level up and and down the v-cycle.  HPGMG
+also includes Jacobi, L1Jacobi, Symmetric Gauss-Seidel, and Chebyshev Polynomial
+smoothers.  HPGMG implements both a truncated v-cycle (u-cycle) in which boxes 
+are restricted locally and a true distributed v-cycle in which restriction and 
+interpolation(prolongation) become true distributed operations.  The latter 
+allows the global problem to be restricted to as little as one cell.  At the 
+bottom of the v-cycle, HPGMG switches to one of a few bottom solvers (BiCGStab 
+is used often used in codes like BoxLib).  Once a sufficiently accurate solution
+is obtained on this coarse grid, it is interpolated back up the v-cycle.
 
-HPGMG also includes the option to use Full Multigrid (FMG) in which one executes an f-cycle that should hit the discretization error in one pass (instead of 10 v-cycles).  This can provide a substantial performance boost, but presents a number of performance optimization challenges.
+HPGMG also includes the option to use Full Multigrid (FMG) in which one executes
+an f-cycle that should hit the discretization error in one pass (instead of 10 
+v-cycles).  This can provide a substantial performance boost, but presents a 
+number of performance optimization challenges.
 
 
 Compilation
@@ -66,7 +80,7 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
 cc -O3 -fno-alias -fno-fnalias -xAVX -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.x86.c -D__MPI  -D__USE_SUBCOMM -D__USE_FCYCLES -D__USE_CHEBY -D__USE_BICGSTAB -o run.avx
 
-On Mira, I use the following...
+On Mira (an IBM BlueGene/Q), one can use the following...
 soft add +mpiwrapper-xl
 mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.bgq.c -D__MPI -D__USE_FCYCLES -D__USE_CHEBY -D__USE_BICGSTAB -o run.bgq
 
@@ -85,18 +99,24 @@ The benchmark takes 2 arguments.
 - the target number of boxes per process is a loose bound on memory per process
 Given these constraints, the benchmark will then calculate the largest cubical domain it can run.
 
+
 On edison, (the Cray XC30 at nersc), one uses aprun to invoke mpi jobs.  A job script may include the following...
 #PBS -l mppwidth=96
 export OMP_NUM_THREADS=12
-aprun -n 8  -d 12  -N 2  -S 1  -ss  -cc numa_node ./run.hpgmg  6  2 4 8   4 2 1
-This will launch 8 mpi processes (-n 8 == 4*2*1) of 12 threads (-d 12 == OMP_NUM_THREADS) with 2 processes per node (-N 2), 1 process per NUMA node (-S 1) with the appropriate NUMA controls (-ss  -cc numa_node).  Moreover, each box is 2^6 on each size (64^3) and there are 64 boxes per node in a 2x4x8 array.
+aprun -n 8  -d 12  -N 2  -S 1  -ss  -cc numa_node ./run.hpgmg  6  8
+This will launch 8 mpi processes (-n 8) of 12 threads (-d 12 == OMP_NUM_THREADS)
+with 2 processes per node (-N 2), 1 process per NUMA node (-S 1) with the 
+appropriate NUMA controls (-ss  -cc numa_node).  Moreover, the dimension of each
+box is 2^6 on a side (64^3) and there is a target of 8 boxes per process on the
+finest grid.  The resultant problem is thus 256^3 on the finest grid.
+
 
 
 Understanding the Results
 =========================
 During execution, the benchmark will output some debug information for understanding convergence and performance.  
 The following is an example and examines a key subset of this information.
-+ aprun -n 512 -d 12 -N 2 -S 1 -ss -cc numa_node ./run.hpgmg.edison 7 2 2 2 8 8 8
++ aprun -n 512 -d 12 -N 2 -S 1 -ss -cc numa_node ./run.hpgmg.edison 7 8
 
 Requested MPI_THREAD_FUNNELED, got MPI_THREAD_FUNNELED
 512 MPI Tasks of 12 threads
