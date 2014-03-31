@@ -23,6 +23,7 @@
 #define __OMP_COLLAPSE collapse(2)
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
+// FIX... make #define
 void apply_BCs(level_type * level, int x_id){
   #ifndef __STENCIL_FUSE_BCs 
   // This is a failure mode if (trying to do communication-avoiding) && (BC!=__BC_PERIODIC)
@@ -177,13 +178,15 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   exchange_boundary(level,__L1inv,0);
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
+
+
 //------------------------------------------------------------------------------------------------------------------------------
 #ifdef  __USE_GSRB
 #define __NUM_SMOOTHS      2 // RBRB
 #include "operators/gsrb.c"
 #elif   __USE_CHEBY
 #define __NUM_SMOOTHS      1
-#define __CHEBYSHEV_DEGREE 4 // i.e. one degree-2 polynomial smoother
+#define __CHEBYSHEV_DEGREE 4 // i.e. one degree-4 polynomial smoother
 #include "operators/chebyshev.c"
 #elif   __USE_JACOBI
 #define __NUM_SMOOTHS      6
