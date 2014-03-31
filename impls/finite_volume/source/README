@@ -64,8 +64,11 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 
 
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
-cc -O3 -fno-alias -fno-fnalias -xAVX level.c operators.7pt.c mg.c solvers.c hpgmg.c -D__MPI  timer.x86.c -openmp  -D__USE_SUBCOMM -D__USE_FCYCLES -D__USE_CHEBY -D__USE_BICGSTAB
+cc -O3 -fno-alias -fno-fnalias -xAVX -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.x86.c -D__MPI  -D__USE_SUBCOMM -D__USE_FCYCLES -D__USE_CHEBY -D__USE_BICGSTAB -o run.avx
 
+On Mira, I use the following...
+soft add +mpiwrapper-xl
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.bgq.c -D__MPI -D__USE_FCYCLES -D__USE_CHEBY -D__USE_BICGSTAB -o run.bgq
 
 
 
