@@ -1,0 +1,37 @@
+#!/bin/sh
+#PBS -N HPGMG
+#PBS -o results.edison.4096.fmg
+#PBS -q regular
+#PBS -j oe
+#PBS -l walltime=0:29:00
+#PBS -l mppwidth=49152
+
+set -x
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=12
+
+aprun -n  1331  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg2 7  1
+aprun -n  1331  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+aprun -n  1728  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+aprun -n  2197  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+aprun -n  2744  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+aprun -n  3375  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+aprun -n  4096  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+
+#aprun -n  1536  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+#aprun -n  1792  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+#aprun -n  2048  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+#aprun -n  2560  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+#aprun -n  3072  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+#aprun -n  3584  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+#aprun -n  4096  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
+
+#aprun -n  1536  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
+#aprun -n  1792  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
+#aprun -n  2048  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
+#aprun -n  2560  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
+#aprun -n  3072  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
+#aprun -n  3584  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
+#aprun -n  4096  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
+

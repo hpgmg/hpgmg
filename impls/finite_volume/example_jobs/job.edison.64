@@ -1,0 +1,31 @@
+#!/bin/sh
+#PBS -N HPGMG
+#PBS -o results.edison.costin
+#PBS -q regular
+#PBS -j oe
+#PBS -l walltime=0:29:00
+#PBS -l mppwidth=768
+
+set -x
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=8
+aprun -n  64 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.costin      7  8
+aprun -n  64 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.costin      6  8
+aprun -n  64 -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.costin      5  8
+
+export OMP_NUM_THREADS=4
+aprun -n 128 -d  6  -N  4  -S 2  -ss  -cc numa_node ./run.edison.costin      7  4
+aprun -n 128 -d  6  -N  4  -S 2  -ss  -cc numa_node ./run.edison.costin      6  4
+aprun -n 128 -d  6  -N  4  -S 2  -ss  -cc numa_node ./run.edison.costin      5  4
+
+export OMP_NUM_THREADS=2
+aprun -n 256 -d  3  -N  8  -S 4  -ss  -cc numa_node ./run.edison.costin      7  2
+aprun -n 256 -d  3  -N  8  -S 4  -ss  -cc numa_node ./run.edison.costin      6  2
+aprun -n 256 -d  3  -N  8  -S 4  -ss  -cc numa_node ./run.edison.costin      5  2
+
+export OMP_NUM_THREADS=1
+aprun -n 512 -d  1  -N 16  -S 8  -ss  -cc numa_node ./run.edison.costin      7  1
+aprun -n 512 -d  1  -N 16  -S 8  -ss  -cc numa_node ./run.edison.costin      6  1
+aprun -n 512 -d  1  -N 16  -S 8  -ss  -cc numa_node ./run.edison.costin      5  1
+

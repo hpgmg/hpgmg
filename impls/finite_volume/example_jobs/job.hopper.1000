@@ -1,0 +1,26 @@
+#!/bin/sh
+#PBS -N HPGMG
+#PBS -o results.hopper.1000.helmholtz2
+#PBS -q regular
+#PBS -j oe
+#PBS -l walltime=0:59:00
+#PBS -l mppwidth=6000
+
+set -x
+cd $PBS_O_WORKDIR
+module swap PrgEnv-pgi PrgEnv-intel
+
+export OMP_NUM_THREADS=6
+#export OMP_WAIT_POLICY=active
+
+
+aprun -n  1000  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.helmholtz  7  1
+aprun -n   729  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.helmholtz  7  1
+aprun -n   512  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.helmholtz  7  1
+aprun -n   343  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.helmholtz  7  1
+aprun -n   216  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.helmholtz  7  1
+aprun -n   125  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.helmholtz  7  1
+aprun -n    64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.helmholtz  7  1
+aprun -n    27  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.helmholtz  7  1
+aprun -n     8  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper.helmholtz  7  1
+aprun -n     1  -d  6               -ss  -cc numa_node ./run.hopper.helmholtz  7  1

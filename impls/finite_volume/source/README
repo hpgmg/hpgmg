@@ -1,0 +1,171 @@
+*** Copyright Notice ***
+
+HPGMG, Copyright (c) 2014, The Regents of the University of
+California, through Lawrence Berkeley National Laboratory (subject to
+receipt of any required approvals from the U.S. Dept. of Energy).  All
+rights reserved.
+
+If you have questions about your rights to use or distribute this
+software, please contact Berkeley Lab's Technology Transfer Department
+at  TTD@lbl.gov.
+
+NOTICE.  This software is owned by the U.S. Department of Energy.  As
+such, the U.S. Government has been granted for itself and others
+acting on its behalf a paid-up, nonexclusive, irrevocable, worldwide
+license in the Software to reproduce, prepare derivative works, and
+perform publicly and display publicly.  Beginning five (5) years after
+the date permission to assert copyright is obtained from the U.S.
+Department of Energy, and subject to any subsequent five (5) year
+renewals, the U.S. Government is granted for itself and others acting
+on its behalf a paid-up, nonexclusive, irrevocable, worldwide license
+in the Software to reproduce, prepare derivative works, distribute
+copies to the public, perform publicly and display publicly, and to
+permit others to do so.
+****************************
+
+
+About
+=====
+HPGMG is a compact benchmark designed to proxy the geometric MG solves found in applications built from AMR MG frameworks like CHOMBO or BoxLib.
+At a high level, the benchmark solves Au=f where u and f are cell-centered (finite volume) 3D structured grids.
+The operator A is a 2nd order finite volume discretization of the helmholtz operator (a*alpha[]*u[] - b* div beta[] grad u[]), where a and b are scalar constants and alpha[] and beta[] are spatially varying coefficients.  HPGMG supports both periodic and homogeneous dirichlet boundary conditions.  
+The benchmark generates a u_exact[] for a large cubical 3D grid partitioned into subdomains(boxes) which are distributed across the supercomputer.
+It then manually differentiates u[] for form f[], then uses a multigrid solver to calculate a u[].  It may then use u_exact[] to test correctness and order.
+By default, HPGMG solves a poisson equation (a==0) with homogeneous dirichlet boundary conditions.
+
+The basic relaxation operator is Gauss-Seidel Red-Black (GSRB) which is applied twice (red/black/red/black) at every level up and and down the v-cycle.
+HPGMG also includes Jacobi, L1Jacobi, and Chebyshev Polynomial smoothers.
+HPGMG implements both a truncated v-cycle (u-cycle) in which boxes are restricted locally and a true distributed v-cycle in which restriction and interpolation(prolongation) become true distributed operations.  
+The latter allows the global problem to be restricted to as little as one cell.
+At the bottom of the v-cycle, HPGMG switches to one of a few bottom solvers (BiCGStab is used often used in codes like BoxLib).
+Once a sufficiently accurate solution is obtained on this coarse grid, it is interpolated back up the v-cycle.
+
+HPGMG also includes the option to use Full Multigrid (FMG) in which one executes an f-cycle that should hit the discretization error in one pass (instead of 10 v-cycles).  This can provide a substantial performance boost, but presents a number of performance optimization challenges.
+
+
+Compilation
+===========
+Although no make file currently exists, compilation is straightforward.
+
+There are a few basic arguments that should be used.  Most are selfexplanatory.  
+
+-D__MPI                                 // compiles the distributed (MPI) version
+-D__USE_BICGSTAB                        // use BiCGStab as a bottom (coarse grid) solver
+-D__USE_SUBCOMM				// build a subcommunicator for each level in the MG v-cycle to minimize the scope of MPI_AllReduce()
+
+-D__USE_UCYCLES                         // use truncated V-Cycles (U-Cycles) in the multigrid solver
+-D__USE_VCYCLES                         // use true distributed V-Cycles in the multigrid solver
+-D__USE_FCYCLES                         // use the Full Multigrid (FMG) solver.  Note, the choice of FMG is orthogonal from U-Cycles and V-Cycles
+
+-D__USE_GSRB				// use the GSRB smoother (the number of pre/posts smooths is specified by __NUM_SMOOTHS)
+-D__USE_CHEBY				// use a Chebyshev Polynomial smoother (degree is specified with __CHEBYSHEV_DEGREE)
+-D__USE_JACOBI				// use a weighted Jacobi smoother with a weight of 2/3
+-D__USE_L1JACOBI			// use a L1 Jacobi smoother (each row's weight is the L1 norm of that row)
+
+
+Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
+cc -O3 -fno-alias -fno-fnalias -xAVX   -openmp hpgmg.c mg.c box.c solver.c operators.ompif.c timer.x86.c -D__MPI -D__USE_BICGSTAB -o run.hpgmg
+This compiles the baseline code.  Any box>=64^3 will be threaded.  
+
+
+
+
+Running the benchmark
+=====================
+The benchmark exploits OpenMP and/or MPI for parallelism.
+You must thus set OMP_NUM_THREADS correctly.  For a machine like Edison at NERSC, this is simply 
+% export OMP_NUM_THREADS=12
+Moreover, on multisocket architectures or when using MPI, you must set affinity correctly.
+
+The benchmark takes 2 arguments.
+./run.hpgmg [log2BoxSize] [Target # of boxes per process]
+- log2BoxSize is the log base 2 of the dimension of each box on the finnest grid (e.g. 6 is a good proxy for real applications)
+- the target number of boxes per process is a loose bound on memory per process
+Given these constraints, the benchmark will then calculate the largest cubical domain it can run.
+
+On edison, (the Cray XC30 at nersc), one uses aprun to invoke mpi jobs.  A job script may include the following...
+#PBS -l mppwidth=96
+export OMP_NUM_THREADS=12
+aprun -n 8  -d 12  -N 2  -S 1  -ss  -cc numa_node ./run.hpgmg  6  2 4 8   4 2 1
+This will launch 8 mpi processes (-n 8 == 4*2*1) of 12 threads (-d 12 == OMP_NUM_THREADS) with 2 processes per node (-N 2), 1 process per NUMA node (-S 1) with the appropriate NUMA controls (-ss  -cc numa_node).  Moreover, each box is 2^6 on each size (64^3) and there are 64 boxes per node in a 2x4x8 array.
+
+
+Understanding the Results
+=========================
+During execution, the benchmark will output some debug information for understanding convergence and performance.  
+The following is an example and examines a key subset of this information.
++ aprun -n 512 -d 12 -N 2 -S 1 -ss -cc numa_node ./run.hpgmg.edison 7 2 2 2 8 8 8
+
+Requested MPI_THREAD_FUNNELED, got MPI_THREAD_FUNNELED
+512 MPI Tasks of 12 threads
+truncating the v-cycle at 2^3 subdomains
+creating domain...       done
+  128 x 128 x 128 (per subdomain)
+  256 x 256 x 256 (per process)
+  2048 x 2048 x 2048 (overall)
+  1-deep ghost zones
+  allocated 1865 MB
+
+This initial output details how MPI and OpenMP were initialized.  
+Moreover, it notes how deep the v-cycle is (down to 2^3 boxes)
+It then shows the progress as it creates the structured grids noting their respective sizes and the total memory explicitly allocated with malloc().
+Thus, the 2K^3 overall problem represents 8 billion degrees of freedom.
+
+
+MGSolve...
+v-cycle= 1, norm=0.00002091903646017090 (2.091904e-05)
+v-cycle= 2, norm=0.00000079708396334668 (7.970840e-07)
+v-cycle= 3, norm=0.00000007951502395414 (7.951502e-08)
+v-cycle= 4, norm=0.00000000581619537788 (5.816195e-09)
+v-cycle= 5, norm=0.00000000048970464287 (4.897046e-10)
+v-cycle= 6, norm=0.00000000003900568126 (3.900568e-11)
+v-cycle= 7, norm=0.00000000000318039461 (3.180395e-12)
+v-cycle= 8, norm=0.00000000000025703104 (2.570310e-13)
+v-cycle= 9, norm=0.00000000000002088201 (2.088201e-14)
+v-cycle=10, norm=0.00000000000000170463 (1.704634e-15)
+v-cycle=11, norm=0.00000000000000014284 (1.428395e-16)
+done
+
+As the multigrid solver progresses, the max (inf) norm of the residual is reported after each v-cycle.
+One expects to reduce the norm by one digit on each v-cycle.  
+Thus to attain a norm less than 1e-15, we required 11 v-cycles.
+
+
+                                  0            1            2            3            4            5            6
+                              128^3         64^3         32^3         16^3          8^3          4^3          2^3        total
+smooth                     2.244879     0.288221     0.020186     0.003279     0.000672     0.000267     0.000000     2.557504
+residual                   0.569046     0.035340     0.001833     0.000328     0.000077     0.000036     0.000030     0.606691
+restriction                0.041538     0.003994     0.000310     0.000072     0.000032     0.000028     0.000000     0.045975
+interpolation              0.076533     0.006586     0.000567     0.000105     0.000038     0.000032     0.000000     0.083860
+applyOp                    0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.001715     0.001715
+BLAS1                      0.157396     0.004949     0.000776     0.000184     0.000055     0.000027     0.014614     0.178002
+BLAS3                      0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000
+communication              0.314615     0.069810     0.024858     0.017584     0.009740     0.005763     0.318338     0.760707
+  local exchange           0.047781     0.008262     0.001819     0.000730     0.000368     0.000233     0.001743     0.060936
+  pack MPI buffers         0.047688     0.007722     0.001089     0.000569     0.000294     0.000215     0.001630     0.059207
+  unpack MPI buffers       0.022835     0.004058     0.001226     0.000530     0.000349     0.000231     0.001712     0.030940
+  MPI_Isend                0.002422     0.002161     0.000856     0.000659     0.000779     0.000374     0.002755     0.010005
+  MPI_Irecv                0.000456     0.000402     0.000152     0.000205     0.000119     0.000079     0.000677     0.002089
+  MPI_Waitall              0.169658     0.047091     0.019666     0.014850     0.007801     0.004603     0.022721     0.286390
+  MPI_collectives          0.023637     0.000000     0.000000     0.000000     0.000000     0.000000     0.286850     0.310487
+--------------         ------------ ------------ ------------ ------------ ------------ ------------ ------------ ------------
+Total by level             3.386964     0.404774     0.047960     0.021436     0.010595     0.006159     0.334945     4.212834
+
+  Total time in MGBuild       0.081082
+  Total time in MGSolve       4.235200
+              " v-cycles      4.213100
+      number of v-cycles            11
+Bottom solver iterations           397
+
+Finally, we see a timing report.  Vertically are the key operations within the v-cycle (communication is further broken down into its constituient operations).  Horizontally is a breakdown of time (in seconds) by level in the v-cycle.  Thus, one can see the difference in time spent in each operation at each level.  These times are totaled by level and by function.  Finally, the total time required to build the solver (note geometric multigrid solves can be built extremely quickly), the time spent in the solver, the number of v-cycles, and the total number of bottom solver (e.g. BiCGStab) iterations summed across all v-cycles is reported.
+
+We thus observe that this 8 billion DOF problem was solved in 4.23 seconds on 512 processes (6144 cores).  It required 397 BiCGStab iterations on the coarse grid spread over 11 vcycles (approx 36 terations per v-cycle).  
+
+As the time spent smoothing the fine grid was non-trivial (2.244 seconds), one might be motivated to analyze it.
+Each box has (128+2)^3 cells including ghost zones.
+There are 8 boxes (2 2 2) per process
+Each call to smooth moves 64 bytes of data per cell per stencil sweep.
+There are 4 calls to smooth and 2 stencil sweeps per smooth in the v-cycle.
+There are 11 v-cycles.
+Thus, smooth requires one move *at least* 8 * 130^3 * 64 * 8 * 11 bytes of data = 98.99e9 bytes.
+Moving this data in 2.244 seconds suggests each process attained an average DRAM bandwidth of 44 GB/s.  This is quite good given this was vanilla OpenMP code without optimization and one could never hope for better than 54GB/s on this machine.
