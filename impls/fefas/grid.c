@@ -136,7 +136,7 @@ static PetscErrorCode PartitionGetRange(PetscInt M,PetscInt p,PetscInt t,PetscIn
   return 0;
 }
 
-PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],const PetscInt pw[3],PetscInt cmax,Grid *grid)
+PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],PetscInt cmax,Grid *grid)
 {
   PetscErrorCode ierr;
   Grid g;
@@ -179,13 +179,13 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
 
     if (CeilDiv(CM[0],Cp[0]) * CeilDiv(CM[1],Cp[1]) * CeilDiv(CM[2],Cp[2]) > cmax || size == 1) {
       for (j=0; j<3; j++) Cp[j] = p[j]; // Coarsen on the same process set
-      ierr = GridCreate(comm,CM,Cp,pw,cmax,&g->coarse);CHKERRQ(ierr);
+      ierr = GridCreate(comm,CM,Cp,cmax,&g->coarse);CHKERRQ(ierr);
       mask = 00;
     } else { // z&07==0 will participate in coarse grid
       MPI_Comm ccomm;
       ierr = MPI_Comm_split(comm,z&07?MPI_UNDEFINED:0,0,&ccomm);CHKERRQ(ierr);
       if (ccomm != MPI_COMM_NULL) { // I continue to coarse grid
-        ierr = GridCreate(ccomm,CM,Cp,pw,cmax,&g->coarse);CHKERRQ(ierr);
+        ierr = GridCreate(ccomm,CM,Cp,cmax,&g->coarse);CHKERRQ(ierr);
         ierr = MPI_Comm_free(&ccomm);CHKERRQ(ierr);
       } else g->coarse = NULL;
       mask = 07;
