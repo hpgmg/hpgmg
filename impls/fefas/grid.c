@@ -40,7 +40,6 @@ struct FE_private {
   PetscSF sf;
   PetscSF sfinject;
   PetscSF sfinjectLocal;
-  PetscSegBuffer seg;
   struct {
     PetscReal *B;
     PetscReal *D;
@@ -916,7 +915,6 @@ PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,Pets
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
   fedegree = fe->degree;
   P = fedegree + 1;
-  if (!fe->seg) {ierr = PetscSegBufferCreate(sizeof(PetscScalar),ne*fe->dof*P*P*P,&fe->seg);CHKERRQ(ierr);}
 
   for (e=elem; e<elem+ne; e++) {
     const PetscInt *m = fe->grid->m;
@@ -1002,7 +1000,6 @@ static PetscErrorCode FEDestroy(void **ctx)
   ierr = PetscSFDestroy(&fe->sfinjectLocal);CHKERRQ(ierr);
   ierr = DMDestroy(&fe->dmcoarse);CHKERRQ(ierr);
   ierr = PetscFree6(fe->ref.B,fe->ref.D,fe->ref.x,fe->ref.w,fe->ref.interp,fe->ref.w3);CHKERRQ(ierr);
-  ierr = PetscSegBufferDestroy(&fe->seg);CHKERRQ(ierr);
   ierr = PetscFree(*ctx);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
