@@ -6,7 +6,8 @@
 
 typedef uint64_t zcode;
 
-#define COARSE_KNOWN_MAX 8
+// Coarse grids should never be smaller than fine grids, so 27 neighbors should always be enough.
+#define COARSE_KNOWN_MAX 27
 
 struct Grid_private {
   PetscInt refct;
