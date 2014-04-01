@@ -2,17 +2,14 @@
 #define _pointwise_h
 
 #include <petscsys.h>
-
-#if defined(__GNUC__)
-#define ALIGN32 __attribute__((aligned(32))) /* AVX packed instructions need 32-byte alignment */
-#endif
+#include "fefas-align.h"
 
 static PetscErrorCode PointwiseJacobianInvert(PetscInt ne,PetscInt Q,const PetscReal w[Q],PetscScalar dx[3][3][Q][ne],PetscScalar wdxdet[Q][ne])
 {
   PetscInt i,j,k,e;
 
   for (i=0; i<Q; i++) {
-    PetscScalar a[3][3][ne] ALIGN32;
+    PetscScalar a[3][3][ne]_align;
     for (e=0; e<ne; e++) {
       PetscScalar b0,b3,b6,det,idet;
       for (j=0; j<3; j++) {

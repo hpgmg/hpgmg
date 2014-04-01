@@ -2,12 +2,7 @@
 #define _tensor_h
 
 #include <petscsys.h>
-
-#ifdef __AVX__
-#  define _align __attribute__((aligned(32))) /* AVX packed instructions need 32-byte alignment */
-#else
-#  define _align
-#endif
+#include "fefas-align.h"
 
 typedef enum {TENSOR_EVAL,TENSOR_TRANSPOSE} TensorMode;
 
