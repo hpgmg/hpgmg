@@ -294,7 +294,7 @@ PetscErrorCode RunMGV()
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
   ierr = OptionsParse("Finite Element FAS FMG solver",&opt);CHKERRQ(ierr);
-  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
   ierr = GridGetNumLevels(grid,&nlevels);CHKERRQ(ierr);
 
   ierr = GridView(grid);CHKERRQ(ierr);
@@ -377,7 +377,7 @@ PetscErrorCode RunFMG()
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
   ierr = OptionsParse("Finite Element FAS FMG solver",&opt);CHKERRQ(ierr);
-  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,NULL,opt->cmax,&grid);CHKERRQ(ierr);
+  ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
   ierr = GridGetNumLevels(grid,&nlevels);CHKERRQ(ierr);
 
   ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
