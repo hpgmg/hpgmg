@@ -498,12 +498,12 @@ PetscErrorCode DMFEGetInfo(DM dm,PetscInt *fedegree,PetscInt *level,PetscInt mlo
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
-  *fedegree = fe->degree;
-  *level = fe->grid->level;
+  if (fedegree) *fedegree = fe->degree;
+  if (level)    *level = fe->grid->level;
   for (PetscInt i=0; i<3; i++) {
-    mlocal[i] = fe->grid->m[i];
-    Mglobal[i] = fe->grid->M[i];
-    procs[i] = fe->grid->p[i];
+    if (mlocal)  mlocal[i] = fe->grid->m[i];
+    if (Mglobal) Mglobal[i] = fe->grid->M[i];
+    if (procs)   procs[i] = fe->grid->p[i];
   }
   PetscFunctionReturn(0);
 }

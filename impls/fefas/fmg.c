@@ -91,13 +91,8 @@ PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
   mg->dm = dm;
   *newmg = mg;
   for (PetscInt lev=nlevels-1; ; lev--) {
-    char name[256];
     DM dmcoarse;
     mg->monitor = monitor;
-    ierr = PetscSNPrintf(name,sizeof name,"FMG Level %D",lev);CHKERRQ(ierr);
-    ierr = PetscLogStageRegister(name,&mg->stage);CHKERRQ(ierr);
-    ierr = PetscSNPrintf(name,sizeof name,"MGVcycleLevel%D",lev);CHKERRQ(ierr);
-    ierr = PetscLogEventRegister(name,DM_CLASSID,&mg->V_Cycle);CHKERRQ(ierr);
     if (mg->dm) { // I have some grid at this level
       Mat A;
       PC pc;
@@ -150,6 +145,24 @@ static PetscReal ConvergenceRate(PetscReal normCoarse,PetscReal normFine) {
   // Try to avoid reporting noisy rates in pre-asymptotic regime
   if (normCoarse < 1e3*PETSC_MACHINE_EPSILON && normFine > 1e3*PETSC_MACHINE_EPSILON) return 0;
   return log2(normCoarse/normFine);
+}
+
+static PetscErrorCode MGSetProfiling(MG mg,PetscBool flg) {
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  if (flg) {
+    PetscInt lev;
+    ierr = DMFEGetInfo(mg->dm,NULL,&lev,NULL,NULL,NULL);CHKERRQ(ierr);
+    for ( ; lev >= 0; mg=mg->coarse,lev--) {
+      char name[256];
+      ierr = PetscSNPrintf(name,sizeof name,"FMG Level %D",lev);CHKERRQ(ierr);
+      ierr = PetscLogStageRegister(name,&mg->stage);CHKERRQ(ierr);
+      ierr = PetscSNPrintf(name,sizeof name,"MGVcycleLevel%D",lev);CHKERRQ(ierr);
+      ierr = PetscLogEventRegister(name,DM_CLASSID,&mg->V_Cycle);CHKERRQ(ierr);
+    }
+  }
+  PetscFunctionReturn(0);
 }
 
 static PetscErrorCode MGRecordDiagnostics(Op op,MG mg,Vec B,Vec U) {
@@ -309,6 +322,7 @@ PetscErrorCode RunMGV()
   ierr = VecNorm(F,NORM_2,&normF);CHKERRQ(ierr);
 
   ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
+  ierr = MGSetProfiling(mg,PETSC_TRUE);CHKERRQ(ierr);
   for (PetscInt i=0; i<5; i++) {
     Vec Y;
     ierr = MGVCycle(op,mg,opt->smooth[0],opt->smooth[1],F,U);CHKERRQ(ierr);
@@ -392,6 +406,7 @@ PetscErrorCode RunFMG()
   ierr = VecNorm(F,NORM_2,&normF);CHKERRQ(ierr);
 
   ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
+  ierr = MGSetProfiling(mg,PETSC_TRUE);CHKERRQ(ierr);
   for (PetscInt i=0; i<3; i++) {
     Vec Y;
     if (!i) {ierr = MGFCycle(op,mg,opt->smooth[0],opt->smooth[1],F,U);CHKERRQ(ierr);}
