@@ -26,41 +26,77 @@
 //------------------------------------------------------------------------------------------------------------------------------
 // FIX... make #define
 void apply_BCs(level_type * level, int x_id){
-  #ifndef __STENCIL_FUSE_BCs 
+  #ifndef __STENCIL_FUSE_BC
   // This is a failure mode if (trying to do communication-avoiding) && (BC!=__BC_PERIODIC)
   apply_BCs_linear(level,x_id);
   #endif
 }
 //------------------------------------------------------------------------------------------------------------------------------
-#ifdef __STENCIL_VARIABLE_COEFFICIENT
-  #ifdef __STENCIL_FUSE_BCs                        
-    #define __apply_op(x)                                                                        \
-    (                                                                                            \
-      a*alpha[ijk]*x[ijk] -b*h2inv*(                                                             \
-       +beta_i[ijk        ]*( valid[ijk-1      ]*( (x)[ijk] + (x)[ijk-1      ]) - 2.0*(x)[ijk] ) \
-       +beta_j[ijk        ]*( valid[ijk-jStride]*( (x)[ijk] + (x)[ijk-jStride]) - 2.0*(x)[ijk] ) \
-       +beta_k[ijk        ]*( valid[ijk-kStride]*( (x)[ijk] + (x)[ijk-kStride]) - 2.0*(x)[ijk] ) \
-       +beta_i[ijk+1      ]*( valid[ijk+1      ]*( (x)[ijk] + (x)[ijk+1      ]) - 2.0*(x)[ijk] ) \
-       +beta_j[ijk+jStride]*( valid[ijk+jStride]*( (x)[ijk] + (x)[ijk+jStride]) - 2.0*(x)[ijk] ) \
-       +beta_k[ijk+kStride]*( valid[ijk+kStride]*( (x)[ijk] + (x)[ijk+kStride]) - 2.0*(x)[ijk] ) \
-      )                                                                                          \
+#ifdef __STENCIL_FUSE_BC
+
+  #ifdef __STENCIL_VARIABLE_COEFFICIENT
+    #define __apply_op(x)                                                                           \
+    (                                                                                               \
+      a*alpha[ijk]*x[ijk] - b*h2inv*(                                                               \
+        + beta_i[ijk        ]*( valid[ijk-1      ]*( (x)[ijk] + (x)[ijk-1      ] ) - 2.0*(x)[ijk] ) \
+        + beta_j[ijk        ]*( valid[ijk-jStride]*( (x)[ijk] + (x)[ijk-jStride] ) - 2.0*(x)[ijk] ) \
+        + beta_k[ijk        ]*( valid[ijk-kStride]*( (x)[ijk] + (x)[ijk-kStride] ) - 2.0*(x)[ijk] ) \
+        + beta_i[ijk+1      ]*( valid[ijk+1      ]*( (x)[ijk] + (x)[ijk+1      ] ) - 2.0*(x)[ijk] ) \
+        + beta_j[ijk+jStride]*( valid[ijk+jStride]*( (x)[ijk] + (x)[ijk+jStride] ) - 2.0*(x)[ijk] ) \
+        + beta_k[ijk+kStride]*( valid[ijk+kStride]*( (x)[ijk] + (x)[ijk+kStride] ) - 2.0*(x)[ijk] ) \
+      )                                                                                             \
     )
-  #else
-    #define __apply_op(x)                                          \
-    (                                                              \
-      a*alpha[ijk]*x[ijk] -b*h2inv*(                               \
-         beta_i[ijk+1      ]*( (x)[ijk+1      ]-(x)[ijk        ] ) \
-        -beta_i[ijk        ]*( (x)[ijk        ]-(x)[ijk-1      ] ) \
-        +beta_j[ijk+jStride]*( (x)[ijk+jStride]-(x)[ijk        ] ) \
-        -beta_j[ijk        ]*( (x)[ijk        ]-(x)[ijk-jStride] ) \
-        +beta_k[ijk+kStride]*( (x)[ijk+kStride]-(x)[ijk        ] ) \
-        -beta_k[ijk        ]*( (x)[ijk        ]-(x)[ijk-kStride] ) \
-      )                                                            \
+  #else  // constant coefficient case...  
+    #define __apply_op(x)                                    \
+    (                                                        \
+      a*alpha[ijk]*x[ijk] - b*h2inv*(                        \
+        + valid[ijk-1      ]*( (x)[ijk] + (x)[ijk-1      ] ) \
+        + valid[ijk-jStride]*( (x)[ijk] + (x)[ijk-jStride] ) \
+        + valid[ijk-kStride]*( (x)[ijk] + (x)[ijk-kStride] ) \
+        + valid[ijk+1      ]*( (x)[ijk] + (x)[ijk+1      ] ) \
+        + valid[ijk+jStride]*( (x)[ijk] + (x)[ijk+jStride] ) \
+        + valid[ijk+kStride]*( (x)[ijk] + (x)[ijk+kStride] ) \
+                       -12.0*( (x)[ijk]                    ) \
+      )                                                      \
     )
-  #endif
-#else
-  #error constant coefficient not yet implemented !!!
+  #endif // variable/constant coefficient
+
 #endif
+
+
+//------------------------------------------------------------------------------------------------------------------------------
+#ifndef __STENCIL_FUSE_BC
+
+  #ifdef __STENCIL_VARIABLE_COEFFICIENT
+    #define __apply_op(x)                                     \
+    (                                                         \
+      a*alpha[ijk]*x[ijk] - b*h2inv*(                         \
+        + beta_i[ijk+1      ]*( (x)[ijk+1      ] - (x)[ijk] ) \
+        + beta_i[ijk        ]*( (x)[ijk-1      ] - (x)[ijk] ) \
+        + beta_j[ijk+jStride]*( (x)[ijk+jStride] - (x)[ijk] ) \
+        + beta_j[ijk        ]*( (x)[ijk-jStride] - (x)[ijk] ) \
+        + beta_k[ijk+kStride]*( (x)[ijk+kStride] - (x)[ijk] ) \
+        + beta_k[ijk        ]*( (x)[ijk-kStride] - (x)[ijk] ) \
+      )                                                       \
+    )
+  #else  // constant coefficient case...  
+    #define __apply_op(x)              \
+    (                                  \
+      a*alpha[ijk]*x[ijk] - b*h2inv*(  \
+        + (x)[ijk+1      ]             \
+        + (x)[ijk-1      ]             \
+        + (x)[ijk+jStride]             \
+        + (x)[ijk-jStride]             \
+        + (x)[ijk+kStride]             \
+        + (x)[ijk-kStride]             \
+        - (x)[ijk        ]*6.0         \
+      )                                \
+    )
+  #endif // variable/constant coefficient
+
+#endif // BCs
+
+
 //------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
   if(level->my_rank==0){printf("  rebuilding operator for level h=%e: ",level->h);fflush(stdout);}
