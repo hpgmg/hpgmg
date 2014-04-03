@@ -12,7 +12,6 @@ struct Options_private {
   PetscBool coord_distort;
 };
 
-typedef struct MG_private *MG;
 struct MG_private {
   DM dm;
   KSP ksp;
@@ -72,7 +71,7 @@ static PetscErrorCode OptionsParse(const char *header,Options *opt)
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
+PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
   PetscErrorCode ierr;
   MG mg;
   PetscInt two;
@@ -136,7 +135,7 @@ static PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode MGDestroy(MG *mg) {
+PetscErrorCode MGDestroy(MG *mg) {
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
@@ -246,7 +245,7 @@ static PetscErrorCode MGVCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode MGFCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmooths,Vec B,Vec U) {
+PetscErrorCode MGFCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmooths,Vec B,Vec U) {
   PetscErrorCode ierr;
 
   PetscFunctionBegin;

@@ -2,7 +2,6 @@
 #define _fefas_op_h
 
 #include <petscdm.h>
-#include "../fefas.h"
 #include "../tensor.h"
 
 typedef struct Op_private *Op;

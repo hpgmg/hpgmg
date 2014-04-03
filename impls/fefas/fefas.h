@@ -2,6 +2,8 @@
 #define _fefas_h
 
 #include <petscdm.h>
+#include <stdint.h>
+#include "op/fefas-op.h"
 
 typedef struct Grid_private *Grid;
 
@@ -25,5 +27,10 @@ PetscErrorCode DMFEInject(DM dm,Vec Uf,Vec Uc);
 PetscErrorCode DMFEInterpolate(DM dm,Vec Uc,Vec Uf);
 PetscErrorCode DMFERestrict(DM dm,Vec Uf,Vec Uc);
 PetscErrorCode DMFEZeroBoundaries(DM dm,Vec U);
+
+typedef struct MG_private *MG;
+PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg);
+PetscErrorCode MGDestroy(MG *mg);
+PetscErrorCode MGFCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmooths,Vec B,Vec U);
 
 #endif

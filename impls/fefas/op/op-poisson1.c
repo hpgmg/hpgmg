@@ -1,4 +1,5 @@
 #include "fefas-op.h"
+#include "../fefas.h"
 #include "../tensor.h"
 #include "../pointwise.h"
 #include <strings.h>
