@@ -113,7 +113,7 @@ static zcode ZCodeFromRank(PetscMPIInt rank,const PetscInt p[3]) {
   return z-1;
 }
 
-static PetscInt GridLevelFromM(const PetscInt M[3]) {
+PetscInt GridLevelFromM(const PetscInt M[3]) {
   PetscInt m[3] = {M[0],M[1],M[2]},level;
   for (level=0; m[0]%2==0 && m[1]%2==0 && m[2]%2==0; level++) {
     m[0] /= 2;

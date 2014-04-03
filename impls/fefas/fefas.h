@@ -13,6 +13,7 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
 PetscErrorCode GridDestroy(Grid *grid);
 PetscErrorCode GridView(Grid grid);
 PetscErrorCode GridGetNumLevels(Grid grid,PetscInt *nlevels);
+PetscInt GridLevelFromM(const PetscInt M[3]);
 PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe);
 PetscErrorCode DMDestroyFE(DM *dm);
 PetscErrorCode DMFESetUniformCoordinates(DM dm,const PetscReal L[]);
@@ -32,5 +33,10 @@ typedef struct MG_private *MG;
 PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg);
 PetscErrorCode MGDestroy(MG *mg);
 PetscErrorCode MGFCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmooths,Vec B,Vec U);
+
+PetscInt SampleGridNumLevels(const PetscInt p[]);
+int64_t SampleGridNumElements(const PetscInt p[]);
+PetscErrorCode SampleGridRangeCreate(PetscMPIInt nranks,PetscInt minlocal,PetscInt maxlocal,PetscInt maxsamples,PetscInt *nsamples,PetscInt **gridsizes);
+PetscErrorCode ProcessGridFindSquarest(PetscMPIInt nranks,PetscInt squarest[3]);
 
 #endif

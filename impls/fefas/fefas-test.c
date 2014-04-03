@@ -3,6 +3,7 @@
 #include "pointwise.h"
 #include "op/fefas-op.h"
 #include <petscksp.h>
+#include <inttypes.h>
 
 typedef struct Options_private *Options;
 struct Options_private {
@@ -526,5 +527,34 @@ PetscErrorCode TestKSPSolve()
   ierr = GridDestroy(&grid);CHKERRQ(ierr);
   ierr = OpDestroy(&op);CHKERRQ(ierr);
   ierr = PetscFree(opt);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode TestSampler()
+{
+  PetscErrorCode ierr;
+  PetscInt tmp,two = 2,maxsamples = 5,nsamples,(*gridsize)[3],squarest[3];
+  PetscMPIInt nranks = -1;
+  PetscReal local[2] = {48,10000};
+
+  PetscFunctionBegin;
+  ierr = PetscOptionsBegin(PETSC_COMM_WORLD,NULL,"Sampler options",NULL);CHKERRQ(ierr);
+  tmp = 1;
+  ierr = PetscOptionsInt("-nranks","number of processes (to emulate)","",tmp,&tmp,NULL);CHKERRQ(ierr);
+  ierr = PetscMPIIntCast(tmp,&nranks);CHKERRQ(ierr);
+  ierr = PetscOptionsRealArray("-local","range of local problem sizes","",local,&two,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-maxsamples","maximum number of samples across range","",maxsamples,&maxsamples,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
+
+  ierr = ProcessGridFindSquarest(nranks,squarest);CHKERRQ(ierr);
+  ierr = PetscPrintf(PETSC_COMM_WORLD,"Processors: [%4D %4D %4D] = %d\n",squarest[0],squarest[1],squarest[2],nranks);CHKERRQ(ierr);
+
+  ierr = SampleGridRangeCreate(nranks,(PetscReal)local[0],(PetscReal)local[1],maxsamples,&nsamples,(PetscInt**)&gridsize);CHKERRQ(ierr);
+  for (PetscInt i=0; i<nsamples; i++) {
+    PetscInt nlevels = GridLevelFromM(gridsize[i]);
+    ierr = PetscPrintf(PETSC_COMM_WORLD,"Filtered Grid: L%2D [%4D %4D %4D] = %12"PRId64"\n",nlevels,gridsize[i][0],gridsize[i][1],gridsize[i][2],SampleGridNumElements(gridsize[i]));CHKERRQ(ierr);
+  }
+
+  ierr = PetscFree(gridsize);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

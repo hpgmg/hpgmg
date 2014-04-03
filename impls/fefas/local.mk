@@ -3,6 +3,7 @@ fefas-y.c += $(call thisdir, \
 	fefas-test.c \
 	fmg.c \
 	grid.c \
+	sampler.c \
 	tensor.c \
 	tensor-fma.c \
 	)
