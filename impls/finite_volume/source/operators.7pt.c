@@ -49,7 +49,7 @@ void apply_BCs(level_type * level, int x_id){
   #else  // constant coefficient case...  
     #define __apply_op(x)                                    \
     (                                                        \
-      a*alpha[ijk]*x[ijk] - b*h2inv*(                        \
+      a*x[ijk] - b*h2inv*(                                   \
         + valid[ijk-1      ]*( (x)[ijk] + (x)[ijk-1      ] ) \
         + valid[ijk-jStride]*( (x)[ijk] + (x)[ijk-jStride] ) \
         + valid[ijk-kStride]*( (x)[ijk] + (x)[ijk-kStride] ) \
@@ -82,7 +82,7 @@ void apply_BCs(level_type * level, int x_id){
   #else  // constant coefficient case...  
     #define __apply_op(x)              \
     (                                  \
-      a*alpha[ijk]*x[ijk] - b*h2inv*(  \
+      a*x[ijk] - b*h2inv*(             \
         + (x)[ijk+1      ]             \
         + (x)[ijk-1      ]             \
         + (x)[ijk+jStride]             \
