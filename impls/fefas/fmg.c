@@ -349,7 +349,7 @@ PetscErrorCode RunMGV()
 }
 
 // Smooth 5% mesh distortion implemented by "swirling" the region inside |(x,y)|_2 < 1.
-static PetscErrorCode CoordDistort(DM dm,const PetscReal L[]) {
+PetscErrorCode DMCoordDistort(DM dm,const PetscReal L[]) {
   PetscErrorCode ierr;
   PetscScalar *xx;
   PetscInt m;
@@ -395,7 +395,7 @@ PetscErrorCode RunFMG()
 
   ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
-  if (opt->coord_distort) {ierr = CoordDistort(dm,opt->L);CHKERRQ(ierr);}
+  if (opt->coord_distort) {ierr = DMCoordDistort(dm,opt->L);CHKERRQ(ierr);}
 
   ierr = DMCreateGlobalVector(dm,&U0);CHKERRQ(ierr);
   ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);

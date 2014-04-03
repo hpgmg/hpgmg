@@ -14,6 +14,7 @@ PetscErrorCode TestKSPSolve(void);
 PetscErrorCode TestSampler(void);
 PetscErrorCode RunMGV(void);
 PetscErrorCode RunFMG(void);
+PetscErrorCode RunSample(void);
 
 static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action)(void))
 {
@@ -35,6 +36,7 @@ static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action
   ierr = PetscFunctionListAdd(&actionlist,"test-sampler",TestSampler);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"mgv",RunMGV);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"fmg",RunFMG);CHKERRQ(ierr);
+  ierr = PetscFunctionListAdd(&actionlist,"sample",RunSample);CHKERRQ(ierr);
 
   if (argc < 2 || !argv[1] || argv[1][0] == '-') {
     ierr = PetscViewerASCIIPrintf(PETSC_VIEWER_STDERR_WORLD,"First argument '%s' must be an action:",argc>=2&&argv[1]?argv[1]:"");CHKERRQ(ierr);

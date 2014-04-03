@@ -1,4 +1,5 @@
 #include "fefas.h"
+#include "petsctime.h"
 #include <stdint.h>
 #include <inttypes.h>
 
@@ -110,5 +111,107 @@ PetscErrorCode SampleGridRangeCreate(PetscMPIInt nranks,PetscInt minlocal,PetscI
   *nsamples = n;
   ierr = PetscMalloc(n*sizeof gsize[0],gridsizes);CHKERRQ(ierr);
   ierr = PetscMemcpy(*gridsizes,gsize[0],n*sizeof gsize[0]);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const PetscInt smooth[2],PetscInt nrepeat) {
+  PetscErrorCode ierr;
+  PetscInt pgrid[3],cmax,fedegree,dof,nlevels,M_max;
+  PetscMPIInt nranks;
+  Grid grid;
+  DM dm;
+  Vec U,F;
+  MG mg;
+  PetscReal L[3];
+
+  PetscFunctionBegin;
+  ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
+  ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+
+  ierr = MPI_Comm_size(comm,&nranks);CHKERRQ(ierr);
+  ierr = ProcessGridFindSquarest(nranks,pgrid);CHKERRQ(ierr);
+
+  // It would make sense to either use a different coarsening criteria (perhaps even specified by the sampler).  On
+  // large numbers of processes, the coarse grids should be square enough that 192 is a good threshold size.
+  cmax = 192;
+
+  ierr = GridCreate(comm,M,pgrid,cmax,&grid);CHKERRQ(ierr);
+  ierr = GridGetNumLevels(grid,&nlevels);CHKERRQ(ierr);
+
+  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  M_max = PetscMax(M[0],PetscMax(M[1],M[2]));
+  L[0] = M[0]*1./M_max;
+  L[1] = M[1]*1./M_max;
+  L[2] = M[2]*1./M_max;
+  ierr = DMFESetUniformCoordinates(dm,L);CHKERRQ(ierr);
+  ierr = DMCoordDistort(dm,L);CHKERRQ(ierr);
+
+  ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
+  ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);
+  ierr = OpForcing(op,dm,F);CHKERRQ(ierr);
+
+  ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
+
+  for (PetscInt i=0; i<nrepeat; i++) {
+    PetscLogDouble t0,t1,elapsed,flops,eqs;
+    ierr = VecZeroEntries(U);CHKERRQ(ierr);
+    ierr = MPI_Barrier(comm);CHKERRQ(ierr);
+    ierr = PetscTime(&t0);CHKERRQ(ierr);
+    flops = petsc_TotalFlops;
+    ierr = MGFCycle(op,mg,smooth[0],smooth[1],F,U);CHKERRQ(ierr);
+    ierr = PetscTime(&t1);CHKERRQ(ierr);
+    flops = petsc_TotalFlops - flops;
+    elapsed = t1 - t0;
+    ierr = MPI_Allreduce(MPI_IN_PLACE,&elapsed,1,MPI_DOUBLE,MPI_MAX,comm);CHKERRQ(ierr);
+    ierr = MPI_Allreduce(MPI_IN_PLACE,&flops,1,MPI_DOUBLE,MPI_SUM,comm);CHKERRQ(ierr);
+    eqs = (double)(M[0]*fedegree+1)*(M[1]*fedegree+1)*(M[2]*fedegree+1)*dof;
+    ierr = PetscPrintf(comm,"Q%D G[%4D%4D%4D] P[%3D%3D%3D] %10.3e s  %10f GF  %10f MEq/s\n",fedegree,M[0],M[1],M[2],pgrid[0],pgrid[1],pgrid[2],t1-t0,flops/elapsed*1e-9,eqs/elapsed*1e-6);CHKERRQ(ierr);
+  }
+
+  ierr = MGDestroy(&mg);CHKERRQ(ierr);
+  ierr = VecDestroy(&U);CHKERRQ(ierr);
+  ierr = VecDestroy(&F);CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
+  ierr = GridDestroy(&grid);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode RunSample() {
+  PetscErrorCode ierr;
+  Op op;
+  PetscInt pgrid[3],smooth[2] = {3,1},two = 2,maxsamples = 6,repeat = 5,nsamples,(*gridsize)[3];
+  PetscReal local[2] = {100,10000};
+  PetscMPIInt nranks;
+  MPI_Comm comm = PETSC_COMM_WORLD;
+
+  PetscFunctionBegin;
+  ierr = PetscOptionsBegin(comm,NULL,"FMG Performance Sampler options",NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsRealArray("-local","range of local problem sizes","",local,&two,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-maxsamples","maximum number of samples across range","",maxsamples,&maxsamples,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-repeat","Number of repetitions for each problem size","",repeat,&repeat,NULL);CHKERRQ(ierr);
+  two = 2;
+  ierr = PetscOptionsIntArray("-smooth","V- and F-cycle pre,post smoothing","",smooth,&two,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
+
+  ierr = OpCreateFromOptions(comm,&op);CHKERRQ(ierr);
+
+  ierr = MPI_Comm_size(comm,&nranks);CHKERRQ(ierr);
+  ierr = ProcessGridFindSquarest(nranks,pgrid);CHKERRQ(ierr);
+  ierr = PetscPrintf(comm,"Finite Element FAS Performance Sampler on process grid [%D %D %D] = %D\n",nranks,pgrid[0],pgrid[1],pgrid[2]);CHKERRQ(ierr);
+
+  ierr = SampleGridRangeCreate(nranks,(PetscReal)local[0],(PetscReal)local[1],maxsamples,&nsamples,(PetscInt**)&gridsize);CHKERRQ(ierr);
+
+  ierr = PetscPrintf(comm,"Small Test G[]\n");CHKERRQ(ierr);
+  ierr = SampleOnGrid(comm,op,gridsize[nsamples-1],smooth,1);CHKERRQ(ierr);
+  ierr = PetscPrintf(comm,"Large Test\n");CHKERRQ(ierr);
+  ierr = SampleOnGrid(comm,op,gridsize[0],smooth,1);CHKERRQ(ierr);
+
+  ierr = PetscPrintf(comm,"Starting performance sampling\n");CHKERRQ(ierr);
+  for (PetscInt i=nsamples-1; i>=0; i--) {
+    ierr = SampleOnGrid(comm,op,gridsize[i],smooth,repeat);CHKERRQ(ierr);
+  }
+
+  ierr = PetscFree(gridsize);CHKERRQ(ierr);
+  ierr = OpDestroy(&op);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
