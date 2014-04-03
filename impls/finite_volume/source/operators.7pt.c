@@ -15,9 +15,10 @@
 #include "level.h"
 #include "operators.h"
 //------------------------------------------------------------------------------------------------------------------------------
-#define __STENCIL_FUSE_BCs 
 #define __STENCIL_STAR_SHAPED 1
 #define __STENCIL_RADIUS      1
+#define __STENCIL_VARIABLE_COEFFICIENT
+#define __STENCIL_FUSE_BC
 //------------------------------------------------------------------------------------------------------------------------------
 #ifndef __OMP_COLLAPSE
 #define __OMP_COLLAPSE collapse(2)
@@ -31,30 +32,34 @@ void apply_BCs(level_type * level, int x_id){
   #endif
 }
 //------------------------------------------------------------------------------------------------------------------------------
-#ifdef __STENCIL_FUSE_BCs                        
-#define __apply_op(x)                                                                        \
-(                                                                                            \
-  a*alpha[ijk]*x[ijk] -b*h2inv*(                                                             \
-   +beta_i[ijk        ]*( valid[ijk-1      ]*( (x)[ijk] + (x)[ijk-1      ]) - 2.0*(x)[ijk] ) \
-   +beta_j[ijk        ]*( valid[ijk-jStride]*( (x)[ijk] + (x)[ijk-jStride]) - 2.0*(x)[ijk] ) \
-   +beta_k[ijk        ]*( valid[ijk-kStride]*( (x)[ijk] + (x)[ijk-kStride]) - 2.0*(x)[ijk] ) \
-   +beta_i[ijk+1      ]*( valid[ijk+1      ]*( (x)[ijk] + (x)[ijk+1      ]) - 2.0*(x)[ijk] ) \
-   +beta_j[ijk+jStride]*( valid[ijk+jStride]*( (x)[ijk] + (x)[ijk+jStride]) - 2.0*(x)[ijk] ) \
-   +beta_k[ijk+kStride]*( valid[ijk+kStride]*( (x)[ijk] + (x)[ijk+kStride]) - 2.0*(x)[ijk] ) \
-  )                                                                                          \
-)
+#ifdef __STENCIL_VARIABLE_COEFFICIENT
+  #ifdef __STENCIL_FUSE_BCs                        
+    #define __apply_op(x)                                                                        \
+    (                                                                                            \
+      a*alpha[ijk]*x[ijk] -b*h2inv*(                                                             \
+       +beta_i[ijk        ]*( valid[ijk-1      ]*( (x)[ijk] + (x)[ijk-1      ]) - 2.0*(x)[ijk] ) \
+       +beta_j[ijk        ]*( valid[ijk-jStride]*( (x)[ijk] + (x)[ijk-jStride]) - 2.0*(x)[ijk] ) \
+       +beta_k[ijk        ]*( valid[ijk-kStride]*( (x)[ijk] + (x)[ijk-kStride]) - 2.0*(x)[ijk] ) \
+       +beta_i[ijk+1      ]*( valid[ijk+1      ]*( (x)[ijk] + (x)[ijk+1      ]) - 2.0*(x)[ijk] ) \
+       +beta_j[ijk+jStride]*( valid[ijk+jStride]*( (x)[ijk] + (x)[ijk+jStride]) - 2.0*(x)[ijk] ) \
+       +beta_k[ijk+kStride]*( valid[ijk+kStride]*( (x)[ijk] + (x)[ijk+kStride]) - 2.0*(x)[ijk] ) \
+      )                                                                                          \
+    )
+  #else
+    #define __apply_op(x)                                          \
+    (                                                              \
+      a*alpha[ijk]*x[ijk] -b*h2inv*(                               \
+         beta_i[ijk+1      ]*( (x)[ijk+1      ]-(x)[ijk        ] ) \
+        -beta_i[ijk        ]*( (x)[ijk        ]-(x)[ijk-1      ] ) \
+        +beta_j[ijk+jStride]*( (x)[ijk+jStride]-(x)[ijk        ] ) \
+        -beta_j[ijk        ]*( (x)[ijk        ]-(x)[ijk-jStride] ) \
+        +beta_k[ijk+kStride]*( (x)[ijk+kStride]-(x)[ijk        ] ) \
+        -beta_k[ijk        ]*( (x)[ijk        ]-(x)[ijk-kStride] ) \
+      )                                                            \
+    )
+  #endif
 #else
-#define __apply_op(x)                                          \
-(                                                              \
-  a*alpha[ijk]*x[ijk] -b*h2inv*(                               \
-     beta_i[ijk+1      ]*( (x)[ijk+1      ]-(x)[ijk        ] ) \
-    -beta_i[ijk        ]*( (x)[ijk        ]-(x)[ijk-1      ] ) \
-    +beta_j[ijk+jStride]*( (x)[ijk+jStride]-(x)[ijk        ] ) \
-    -beta_j[ijk        ]*( (x)[ijk        ]-(x)[ijk-jStride] ) \
-    +beta_k[ijk+kStride]*( (x)[ijk+kStride]-(x)[ijk        ] ) \
-    -beta_k[ijk        ]*( (x)[ijk        ]-(x)[ijk-kStride] ) \
-  )                                                            \
-)
+  #error constant coefficient not yet implemented !!!
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){

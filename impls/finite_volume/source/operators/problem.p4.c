@@ -105,7 +105,7 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       Bi = 1.0;
       Bj = 1.0;
       Bk = 1.0;
-      #if 1 // variable coefficient problem...
+      #ifdef __STENCIL_VARIABLE_COEFFICIENT // variable coefficient problem...
       evaluateBeta(x-hLevel*0.5,y           ,z           ,&Bi,&Bx,&By,&Bz); // face-centered value of Beta for beta_i
       evaluateBeta(x           ,y-hLevel*0.5,z           ,&Bj,&Bx,&By,&Bz); // face-centered value of Beta for beta_j
       evaluateBeta(x           ,y           ,z-hLevel*0.5,&Bk,&Bx,&By,&Bz); // face-centered value of Beta for beta_k
