@@ -3,6 +3,8 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
+extern const char __STENCIL_STRING[];
+//------------------------------------------------------------------------------------------------------------------------------
   void                  apply_op(level_type * level, int Ax_id,  int x_id, double a, double b);
   void                  residual(level_type * level, int res_id, int x_id, int rhs_id, double a, double b);
   void                    smooth(level_type * level, int phi_id, int rhs_id, double a, double b);

@@ -121,8 +121,8 @@ int main(int argc, char **argv){
     exit(0);
   }
 
-  if(MPI_Rank==0)if(OMP_Nested)printf("%d MPI Tasks of %d threads (OMP_NESTED=true)\n" ,MPI_Tasks,OMP_Threads);
-                          else printf("%d MPI Tasks of %d threads (OMP_NESTED=false)\n",MPI_Tasks,OMP_Threads);
+  if(MPI_Rank==0)if(OMP_Nested)printf("%d MPI Tasks of %d threads (OMP_NESTED=TRUE)\n" ,MPI_Tasks,OMP_Threads);
+                          else printf("%d MPI Tasks of %d threads (OMP_NESTED=FALSE)\n",MPI_Tasks,OMP_Threads);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   // calculate the problem size...
   int box_dim=1<<log2_box_dim;
@@ -135,13 +135,15 @@ int main(int argc, char **argv){
   }
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  if(MPI_Rank==0)printf("%s\n" ,__STENCIL_STRING);
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // create the fine level...
   int ghosts=1;
   level_type fine_grid;
-  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.9;double b=0.9; // Helmholtz w/Periodic
-  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=0.9; //   Poisson w/Periodic
-  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.9;double b=0.9; // Helmholtz w/Dirichlet
-    create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=0.9; //   Poisson w/Dirichlet
+  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Periodic
+  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Periodic
+  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Dirichlet
+    create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Dirichlet
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   initialize_problem(&fine_grid,h0,a,b);
   rebuild_operator(&fine_grid,NULL,a,b); // i.e. calculate Dinv and lambda_max

@@ -35,6 +35,7 @@ void apply_BCs(level_type * level, int x_id){
 #ifdef __STENCIL_FUSE_BC
 
   #ifdef __STENCIL_VARIABLE_COEFFICIENT
+    const char __STENCIL_STRING[] = "2nd-order, 7-point, variable-coefficient, finite volume helmholtz, with fused boundary conditions";
     #define __apply_op(x)                                                                           \
     (                                                                                               \
       a*alpha[ijk]*x[ijk] - b*h2inv*(                                                               \
@@ -47,6 +48,7 @@ void apply_BCs(level_type * level, int x_id){
       )                                                                                             \
     )
   #else  // constant coefficient case...  
+    const char __STENCIL_STRING[] = "2nd-order, 7-point, constant-coefficient, finite volume helmholtz, with fused boundary conditions";
     #define __apply_op(x)                                    \
     (                                                        \
       a*x[ijk] - b*h2inv*(                                   \
@@ -68,6 +70,7 @@ void apply_BCs(level_type * level, int x_id){
 #ifndef __STENCIL_FUSE_BC
 
   #ifdef __STENCIL_VARIABLE_COEFFICIENT
+    const char __STENCIL_STRING[] = "2nd-order, 7-point, variable-coefficient, finite volume helmholtz";
     #define __apply_op(x)                                     \
     (                                                         \
       a*alpha[ijk]*x[ijk] - b*h2inv*(                         \
@@ -80,6 +83,7 @@ void apply_BCs(level_type * level, int x_id){
       )                                                       \
     )
   #else  // constant coefficient case...  
+    const char __STENCIL_STRING[] = "2nd-order, 7-point, constant-coefficient, finite volume helmholtz";
     #define __apply_op(x)              \
     (                                  \
       a*x[ijk] - b*h2inv*(             \
