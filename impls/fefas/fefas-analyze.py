@@ -1,7 +1,7 @@
 def parse_logfile(fname):
     import re
     FP = r'([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)'
-    PERFLINE = re.compile(r'Q2 G''\[ *(\d+) +(\d+) +(\d+)\] P\[ *(\d+) +(\d+) +(\d+)\]  '+FP+r' s +'+FP+r' GF +'+FP+r' MEq/s')
+    PERFLINE = re.compile(r'Q2 G''\[([\d ]{4})([\d ]{4})([\d ]{4})\] P\[ *(\d+) +(\d+) +(\d+)\]  '+FP+r' s +'+FP+r' GF +'+FP+r' MEq/s')
     HOSTLINE = re.compile(r'.*on a ([a-z\-_0-9]+) named \w+ with (\d+) processors')
     Sizes = []
     GFlops = []
@@ -45,16 +45,22 @@ def plot(logfiles, outputfile):
     ax2 = ax1.twinx()
     #ax1.set_autoscaley_on(False)
     ax1.set_ylabel('MEquations/second')
+    all_sizes = []
+    all_gflops = []
+    all_meqs = []
     max_meqs = 0
     for f in logfiles:
         sizes, gflops, meqs, hostname, procs = parse_logfile(f)
-        flops_per_meqn = gflops[-1] / meqs[-1]
-        max_meqs = max(max_meqs,max(meqs))
+        all_sizes += sizes
+        all_gflops += gflops
+        all_meqs += meqs
         ax1.semilogx(sizes, meqs, next(symbols), label='%s np=%d'%(hostname, procs))
+    flops_per_meqn = all_gflops[-1] / all_meqs[-1]
+    ax1.set_xlim(0,max(all_sizes))
+    ax2.set_xlim(0,max(all_sizes))
     ax2.set_autoscaley_on(False)
-    ax2.set_xlim(0,max(sizes))
-    ax1.set_ylim(0,1.1*max_meqs)
-    ax2.set_ylim(0,1.1*max_meqs*flops_per_meqn)
+    ax1.set_ylim(0,1.1*max(all_meqs))
+    ax2.set_ylim(0,1.1*max(all_meqs)*flops_per_meqn)
     ax2.set_ylabel('GFlop/s')
     ax1.legend(loc='upper left')
     if outputfile:
