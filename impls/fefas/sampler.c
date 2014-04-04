@@ -151,6 +151,7 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   ierr = OpForcing(op,dm,F);CHKERRQ(ierr);
 
   ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
+  ierr = MGSetUpPC(mg);CHKERRQ(ierr);
 
   for (PetscInt i=0; i<nrepeat; i++) {
     PetscLogDouble t0,t1,elapsed,flops,eqs;

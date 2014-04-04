@@ -141,6 +141,27 @@ PetscErrorCode MGDestroy(MG *mg) {
   PetscFunctionReturn(0);
 }
 
+// PCJacobi does not extract the diagonal until it is applied to a vector.
+PetscErrorCode MGSetUpPC(MG mg) {
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  for (; mg; mg=mg->coarse) {
+    if (mg->dm) {
+      PC pc;
+      Vec U,V;
+      ierr = KSPGetPC(mg->ksp,&pc);CHKERRQ(ierr);
+      ierr = DMGetGlobalVector(mg->dm,&U);CHKERRQ(ierr);
+      ierr = DMGetGlobalVector(mg->dm,&V);CHKERRQ(ierr);
+      ierr = VecZeroEntries(U);CHKERRQ(ierr);
+      ierr = PCApply(pc,U,V);CHKERRQ(ierr);
+      ierr = DMRestoreGlobalVector(mg->dm,&U);CHKERRQ(ierr);
+      ierr = DMRestoreGlobalVector(mg->dm,&V);CHKERRQ(ierr);
+    }
+  }
+  PetscFunctionReturn(0);
+}
+
 static PetscReal ConvergenceRate(PetscReal normCoarse,PetscReal normFine) {
   // Try to avoid reporting noisy rates in pre-asymptotic regime
   if (normCoarse < 1e3*PETSC_MACHINE_EPSILON && normFine > 1e3*PETSC_MACHINE_EPSILON) return 0;

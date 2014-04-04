@@ -33,6 +33,7 @@ PetscErrorCode DMCoordDistort(DM dm,const PetscReal L[]);
 typedef struct MG_private *MG;
 PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg);
 PetscErrorCode MGDestroy(MG *mg);
+PetscErrorCode MGSetUpPC(MG mg);
 PetscErrorCode MGFCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmooths,Vec B,Vec U);
 
 PetscInt SampleGridNumLevels(const PetscInt p[]);
