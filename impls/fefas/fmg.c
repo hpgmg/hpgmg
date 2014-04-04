@@ -72,6 +72,11 @@ static PetscErrorCode OptionsParse(const char *header,Options *opt)
   PetscFunctionReturn(0);
 }
 
+PetscErrorCode MGMonitorSet(MG mg,PetscBool mon) {
+  for ( ; mg; mg=mg->coarse) mg->monitor = mon;
+  return 0;
+}
+
 PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
   PetscErrorCode ierr;
   MG mg;
@@ -93,7 +98,6 @@ PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
   *newmg = mg;
   for (PetscInt lev=nlevels-1; ; lev--) {
     DM dmcoarse;
-    mg->monitor = monitor;
     if (mg->dm) { // I have some grid at this level
       Mat A;
       PC pc;
@@ -128,6 +132,7 @@ PetscErrorCode MGCreate(Op op,DM dm,PetscInt nlevels,MG *newmg) {
     mg->coarse->dm = dmcoarse;
     mg = mg->coarse;
   }
+  if (monitor) {ierr = MGMonitorSet(*newmg,PETSC_TRUE);CHKERRQ(ierr);}
   PetscFunctionReturn(0);
 }
 

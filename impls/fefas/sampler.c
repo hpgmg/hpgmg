@@ -114,7 +114,7 @@ PetscErrorCode SampleGridRangeCreate(PetscMPIInt nranks,PetscInt minlocal,PetscI
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const PetscInt smooth[2],PetscInt nrepeat,PetscLogDouble *memory) {
+static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const PetscInt smooth[2],PetscInt nrepeat,PetscLogDouble *memory,PetscBool monitor) {
   PetscErrorCode ierr;
   PetscInt pgrid[3],cmax,fedegree,dof,nlevels,M_max;
   PetscMPIInt nranks;
@@ -151,6 +151,7 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   ierr = OpForcing(op,dm,F);CHKERRQ(ierr);
 
   ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
+  ierr = MGMonitorSet(mg,monitor);CHKERRQ(ierr);
   ierr = MGSetUpPC(mg);CHKERRQ(ierr);
 
   for (PetscInt i=0; i<nrepeat; i++) {
@@ -200,7 +201,7 @@ PetscErrorCode RunSample() {
 
   ierr = MPI_Comm_size(comm,&nranks);CHKERRQ(ierr);
   ierr = ProcessGridFindSquarest(nranks,pgrid);CHKERRQ(ierr);
-  ierr = PetscPrintf(comm,"Finite Element FAS Performance Sampler on process grid [%D %D %D] = %D\n",nranks,pgrid[0],pgrid[1],pgrid[2]);CHKERRQ(ierr);
+  ierr = PetscPrintf(comm,"Finite Element FAS Performance Sampler on process grid [%D %D %D] = %d\n",pgrid[0],pgrid[1],pgrid[2],nranks);CHKERRQ(ierr);
 
   ierr = SampleGridRangeCreate(nranks,(PetscReal)local[0],(PetscReal)local[1],maxsamples,&nsamples,(PetscInt**)&gridsize);CHKERRQ(ierr);
 
@@ -209,16 +210,16 @@ PetscErrorCode RunSample() {
   ierr = PetscPrintf(comm,"Max memory per MPI rank: %f GB\n",memory*1e-9);CHKERRQ(ierr);
 
   ierr = PetscPrintf(comm,"Small Test G[]\n");CHKERRQ(ierr);
-  ierr = SampleOnGrid(comm,op,gridsize[nsamples-1],smooth,1,NULL);CHKERRQ(ierr);
+  ierr = SampleOnGrid(comm,op,gridsize[nsamples-1],smooth,1,NULL,PETSC_FALSE);CHKERRQ(ierr);
   ierr = PetscPrintf(comm,"Large Test\n");CHKERRQ(ierr);
-  ierr = SampleOnGrid(comm,op,gridsize[0],smooth,1,&memory);CHKERRQ(ierr);
+  ierr = SampleOnGrid(comm,op,gridsize[0],smooth,1,&memory,PETSC_TRUE);CHKERRQ(ierr);
 
   ierr = MPI_Allreduce(MPI_IN_PLACE,&memory,1,MPI_DOUBLE,MPI_MAX,comm);CHKERRQ(ierr);
   ierr = PetscPrintf(comm,"Max memory per MPI rank: %f GB\n",memory*1e-9);CHKERRQ(ierr);
 
   ierr = PetscPrintf(comm,"Starting performance sampling\n");CHKERRQ(ierr);
   for (PetscInt i=nsamples-1; i>=0; i--) {
-    ierr = SampleOnGrid(comm,op,gridsize[i],smooth,repeat,NULL);CHKERRQ(ierr);
+    ierr = SampleOnGrid(comm,op,gridsize[i],smooth,repeat,NULL,PETSC_FALSE);CHKERRQ(ierr);
   }
 
   ierr = PetscFree(gridsize);CHKERRQ(ierr);
