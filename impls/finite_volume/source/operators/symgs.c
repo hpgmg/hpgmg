@@ -32,7 +32,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
       const double * __restrict__ beta_i   = level->my_boxes[box].components[__beta_i] + ghosts*(1+jStride+kStride);
       const double * __restrict__ beta_j   = level->my_boxes[box].components[__beta_j] + ghosts*(1+jStride+kStride);
       const double * __restrict__ beta_k   = level->my_boxes[box].components[__beta_k] + ghosts*(1+jStride+kStride);
-      const double * __restrict__ lambda   = level->my_boxes[box].components[  __Dinv] + ghosts*(1+jStride+kStride);
+      const double * __restrict__ Dinv     = level->my_boxes[box].components[  __Dinv] + ghosts*(1+jStride+kStride);
       const double * __restrict__ valid    = level->my_boxes[box].components[ __valid] + ghosts*(1+jStride+kStride); // cell is inside the domain
           
 
@@ -41,16 +41,16 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
         for(j=0;j<dim;j++){
         for(i=0;i<dim;i++){
           int ijk = i + j*jStride + k*kStride;
-          double helmholtz = __apply_op(phi);
-          phi[ijk] = phi[ijk] + lambda[ijk]*(rhs[ijk]-helmholtz);
+          double Ax = __apply_op(phi);
+          phi[ijk] = phi[ijk] + Dinv[ijk]*(rhs[ijk]-Ax);
         }}}
       }else{ // backward sweep
         for(k=dim-1;k>=0;k--){
         for(j=dim-1;j>=0;j--){
         for(i=dim-1;i>=0;i--){
           int ijk = i + j*jStride + k*kStride;
-          double helmholtz = __apply_op(phi);
-          phi[ijk] = phi[ijk] + lambda[ijk]*(rhs[ijk]-helmholtz);
+          double Ax = __apply_op(phi);
+          phi[ijk] = phi[ijk] + Dinv[ijk]*(rhs[ijk]-Ax);
         }}}
       }
 

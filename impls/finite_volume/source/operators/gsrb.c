@@ -36,7 +36,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
       const double * __restrict__ beta_i   = level->my_boxes[box].components[__beta_i] + ghosts*(1+jStride+kStride);
       const double * __restrict__ beta_j   = level->my_boxes[box].components[__beta_j] + ghosts*(1+jStride+kStride);
       const double * __restrict__ beta_k   = level->my_boxes[box].components[__beta_k] + ghosts*(1+jStride+kStride);
-      const double * __restrict__ lambda   = level->my_boxes[box].components[  __Dinv] + ghosts*(1+jStride+kStride);
+      const double * __restrict__ Dinv     = level->my_boxes[box].components[  __Dinv] + ghosts*(1+jStride+kStride);
       const double * __restrict__ valid    = level->my_boxes[box].components[ __valid] + ghosts*(1+jStride+kStride); // cell is inside the domain
       const double * __restrict__ RedBlack[2] = {level->RedBlack_FP[0] + ghosts*(1+jStride), 
                                                  level->RedBlack_FP[1] + ghosts*(1+jStride)};
@@ -53,8 +53,9 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
               int EvenOdd = (k^ss)&1;
               int ij  = i + j*jStride;
               int ijk = i + j*jStride + k*kStride;
-              double helmholtz = __apply_op(phi);
-              phi_new[ijk] = phi[ijk] + RedBlack[EvenOdd][ij]*lambda[ijk]*(rhs[ijk]-helmholtz); // compiler seems to get confused unless there are disjoint read/write pointers
+              double Ax = __apply_op(phi);
+              double Dinv_ijk = __calculate_Dinv();
+              phi_new[ijk] = phi[ijk] + RedBlack[EvenOdd][ij]*Dinv_ijk*(rhs[ijk]-Ax); // compiler seems to get confused unless there are disjoint read/write pointers
         }}}
         #elif defined(__GSRB_STRIDE2)
         #warning GSRB using stride-2 accesses
@@ -63,8 +64,9 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
         for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
         for(i=((j^k^ss)&1)+1-ghosts;i<dim+ghostsToOperateOn;i+=2){ // stride-2 GSRB
               int ijk = i + j*jStride + k*kStride; 
-              double helmholtz = __apply_op(phi);
-              phi_new[ijk] = phi[ijk] + lambda[ijk]*(rhs[ijk]-helmholtz);
+              double Ax = __apply_op(phi);
+              double Dinv_ijk = __calculate_Dinv();
+              phi_new[ijk] = phi[ijk] + Dinv_ijk*(rhs[ijk]-Ax);
         }}}
         #else
         #warning GSRB using if-then-else on loop indices for Red-Black
@@ -74,8 +76,9 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
         for(i=0-ghostsToOperateOn;i<dim+ghostsToOperateOn;i++){
         if((i^j^k^ss^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
               int ijk = i + j*jStride + k*kStride;
-              double helmholtz = __apply_op(phi);
-              phi_new[ijk] = phi[ijk] + lambda[ijk]*(rhs[ijk]-helmholtz);
+              double Ax = __apply_op(phi);
+              double Dinv_ijk = __calculate_Dinv();
+              phi_new[ijk] = phi[ijk] + Dinv_ijk*(rhs[ijk]-Ax);
         }}}}
         #endif
       } // ss-loop

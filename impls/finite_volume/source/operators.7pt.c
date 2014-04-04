@@ -24,7 +24,7 @@
 #define __OMP_COLLAPSE collapse(2)
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-// FIX... make #define
+// fix... make #define...
 void apply_BCs(level_type * level, int x_id){
   #ifndef __STENCIL_FUSE_BC
   // This is a failure mode if (trying to do communication-avoiding) && (BC!=__BC_PERIODIC)
@@ -32,34 +32,68 @@ void apply_BCs(level_type * level, int x_id){
   #endif
 }
 //------------------------------------------------------------------------------------------------------------------------------
+// calculate Dinv?
+#ifdef __STENCIL_VARIABLE_COEFFICIENT
+  #define __recalculate_Dinv()                                  \
+  (                                                             \
+    1.0 / (a*alpha[ijk] - b*h2inv*(                             \
+             + beta_i[ijk        ]*( valid[ijk-1      ] - 2.0 ) \
+             + beta_j[ijk        ]*( valid[ijk-jStride] - 2.0 ) \
+             + beta_k[ijk        ]*( valid[ijk-kStride] - 2.0 ) \
+             + beta_i[ijk+1      ]*( valid[ijk+1      ] - 2.0 ) \
+             + beta_j[ijk+jStride]*( valid[ijk+jStride] - 2.0 ) \
+             + beta_k[ijk+kStride]*( valid[ijk+kStride] - 2.0 ) \
+          ))                                                    \
+  )
+#else // constant coefficient case... 
+  #define __recalculate_Dinv()      \
+  (                                 \
+    1.0 / (a - b*h2inv*(            \
+             + valid[ijk-1      ]   \
+             + valid[ijk-jStride]   \
+             + valid[ijk-kStride]   \
+             + valid[ijk+1      ]   \
+             + valid[ijk+jStride]   \
+             + valid[ijk+kStride]   \
+             - 12.0                 \
+          ))                        \
+  )
+#endif
+
+#if defined(__STENCIL_DINV) && defined(__STENCIL_FUSE_BC)
+#define __calculate_Dinv() __recalculate_Dinv() // recalculate it
+#else
+#define __calculate_Dinv() Dinv[ijk]            // simply retriev it rather than recalculating it
+#endif
+//------------------------------------------------------------------------------------------------------------------------------
 #ifdef __STENCIL_FUSE_BC
 
   #ifdef __STENCIL_VARIABLE_COEFFICIENT
     const char __STENCIL_STRING[] = "2nd-order, 7-point, variable-coefficient, finite volume helmholtz, with fused boundary conditions";
-    #define __apply_op(x)                                                                           \
-    (                                                                                               \
-      a*alpha[ijk]*x[ijk] - b*h2inv*(                                                               \
-        + beta_i[ijk        ]*( valid[ijk-1      ]*( (x)[ijk] + (x)[ijk-1      ] ) - 2.0*(x)[ijk] ) \
-        + beta_j[ijk        ]*( valid[ijk-jStride]*( (x)[ijk] + (x)[ijk-jStride] ) - 2.0*(x)[ijk] ) \
-        + beta_k[ijk        ]*( valid[ijk-kStride]*( (x)[ijk] + (x)[ijk-kStride] ) - 2.0*(x)[ijk] ) \
-        + beta_i[ijk+1      ]*( valid[ijk+1      ]*( (x)[ijk] + (x)[ijk+1      ] ) - 2.0*(x)[ijk] ) \
-        + beta_j[ijk+jStride]*( valid[ijk+jStride]*( (x)[ijk] + (x)[ijk+jStride] ) - 2.0*(x)[ijk] ) \
-        + beta_k[ijk+kStride]*( valid[ijk+kStride]*( (x)[ijk] + (x)[ijk+kStride] ) - 2.0*(x)[ijk] ) \
-      )                                                                                             \
+    #define __apply_op(x)                                                                     \
+    (                                                                                         \
+      a*alpha[ijk]*x[ijk] - b*h2inv*(                                                         \
+        + beta_i[ijk        ]*( valid[ijk-1      ]*( x[ijk] + x[ijk-1      ] ) - 2.0*x[ijk] ) \
+        + beta_j[ijk        ]*( valid[ijk-jStride]*( x[ijk] + x[ijk-jStride] ) - 2.0*x[ijk] ) \
+        + beta_k[ijk        ]*( valid[ijk-kStride]*( x[ijk] + x[ijk-kStride] ) - 2.0*x[ijk] ) \
+        + beta_i[ijk+1      ]*( valid[ijk+1      ]*( x[ijk] + x[ijk+1      ] ) - 2.0*x[ijk] ) \
+        + beta_j[ijk+jStride]*( valid[ijk+jStride]*( x[ijk] + x[ijk+jStride] ) - 2.0*x[ijk] ) \
+        + beta_k[ijk+kStride]*( valid[ijk+kStride]*( x[ijk] + x[ijk+kStride] ) - 2.0*x[ijk] ) \
+      )                                                                                       \
     )
   #else  // constant coefficient case...  
     const char __STENCIL_STRING[] = "2nd-order, 7-point, constant-coefficient, finite volume helmholtz, with fused boundary conditions";
-    #define __apply_op(x)                                    \
-    (                                                        \
-      a*x[ijk] - b*h2inv*(                                   \
-        + valid[ijk-1      ]*( (x)[ijk] + (x)[ijk-1      ] ) \
-        + valid[ijk-jStride]*( (x)[ijk] + (x)[ijk-jStride] ) \
-        + valid[ijk-kStride]*( (x)[ijk] + (x)[ijk-kStride] ) \
-        + valid[ijk+1      ]*( (x)[ijk] + (x)[ijk+1      ] ) \
-        + valid[ijk+jStride]*( (x)[ijk] + (x)[ijk+jStride] ) \
-        + valid[ijk+kStride]*( (x)[ijk] + (x)[ijk+kStride] ) \
-                       -12.0*( (x)[ijk]                    ) \
-      )                                                      \
+    #define __apply_op(x)                                \
+    (                                                    \
+      a*x[ijk] - b*h2inv*(                               \
+        + valid[ijk-1      ]*( x[ijk] + x[ijk-1      ] ) \
+        + valid[ijk-jStride]*( x[ijk] + x[ijk-jStride] ) \
+        + valid[ijk-kStride]*( x[ijk] + x[ijk-kStride] ) \
+        + valid[ijk+1      ]*( x[ijk] + x[ijk+1      ] ) \
+        + valid[ijk+jStride]*( x[ijk] + x[ijk+jStride] ) \
+        + valid[ijk+kStride]*( x[ijk] + x[ijk+kStride] ) \
+                       -12.0*( x[ijk]                  ) \
+      )                                                  \
     )
   #endif // variable/constant coefficient
 
@@ -71,30 +105,30 @@ void apply_BCs(level_type * level, int x_id){
 
   #ifdef __STENCIL_VARIABLE_COEFFICIENT
     const char __STENCIL_STRING[] = "2nd-order, 7-point, variable-coefficient, finite volume helmholtz";
-    #define __apply_op(x)                                     \
-    (                                                         \
-      a*alpha[ijk]*x[ijk] - b*h2inv*(                         \
-        + beta_i[ijk+1      ]*( (x)[ijk+1      ] - (x)[ijk] ) \
-        + beta_i[ijk        ]*( (x)[ijk-1      ] - (x)[ijk] ) \
-        + beta_j[ijk+jStride]*( (x)[ijk+jStride] - (x)[ijk] ) \
-        + beta_j[ijk        ]*( (x)[ijk-jStride] - (x)[ijk] ) \
-        + beta_k[ijk+kStride]*( (x)[ijk+kStride] - (x)[ijk] ) \
-        + beta_k[ijk        ]*( (x)[ijk-kStride] - (x)[ijk] ) \
-      )                                                       \
+    #define __apply_op(x)                                 \
+    (                                                     \
+      a*alpha[ijk]*x[ijk] - b*h2inv*(                     \
+        + beta_i[ijk+1      ]*( x[ijk+1      ] - x[ijk] ) \
+        + beta_i[ijk        ]*( x[ijk-1      ] - x[ijk] ) \
+        + beta_j[ijk+jStride]*( x[ijk+jStride] - x[ijk] ) \
+        + beta_j[ijk        ]*( x[ijk-jStride] - x[ijk] ) \
+        + beta_k[ijk+kStride]*( x[ijk+kStride] - x[ijk] ) \
+        + beta_k[ijk        ]*( x[ijk-kStride] - x[ijk] ) \
+      )                                                   \
     )
   #else  // constant coefficient case...  
     const char __STENCIL_STRING[] = "2nd-order, 7-point, constant-coefficient, finite volume helmholtz";
-    #define __apply_op(x)              \
-    (                                  \
-      a*x[ijk] - b*h2inv*(             \
-        + (x)[ijk+1      ]             \
-        + (x)[ijk-1      ]             \
-        + (x)[ijk+jStride]             \
-        + (x)[ijk-jStride]             \
-        + (x)[ijk+kStride]             \
-        + (x)[ijk-kStride]             \
-        - (x)[ijk        ]*6.0         \
-      )                                \
+    #define __apply_op(x)            \
+    (                                \
+      a*x[ijk] - b*h2inv*(           \
+        + x[ijk+1      ]             \
+        + x[ijk-1      ]             \
+        + x[ijk+jStride]             \
+        + x[ijk-jStride]             \
+        + x[ijk+kStride]             \
+        + x[ijk-kStride]             \
+        - x[ijk        ]*6.0         \
+      )                              \
     )
   #endif // variable/constant coefficient
 
@@ -189,11 +223,9 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
                                      );
 
       #endif
-      //if( (printedError==0) && (fabs(Aii) <  fabs(sumAbsAij)) ){printf("   not diagonally dominant at (%5d,%5d,%5d) %e vs %e\n",lowi+i,lowj+j,lowk+k,fabs(Aii),fabs(sumAbsAij));printedError=1;}
-      //if( (printedError==0) && (fabs(Aii) == fabs(sumAbsAij)) ){printf("weakly diagonally dominant at (%5d,%5d,%5d) %e vs %e\n",lowi+i,lowj+j,lowk+k,fabs(Aii),fabs(sumAbsAij));printedError=1;}
       #if 0
-      if( (Aii==0)       ){printf("Error... zero on the diagonal\n");}
-      if( isinf(1.0/Aii) ){printf("Error... D^{-1} == inf\n");}
+      if( (printedError==0) && (Aii==0)       ){printf("Error(%5d,%5d,%5d)... zero on the diagonal\n",lowi+i,lowj+j,lowk+k);printedError=1}
+      if( (printedError==0) && isinf(1.0/Aii) ){printf("Error(%5d,%5d,%5d)... D^{-1} == inf       \n",lowi+i,lowj+j,lowk+k);printedError=1}
       #endif
        Dinv[ijk] = 1.0/Aii;							// inverse of the diagonal Aii
       L1inv[ijk] = 1.0/(fabs(Aii)+sumAbsAij);					// inverse of the L1 row norm

@@ -3,7 +3,7 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // y=Ax or y=D^{-1}Ax = lambda[]Ax
+void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // y=Ax
   int starShaped = __STENCIL_STAR_SHAPED;
 
   // exchange the boundary of x in preparation for Ax
@@ -28,7 +28,6 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // 
     const double * __restrict__ beta_i = level->my_boxes[box].components[ __beta_i] + ghosts*(1+jStride+kStride);
     const double * __restrict__ beta_j = level->my_boxes[box].components[ __beta_j] + ghosts*(1+jStride+kStride);
     const double * __restrict__ beta_k = level->my_boxes[box].components[ __beta_k] + ghosts*(1+jStride+kStride);
-    const double * __restrict__ lambda = level->my_boxes[box].components[   __Dinv] + ghosts*(1+jStride+kStride);
     const double * __restrict__  valid = level->my_boxes[box].components[  __valid] + ghosts*(1+jStride+kStride);
 
     #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE

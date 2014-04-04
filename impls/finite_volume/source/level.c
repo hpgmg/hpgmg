@@ -155,8 +155,8 @@ int create_box(box_type *box, int numComponents, int dim, int ghosts){
   box->numComponents = numComponents;
   box->dim = dim;
   box->ghosts = ghosts;
-  box->jStride = (dim+2*ghosts);
-  box->kStride = (dim+2*ghosts)*(dim+2*ghosts);
+  box->jStride = (dim+2*ghosts);                // pencil... could pad to ensure j+/-1 is aligned
+  box->kStride = (dim+2*ghosts)*(dim+2*ghosts); // plane
 
   // pad each plane such that 
   //   1. it is greater than a multiple of the maximum unrolling (or vector length)

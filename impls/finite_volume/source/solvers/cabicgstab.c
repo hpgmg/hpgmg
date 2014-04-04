@@ -122,7 +122,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
     scale_grid(level,P[0],1.0,__p);                                                             // P[0] = A^0p = __p
     for(n=1;n<2*__ca_krylov_s+1;n++){                                                           // naive way of calculating the monomial basis.
       #ifdef DiagonallyPrecondition                                                             //
-      mul_grids(level,__temp,1.0,__Dinv,P[n-1]);                                                //   temp[] = lambda[]*P[n-1]
+      mul_grids(level,__temp,1.0,__Dinv,P[n-1]);                                                //   temp[] = Dinv[]*P[n-1]
       apply_op(level,P[n],__temp,a,b);                                                          //   P[n] = AD^{-1}__temp = AD^{-1}P[n-1] = ((AD^{-1})^n)p
       #else                                                                                     //
       apply_op(level,P[n],P[n-1],a,b);                                                          //   P[n] = A(P[n-1]) = (A^n)p
@@ -131,7 +131,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
     scale_grid(level,R[0],1.0,__r);                                                             // R[0] = A^0r = __r
     for(n=1;n<2*__ca_krylov_s;n++){                                                             // naive way of calculating the monomial basis.
       #ifdef DiagonallyPrecondition                                                             //
-      mul_grids(level,__temp,1.0,__Dinv,R[n-1]);                                                //   temp[] = lambda[]*R[n-1]
+      mul_grids(level,__temp,1.0,__Dinv,R[n-1]);                                                //   temp[] = Dinv[]*R[n-1]
       apply_op(level,R[n],__temp,a,b);                                                          //   R[n] = AD^{-1}__temp = AD^{-1}R[n-1]
       #else                                                                                     //
       apply_op(level,R[n],R[n-1],a,b);                                                          //   R[n] = A(R[n-1]) = (A^n)r
@@ -273,7 +273,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
   }                                                                                             // } // outer m loop
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   #ifdef DiagonallyPrecondition
-  mul_grids(level,e_id,1.0,__Dinv,e_id);                                                        //   e_id[] = lambda[]*e_id[] // i.e. e = D^{-1}e'
+  mul_grids(level,e_id,1.0,__Dinv,e_id);                                                        //   e_id[] = Dinv[]*e_id[] // i.e. e = D^{-1}e'
   #endif
 
 }
@@ -357,7 +357,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
     scale_grid(level,P[0],1.0,__p);                                             // P[0] = A^0p = __p
     for(n=1;n<2*__ca_krylov_s+1;n++){                                           // naive way of calculating the monomial basis.
       #ifdef DiagonallyPrecondition                                             //
-      mul_grids(level,__temp,1.0,__Dinv,P[n-1]);                                //   temp[] = lambda[]*P[n-1]
+      mul_grids(level,__temp,1.0,__Dinv,P[n-1]);                                //   temp[] = Dinv[]*P[n-1]
       apply_op(level,P[n],__temp,a,b);                                          //   P[n] = AD^{-1}__temp = AD^{-1}P[n-1] = ((AD^{-1})^n)p
       #else                                                                     //
       apply_op(level,P[n],P[n-1],a,b);                                          //   P[n] = A(P[n-1]) = (A^n)p
@@ -366,7 +366,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
     scale_grid(level,R[0],1.0,__r);                                             // R[0] = A^0r = __r
     for(n=1;n<2*__ca_krylov_s;n++){                                             // naive way of calculating the monomial basis.
       #ifdef DiagonallyPrecondition                                             //
-      mul_grids(level,__temp,1.0,__Dinv,R[n-1]);                                //   temp[] = lambda[]*R[n-1]
+      mul_grids(level,__temp,1.0,__Dinv,R[n-1]);                                //   temp[] = Dinv[]*R[n-1]
       apply_op(level,R[n],__temp,a,b);                                          //   R[n] = AD^{-1}__temp = AD^{-1}R[n-1]
       #else                                                                     //
       apply_op(level,R[n],R[n-1],a,b);                                          //   R[n] = A(R[n-1]) = (A^n)r
@@ -507,7 +507,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
   }                                                                                             // } // outer m loop
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   #ifdef DiagonallyPrecondition
-  mul_grids(level,e_id,1.0,__Dinv,e_id);                                                        //   e_id[] = lambda[]*e_id[] // i.e. e = D^{-1}e'
+  mul_grids(level,e_id,1.0,__Dinv,e_id);                                                        //   e_id[] = Dinv[]*e_id[] // i.e. e = D^{-1}e'
   #endif
 }
 #endif // __USE_TELESCOPING_CA_KRYLOV

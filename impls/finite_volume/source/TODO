@@ -1,0 +1,8 @@
+- calculate Dinv on the fly
+- subdivide ghost zone exchange block copies to increase (easy) thread-parallelism
+- more efficient ghost zone exchange (box intersection algebra) when communicating edges and corners
+- communication-avoiding smoothers (wavefront, simdized)
+- high-order (4th order) operators
+  - 27pt constant coefficient + Mehrstellen
+  - 13pt constant coefficient
+  - 61pt(?) variable coefficient

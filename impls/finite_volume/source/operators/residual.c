@@ -38,8 +38,8 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
       int ijk = i + j*jStride + k*kStride;
-      double helmholtz = __apply_op(x);
-      res[ijk] = rhs[ijk]-helmholtz;
+      double Ax = __apply_op(x);
+      res[ijk] = rhs[ijk]-Ax;
     }}}
   }
   level->cycles.residual += (uint64_t)(CycleTime()-_timeStart);

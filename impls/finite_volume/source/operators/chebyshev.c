@@ -63,7 +63,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       const double * __restrict__ beta_i   = level->my_boxes[box].components[__beta_i] + ghosts*(1+jStride+kStride);
       const double * __restrict__ beta_j   = level->my_boxes[box].components[__beta_j] + ghosts*(1+jStride+kStride);
       const double * __restrict__ beta_k   = level->my_boxes[box].components[__beta_k] + ghosts*(1+jStride+kStride);
-      const double * __restrict__ lambda   = level->my_boxes[box].components[__Dinv  ] + ghosts*(1+jStride+kStride);
+      const double * __restrict__ Dinv     = level->my_boxes[box].components[__Dinv  ] + ghosts*(1+jStride+kStride);
       const double * __restrict__ valid    = level->my_boxes[box].components[__valid ] + ghosts*(1+jStride+kStride); // cell is inside the domain
 
       int ghostsToOperateOn=ghosts-1;
@@ -84,11 +84,12 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
         for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
         for(i=0-ghostsToOperateOn;i<dim+ghostsToOperateOn;i++){
           int ijk = i + j*jStride + k*kStride;
-          // According to Saad... but his was missing a lambda[ijk] == D^{-1} !!!
+          // According to Saad... but his was missing a Dinv[ijk] == D^{-1} !!!
           //  x_{n+1} = x_{n} + rho_{n} [ rho_{n-1}(x_{n} - x_{n-1}) + (2/delta)(b-Ax_{n}) ]
-          //  x_temp[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_temp[ijk]) + c2*lambda[ijk]*(rhs[ijk]-Ax_n);
-          double Ax_n = __apply_op(x_n);
-          x_np1[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_nm1[ijk]) + c2*lambda[ijk]*(rhs[ijk]-Ax_n);
+          //  x_temp[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_temp[ijk]) + c2*Dinv[ijk]*(rhs[ijk]-Ax_n);
+          double Ax_n     = __apply_op(x_n);
+          double Dinv_ijk = __calculate_Dinv();
+          x_np1[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_nm1[ijk]) + c2*Dinv_ijk*(rhs[ijk]-Ax_n);
         }}}
       } // ss-loop
     } // box-loop

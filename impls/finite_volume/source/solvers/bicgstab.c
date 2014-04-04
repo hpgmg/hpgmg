@@ -35,7 +35,7 @@ void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double
   while( (j<jMax) && (!BiCGStabFailed) && (!BiCGStabConverged) ){               // while(not done){
     j++;level->Krylov_iterations++;                                             //
     #ifdef DiagonallyPrecondition                                               //
-    mul_grids(level,__temp,1.0,__Dinv,__p);                                     //   temp[] = lambda[]*p[]
+    mul_grids(level,__temp,1.0,__Dinv,__p);                                     //   temp[] = Dinv[]*p[]
     apply_op(level,__Ap,__temp,a,b);                                            //   Ap = AD^{-1}(p)
     #else                                                                       //
     apply_op(level,__Ap,__p,a,b);                                               //   Ap = A(p)
@@ -51,7 +51,7 @@ void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double
     if(norm_of_s == 0.0){BiCGStabConverged=1;break;}                            //   FIX - redundant??  if As_dot_As==0, then As must be 0 which implies s==0
     if(norm_of_s < desired_reduction_in_norm*norm_of_r0){BiCGStabConverged=1;break;}
     #ifdef DiagonallyPrecondition                                               //
-    mul_grids(level,__temp,1.0,__Dinv,__s);                                     //   temp[] = lambda[]*s[]
+    mul_grids(level,__temp,1.0,__Dinv,__s);                                     //   temp[] = Dinv[]*s[]
     apply_op(level,__As,__temp,a,b);                                            //   As = AD^{-1}(s)
     #else                                                                       //
     apply_op(level,__As,__s,a,b);                                               //   As = A(s)
@@ -82,7 +82,7 @@ void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double
     r_dot_r0 = r_dot_r0_new;                                                    //   r_dot_r0 = r_dot_r0_new   (save old r_dot_r0)
   }                                                                             // }
     #ifdef DiagonallyPrecondition                                               //
-    mul_grids(level,x_id,1.0,__Dinv,x_id);                                      //   x_id[] = lambda[]*x_id[] // i.e. x = D^{-1}x'
+    mul_grids(level,x_id,1.0,__Dinv,x_id);                                      //   x_id[] = Dinv[]*x_id[] // i.e. x = D^{-1}x'
     #endif                                                                      //
   #ifdef __DEBUG
   if(BiCGStabFailed)if(level->my_rank==0)printf("BiCGStab Failed... error = %d\n",BiCGStabFailed);
