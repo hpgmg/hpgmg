@@ -19,6 +19,7 @@ struct MG_private {
   PetscReal enormInfty,enormL2;
   PetscReal rnorm2,bnorm2;      // rnorm is normalized by bnorm
   PetscBool monitor;
+  PetscBool diagnostics;
   PetscLogStage stage;
   PetscLogEvent V_Cycle;
 };
@@ -191,14 +192,16 @@ static PetscErrorCode MGRecordDiagnostics(Op op,MG mg,Vec B,Vec U) {
   Vec Y;
 
   PetscFunctionBegin;
-  ierr = DMGetGlobalVector(mg->dm,&Y);CHKERRQ(ierr);
-  ierr = OpApply(op,mg->dm,U,Y);CHKERRQ(ierr);
-  ierr = VecAYPX(Y,-1.,B);CHKERRQ(ierr);
-  ierr = VecNorm(Y,NORM_2,&mg->rnorm2);CHKERRQ(ierr);
-  if (mg->bnorm2 > 1e3*PETSC_MACHINE_EPSILON && mg->rnorm2 > 1e3*PETSC_MACHINE_EPSILON) mg->rnorm2 /= mg->bnorm2;
-  ierr = DMRestoreGlobalVector(mg->dm,&Y);CHKERRQ(ierr);
+  if (mg->monitor || mg->diagnostics) {
+    ierr = DMGetGlobalVector(mg->dm,&Y);CHKERRQ(ierr);
+    ierr = OpApply(op,mg->dm,U,Y);CHKERRQ(ierr);
+    ierr = VecAYPX(Y,-1.,B);CHKERRQ(ierr);
+    ierr = VecNorm(Y,NORM_2,&mg->rnorm2);CHKERRQ(ierr);
+    if (mg->bnorm2 > 1e3*PETSC_MACHINE_EPSILON && mg->rnorm2 > 1e3*PETSC_MACHINE_EPSILON) mg->rnorm2 /= mg->bnorm2;
+    ierr = DMRestoreGlobalVector(mg->dm,&Y);CHKERRQ(ierr);
 
-  ierr = OpIntegrateNorms(op,mg->dm,U,&mg->enormInfty,&mg->enormL2);CHKERRQ(ierr);
+    ierr = OpIntegrateNorms(op,mg->dm,U,&mg->enormInfty,&mg->enormL2);CHKERRQ(ierr);
+  }
   if (mg->monitor) {
     PetscInt fedegree,level,mlocal[3],Mglobal[3],procs[3];
     PetscReal erateInfty = 0,erateL2 = 0,rrate2 = 0;
