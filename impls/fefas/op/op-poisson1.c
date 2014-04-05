@@ -172,6 +172,67 @@ static PetscErrorCode OpApply_Poisson(Op op,DM dm,Vec U,Vec V,
 static PetscErrorCode OpApply_Poisson1(Op op,DM dm,Vec U,Vec V) { return OpApply_Poisson(op,dm,U,V,OpPointwiseElement_Poisson1); }
 static PetscErrorCode OpApply_Poisson2(Op op,DM dm,Vec U,Vec V) { return OpApply_Poisson(op,dm,U,V,OpPointwiseElement_Poisson2); }
 
+static PetscErrorCode OpApply_Poisson2Affine(Op op,DM dm,Vec U,Vec V)
+{
+  PetscErrorCode ierr;
+  Vec Ul,Vl;
+  PetscInt nelem,P,Q,P3,Q3,Mglobal[3];
+  PetscReal L[3];
+  const PetscScalar *u;
+  PetscScalar *v;
+  const PetscReal *B,*D,*w3;
+  Tensor Tensor1,Tensor3;
+
+  PetscFunctionBegin;
+  ierr = DMFEGetTensorEval(dm,&P,&Q,&B,&D,NULL,NULL,&w3);CHKERRQ(ierr);
+  P3 = P*P*P;
+  Q3 = Q*Q*Q;
+  ierr = OpGetTensors(op,&Tensor1,&Tensor3);CHKERRQ(ierr);
+  ierr = DMFEGetInfo(dm,NULL,NULL,NULL,Mglobal,NULL);CHKERRQ(ierr);
+  ierr = DMFEGetUniformCoordinates(dm,L);CHKERRQ(ierr);
+
+  ierr = DMGetLocalVector(dm,&Ul);CHKERRQ(ierr);
+  ierr = DMGetLocalVector(dm,&Vl);CHKERRQ(ierr);
+  ierr = VecZeroEntries(Vl);CHKERRQ(ierr);
+  ierr = DMFEGetNumElements(dm,&nelem);CHKERRQ(ierr);
+  ierr = DMGlobalToLocalBegin(dm,U,INSERT_VALUES,Ul);CHKERRQ(ierr);
+  ierr = DMGlobalToLocalEnd(dm,U,INSERT_VALUES,Ul);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(Ul,&u);CHKERRQ(ierr);
+  ierr = VecGetArray(Vl,&v);CHKERRQ(ierr);
+
+  for (PetscInt e=0; e<nelem; e+=NE) {
+    PetscScalar ve[1*P3*NE]_align,dv[3][1][Q3][NE]_align,ue[1*P3*NE]_align,du[3][1][Q3][NE]_align,dx[3],wdxdet[Q3];
+
+    for (PetscInt i=0; i<3; i++) dx[i] = 2.*Mglobal[i]/L[i];
+    for (PetscInt i=0; i<Q3; i++) wdxdet[i] = w3[i] / (dx[0]*dx[1]*dx[2]);
+    ierr = DMFEExtractElements(dm,u,e,NE,ue);CHKERRQ(ierr);
+    ierr = PetscMemzero(du,sizeof du);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,D,B,B,TENSOR_EVAL,ue,du[0][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,D,B,TENSOR_EVAL,ue,du[1][0][0]);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,B,D,TENSOR_EVAL,ue,du[2][0][0]);CHKERRQ(ierr);
+    for (PetscInt i=0; i<Q3; i++) {
+      for (PetscInt j=0; j<3; j++) {
+        for (PetscInt l=0; l<NE; l++) {
+          dv[j][0][i][l] = wdxdet[i] * dx[j] * dx[j] * du[j][0][i][l];
+        }
+      }
+    }
+    ierr = PetscMemzero(ve,sizeof ve);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,D,B,B,TENSOR_TRANSPOSE,dv[0][0][0],ve);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,D,B,TENSOR_TRANSPOSE,dv[1][0][0],ve);CHKERRQ(ierr);
+    ierr = TensorContract(Tensor1,B,B,D,TENSOR_TRANSPOSE,dv[2][0][0],ve);CHKERRQ(ierr);
+    ierr = DMFESetElements(dm,v,e,NE,ADD_VALUES,DOMAIN_INTERIOR,ve);CHKERRQ(ierr);
+  }
+  ierr = VecRestoreArrayRead(Ul,&u);CHKERRQ(ierr);
+  ierr = DMRestoreLocalVector(dm,&Ul);CHKERRQ(ierr);
+  ierr = VecRestoreArray(Vl,&v);CHKERRQ(ierr);
+  ierr = VecZeroEntries(V);CHKERRQ(ierr);
+  ierr = DMLocalToGlobalBegin(dm,Vl,ADD_VALUES,V);CHKERRQ(ierr);
+  ierr = DMLocalToGlobalEnd(dm,Vl,ADD_VALUES,V);CHKERRQ(ierr);
+  ierr = DMRestoreLocalVector(dm,&Vl);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 static PetscErrorCode OpDestroy_Poisson(Op op)
 {
   PetscErrorCode ierr;
@@ -229,6 +290,19 @@ PetscErrorCode OpCreate_Poisson2(Op op)
   ierr = OpCreate__Poisson(op);CHKERRQ(ierr);
   ierr = OpSetFEDegree(op,2);CHKERRQ(ierr);
   ierr = OpSetApply(op,OpApply_Poisson2);CHKERRQ(ierr);
+  ierr = OpSetPointwiseElement(op,(OpPointwiseElementFunction)OpPointwiseElement_Poisson2,NE);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+PetscErrorCode OpCreate_Poisson2Affine(Op op)
+{
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  ierr = OpCreate__Poisson(op);CHKERRQ(ierr);
+  ierr = OpSetFEDegree(op,2);CHKERRQ(ierr);
+  // This implementation requires both affine and non-rotated.
+  ierr = OpSetApply(op,OpApply_Poisson2Affine);CHKERRQ(ierr);
+  ierr = OpSetAffineOnly(op,PETSC_TRUE);CHKERRQ(ierr);
   ierr = OpSetPointwiseElement(op,(OpPointwiseElementFunction)OpPointwiseElement_Poisson2,NE);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
