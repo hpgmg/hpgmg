@@ -123,6 +123,7 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   Vec U,F;
   MG mg;
   PetscReal L[3];
+  PetscBool affine;
 
   PetscFunctionBegin;
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
@@ -144,7 +145,8 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   L[1] = M[1]*1./M_max;
   L[2] = M[2]*1./M_max;
   ierr = DMFESetUniformCoordinates(dm,L);CHKERRQ(ierr);
-  ierr = DMCoordDistort(dm,L);CHKERRQ(ierr);
+  ierr = OpGetAffineOnly(op,&affine);CHKERRQ(ierr);
+  if (!affine) {ierr = DMCoordDistort(dm,L);CHKERRQ(ierr);}
 
   ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
   ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);

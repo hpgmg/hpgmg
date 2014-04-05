@@ -20,6 +20,8 @@ PetscErrorCode OpSetPointwiseSolution(Op,PetscErrorCode (*)(Op,const PetscReal[]
 PetscErrorCode OpSetPointwiseForcing(Op,PetscErrorCode (*)(Op,const PetscReal[],const PetscReal[],PetscScalar[]));
 typedef PetscErrorCode (*OpPointwiseElementFunction)(Op,PetscInt,PetscInt,const PetscScalar[],const PetscReal[],const PetscScalar[],PetscScalar[]);
 PetscErrorCode OpSetPointwiseElement(Op,OpPointwiseElementFunction,PetscInt);
+PetscErrorCode OpSetAffineOnly(Op op,PetscBool affine);
+PetscErrorCode OpGetAffineOnly(Op op,PetscBool *affine);
 PetscErrorCode OpSetDestroy(Op,PetscErrorCode (*)(Op));
 PetscErrorCode OpRegister(const char name[],PetscErrorCode (*f)(Op));
 PetscErrorCode OpInitializePackage(void);

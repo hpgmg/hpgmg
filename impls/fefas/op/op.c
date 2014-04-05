@@ -14,6 +14,7 @@ struct Op_private {
   PetscInt fedegree;
   PetscInt dof;
   PetscInt ne;                  /* Preferred number of elements over which to vectorize */
+  PetscBool affineonly;
   Tensor   TensorDOF,Tensor3;
   PetscErrorCode (*Apply)(Op,DM,Vec,Vec);
   PetscErrorCode (*RestrictState)(Op,DM,Vec,Vec);
@@ -70,6 +71,14 @@ PetscErrorCode OpSetPointwiseForcing(Op op,PetscErrorCode (*f)(Op,const PetscRea
 PetscErrorCode OpSetPointwiseElement(Op op,OpPointwiseElementFunction f,PetscInt ne) {
   op->PointwiseElement = f;
   op->ne = ne;
+  return 0;
+}
+PetscErrorCode OpSetAffineOnly(Op op,PetscBool affine) {
+  op->affineonly = affine;
+  return 0;
+}
+PetscErrorCode OpGetAffineOnly(Op op,PetscBool *affine) {
+  *affine = op->affineonly;
   return 0;
 }
 
