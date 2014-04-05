@@ -36,7 +36,7 @@ def parse_logfile(fname):
 
     return Sizes, GFlops, MEqs, HostName, Procs
 
-def plot(logfiles, outputfile):
+def plot(args):
     symbols = iter(['ro', 'bv', 'ks', 'g^'])
     import matplotlib.pyplot as plt
     fig, ax1 = plt.subplots()
@@ -49,23 +49,29 @@ def plot(logfiles, outputfile):
     all_gflops = []
     all_meqs = []
     max_meqs = 0
-    for f in logfiles:
+    for f in args.logfiles:
         sizes, gflops, meqs, hostname, procs = parse_logfile(f)
         all_sizes += sizes
         all_gflops += gflops
         all_meqs += meqs
-        ax1.loglog(sizes, meqs, next(symbols), label='%s np=%d'%(hostname, procs))
+        if args.loglog:
+            ax1.loglog(sizes, meqs, next(symbols), label='%s np=%d'%(hostname, procs))
+        else:
+            ax1.semilogx(sizes, meqs, next(symbols), label='%s np=%d'%(hostname, procs))
     flops_per_meqn = all_gflops[-1] / all_meqs[-1]
     ax1.set_xlim(0.9*min(all_sizes),1.05*max(all_sizes))
     ax2.set_xlim(0.9*min(all_sizes),1.05*max(all_sizes))
     ax2.set_autoscaley_on(False)
-    ax2.set_yscale('log')
+    if args.loglog:
+        ax2.set_yscale('log')
+        ax1.legend(loc='lower right')
+    else:
+        ax1.legend(loc='upper left')
     ax1.set_ylim(0.9*min(all_meqs),1.1*max(all_meqs))
     ax2.set_ylim(0.9*min(all_meqs)*flops_per_meqn,1.1*max(all_meqs)*flops_per_meqn)
     ax2.set_ylabel('GFlop/s')
-    ax1.legend(loc='lower right')
-    if outputfile:
-        plt.savefig(outputfile)
+    if args.output:
+        plt.savefig(args.output)
     else:
         plt.show()
 
@@ -73,6 +79,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser('FE-FAS Performance Analyzer')
     parser.add_argument('-o', '--output', type=str, help='Output file')
+    parser.add_argument('--loglog', type=bool, help='Use logarithmic y axis (x is always logarithmic)')
     parser.add_argument('logfiles', nargs='+', type=str, help='List of files to process, usually including -log_summary')
     args = parser.parse_args()
-    plot(args.logfiles, args.output)
+    plot(args)
