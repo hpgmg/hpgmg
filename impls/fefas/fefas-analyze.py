@@ -54,15 +54,16 @@ def plot(logfiles, outputfile):
         all_sizes += sizes
         all_gflops += gflops
         all_meqs += meqs
-        ax1.semilogx(sizes, meqs, next(symbols), label='%s np=%d'%(hostname, procs))
+        ax1.loglog(sizes, meqs, next(symbols), label='%s np=%d'%(hostname, procs))
     flops_per_meqn = all_gflops[-1] / all_meqs[-1]
-    ax1.set_xlim(0,max(all_sizes))
-    ax2.set_xlim(0,max(all_sizes))
+    ax1.set_xlim(0.9*min(all_sizes),1.05*max(all_sizes))
+    ax2.set_xlim(0.9*min(all_sizes),1.05*max(all_sizes))
     ax2.set_autoscaley_on(False)
-    ax1.set_ylim(0,1.1*max(all_meqs))
-    ax2.set_ylim(0,1.1*max(all_meqs)*flops_per_meqn)
+    ax2.set_yscale('log')
+    ax1.set_ylim(0.9*min(all_meqs),1.1*max(all_meqs))
+    ax2.set_ylim(0.9*min(all_meqs)*flops_per_meqn,1.1*max(all_meqs)*flops_per_meqn)
     ax2.set_ylabel('GFlop/s')
-    ax1.legend(loc='upper left')
+    ax1.legend(loc='lower right')
     if outputfile:
         plt.savefig(outputfile)
     else:
