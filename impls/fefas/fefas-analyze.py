@@ -2,7 +2,7 @@ def parse_logfile(fname):
     import re
     FP = r'([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)'
     PERFLINE = re.compile(r'Q2 G''\[([\d ]{4})([\d ]{4})([\d ]{4})\] P\[ *(\d+) +(\d+) +(\d+)\]  '+FP+r' s +'+FP+r' GF +'+FP+r' MEq/s')
-    HOSTLINE = re.compile(r'.*on a ([a-z\-_0-9]+) named \w+ with (\d+) processors')
+    HOSTLINE = re.compile(r'.*on a ([a-z\-_0-9]+) named [^ ]+ with (\d+) processors')
     Dofs = []
     GFlops = []
     MEqs = []
@@ -37,7 +37,7 @@ def parse_logfile(fname):
     return Dofs, GFlops, MEqs, HostName, Procs
 
 def plot(args):
-    symbols = iter(['ro', 'bv', 'ks', 'g^'])
+    symbols = iter(['ro', 'bv', 'ks', 'g^', 'bx'])
     import matplotlib.pyplot as plt
     fig, ax1 = plt.subplots()
     plt.title('FE-FAS Performance')
