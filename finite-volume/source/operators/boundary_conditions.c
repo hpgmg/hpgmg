@@ -75,16 +75,16 @@ void apply_BCs_linear(level_type * level, int x_id){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-inline void __4thOrder_face(double * __restrict__ x, int ijk, int aStride){
+static inline void __4thOrder_face(double * __restrict__ x, int ijk, int aStride){
   x[ijk] = ( -140.0*x[ijk+aStride] + 70.0*x[ijk+2*aStride] - 28.0*x[ijk+3*aStride] + 5.0*x[ijk+4*aStride] ) / 35.0;
 }
 
-inline void __4thOrder_edge(double * __restrict__ x, int ijk, int aStride, int bStride){
+static inline void __4thOrder_edge(double * __restrict__ x, int ijk, int aStride, int bStride){
   x[ijk] = ( 5.0*x[ijk+aStride] - 10.0*x[ijk+2*aStride] + 10.0*x[ijk+3*aStride] - 5.0*x[ijk+4*aStride] + x[ijk+5*aStride] +
              5.0*x[ijk+bStride] - 10.0*x[ijk+2*bStride] + 10.0*x[ijk+3*bStride] - 5.0*x[ijk+4*bStride] + x[ijk+5*bStride] ) * 0.5;
 }
 
-inline void __4thOrder_corner(double * __restrict__ x, int ijk, int aStride, int bStride, int cStride){
+static inline void __4thOrder_corner(double * __restrict__ x, int ijk, int aStride, int bStride, int cStride){
   x[ijk] = ( 5.0*x[ijk+aStride] - 10.0*x[ijk+2*aStride] + 10.0*x[ijk+3*aStride] - 5.0*x[ijk+4*aStride] + x[ijk+5*aStride] +
              5.0*x[ijk+bStride] - 10.0*x[ijk+2*bStride] + 10.0*x[ijk+3*bStride] - 5.0*x[ijk+4*bStride] + x[ijk+5*bStride] +
              5.0*x[ijk+cStride] - 10.0*x[ijk+2*cStride] + 10.0*x[ijk+3*cStride] - 5.0*x[ijk+4*cStride] + x[ijk+5*cStride] ) / 3.0;
@@ -198,7 +198,7 @@ void apply_BCs_4thOrder(level_type * level, int x_id){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-inline void __2ndOrder(double * __restrict__ x, int ijk, int aStride){
+static inline void __2ndOrder(double * __restrict__ x, int ijk, int aStride){
   x[ijk] = ( -6.0*x[ijk+aStride] + x[ijk+2*aStride] ) / 3.0;
 }
 

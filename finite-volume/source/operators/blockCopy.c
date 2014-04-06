@@ -3,7 +3,7 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-inline void CopyBlock(level_type *level, int id, blockCopy_type *block, int threads_per_block){
+static inline void CopyBlock(level_type *level, int id, blockCopy_type *block, int threads_per_block){
   // copy 3D array from read_i,j,k of read[] to write_i,j,k in write[]
   int   dim_i       = block->dim.i;
   int   dim_j       = block->dim.j;
@@ -60,7 +60,7 @@ inline void CopyBlock(level_type *level, int id, blockCopy_type *block, int thre
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-inline void IncrementBlock(level_type *level, int id, double prescale, blockCopy_type *block, int threads_per_block){
+static inline void IncrementBlock(level_type *level, int id, double prescale, blockCopy_type *block, int threads_per_block){
   // copy 3D array from read_i,j,k of read[] to write_i,j,k in write[]
   int   dim_i       = block->dim.i;
   int   dim_j       = block->dim.j;
