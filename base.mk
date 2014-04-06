@@ -13,7 +13,6 @@ BINDIR ?= bin
 thisdir = $(addprefix $(dir $(lastword $(MAKEFILE_LIST))),$(1))
 incsubdirs = $(addsuffix /local.mk,$(call thisdir,$(1)))
 
-libfefas-y.c :=
 fefas-y.c :=
 
 all : fefas
@@ -44,10 +43,6 @@ ifeq ($(CONFIG_HBM),y)
 endif
 
 CONFIG_XLCOMPILER := $(if $(findstring IBM XL,$(shell $(CC) -qversion 2>/dev/null || true)),y,)
-
-libfefas = $(LIBDIR)/libfefas.$(AR_LIB_SUFFIX)
-libfefas : $(libfefas)
-$(libfefas) : $(libfefas-y.c:%.c=$(OBJDIR)/%.o)
 
 %.$(AR_LIB_SUFFIX) : | $$(@D)/.DIR
 	$(call quiet,AR) $(AR_FLAGS) $@ $^
@@ -85,7 +80,7 @@ test-fe : $(fefas)
 
 .PRECIOUS: %/.DIR
 
-.PHONY: all clean print fefas libfefas test test-fe
+.PHONY: all clean print fefas test test-fe
 
 clean:
 	rm -rf $(OBJDIR) $(LIBDIR) $(BINDIR)
@@ -94,7 +89,7 @@ clean:
 print:
 	@echo $($(VAR))
 
-srcs.c := $(libfefas-y.c) $(fefas-y.c)
+srcs.c := $(fefas-y.c)
 srcs.o := $(srcs.c:%.c=$(OBJDIR)/%.o)
 srcs.d := $(srcs.o:%.o=%.d)
 # Tell make that srcs.d are all up to date.  Without this, the include
