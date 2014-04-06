@@ -1,4 +1,4 @@
-fefas-y.c += $(call thisdir, \
+hpgmg-fe-y.c += $(call thisdir, \
 	fefas.c \
 	fefas-test.c \
 	fmg.c \

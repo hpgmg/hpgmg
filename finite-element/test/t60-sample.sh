@@ -2,9 +2,9 @@
 
 test_description='Test grid creation'
 
-. ./fefas-sharness.sh
+. ./hpgmg-sharness.sh
 
-test_expect_stdout 'list of samples' 1 'fefas test-sampler -local 100,1e9 -maxsamples 10 -nranks 192' '
+test_expect_stdout 'list of samples' 1 'hpgmg-fe test-sampler -local 100,1e9 -maxsamples 10 -nranks 192' '
 Processors: [   4    6    8] = 192
 Filtered Grid: L11 [4096 6144 6144] = 154618822656
 Filtered Grid: L12 [4096 4096 4096] =  68719476736

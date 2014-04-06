@@ -2,9 +2,9 @@
 
 test_description='Test FE coarsening and injection'
 
-. ./fefas-sharness.sh
+. ./hpgmg-sharness.sh
 
-test_expect_stdout 'FE Inject fedegree=1' 4 'fefas test-feinject -M 4,2,6 -p 2,1,2 -L 4,2,6' '
+test_expect_stdout 'FE Inject fedegree=1' 4 'hpgmg-fe test-feinject -M 4,2,6 -p 2,1,2 -L 4,2,6' '
 coarse u[ 0] =        0.0 at  0.0  0.0  0.0
 coarse u[ 1] =        2.0 at  0.0  0.0  2.0
 coarse u[ 2] =        4.0 at  0.0  0.0  4.0

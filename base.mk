@@ -13,9 +13,9 @@ BINDIR ?= bin
 thisdir = $(addprefix $(dir $(lastword $(MAKEFILE_LIST))),$(1))
 incsubdirs = $(addsuffix /local.mk,$(call thisdir,$(1)))
 
-fefas-y.c :=
+hpgmg-fe-y.c :=
 
-all : fefas
+all : hpgmg-fe
 
 # Recursively include files for all targets
 include $(SRCDIR)/local.mk
@@ -39,7 +39,7 @@ endif
 CONFIG_HBM := $(shell test -f /soft/perftools/hpctw/lib/libmpihpm.a -a -f /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a && echo y || true)
 ifeq ($(CONFIG_HBM),y)
   CCPPFLAGS += -DCONFIG_HBM
-  FEFAS_LDLIBS += /soft/perftools/hpctw/lib/libmpihpm.a /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a
+  HPGMG_LDLIBS += /soft/perftools/hpctw/lib/libmpihpm.a /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a
 endif
 
 CONFIG_XLCOMPILER := $(if $(findstring IBM XL,$(shell $(CC) -qversion 2>/dev/null || true)),y,)
@@ -55,24 +55,24 @@ C_DEPFLAGS ?= -MMD -MP
 # on systems that use different syntax to specify C99.
 C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(CFLAGS)),,$(if $(CONFIG_XLCOMPILER),-qlanglvl=extc99,-std=c99))
 
-FEFAS_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLAGS) $(CFLAGS) $(C_DEPFLAGS)
+HPGMG_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLAGS) $(CFLAGS) $(C_DEPFLAGS)
 
-fefas = $(BINDIR)/fefas
-fefas : $(fefas)
-fefas-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(fefas-y.c))) $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(fefas-y.c)))
-$(BINDIR)/fefas : $(fefas-y.o) | $$(@D)/.DIR
-	$(call quiet,CLINKER) -o $@ $^ $(LDLIBS) $(FEFAS_LDLIBS) $(PETSC_SNES_LIB) $(LIBZ_LIB)
+hpgmg-fe = $(BINDIR)/hpgmg-fe
+hpgmg-fe : $(hpgmg-fe)
+hpgmg-fe-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(hpgmg-fe-y.c))) $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(hpgmg-fe-y.c)))
+$(BINDIR)/hpgmg-fe : $(hpgmg-fe-y.o) | $$(@D)/.DIR
+	$(call quiet,CLINKER) -o $@ $^ $(LDLIBS) $(HPGMG_LDLIBS) $(PETSC_SNES_LIB) $(LIBZ_LIB)
 
 $(OBJDIR)/%.o: $(OBJDIR)/%.c
-	$(FEFAS_COMPILE.c) $< -o $@
+	$(HPGMG_COMPILE.c) $< -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $$(@D)/.DIR
-	$(FEFAS_COMPILE.c) $< -o $@
+	$(HPGMG_COMPILE.c) $< -o $@
 
 test: test-fe
 
-test-fe : $(fefas)
-	make -C "$(SRCDIR)/finite-element/test" PETSC_DIR="$(PETSC_DIR)" PETSC_ARCH="$(PETSC_ARCH)" FEFAS_BINDIR="$(abspath $(BINDIR))" all
+test-fe : $(hpgmg-fe)
+	make -C "$(SRCDIR)/finite-element/test" PETSC_DIR="$(PETSC_DIR)" PETSC_ARCH="$(PETSC_ARCH)" HPGMG_BINDIR="$(abspath $(BINDIR))" all
 
 %/.DIR :
 	@mkdir -p $(@D)
@@ -80,7 +80,7 @@ test-fe : $(fefas)
 
 .PRECIOUS: %/.DIR
 
-.PHONY: all clean print fefas test test-fe
+.PHONY: all clean print hpgmg-fe test test-fe
 
 clean:
 	rm -rf $(OBJDIR) $(LIBDIR) $(BINDIR)
@@ -89,7 +89,7 @@ clean:
 print:
 	@echo $($(VAR))
 
-srcs.c := $(fefas-y.c)
+srcs.c := $(hpgmg-fe-y.c)
 srcs.o := $(srcs.c:%.c=$(OBJDIR)/%.o)
 srcs.d := $(srcs.o:%.o=%.d)
 # Tell make that srcs.d are all up to date.  Without this, the include

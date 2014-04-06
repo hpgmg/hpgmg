@@ -5,7 +5,7 @@ all :
 	$(MAKE) -C $(HPGMG_ARCH)
 	echo "Build complete in $(HPGMG_ARCH).  Use make -C $(HPGMG_ARCH) test to test."
 
-test :
+test : all
 	$(MAKE) -C $(HPGMG_ARCH) test
 
 clean :
