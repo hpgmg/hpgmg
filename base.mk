@@ -69,7 +69,7 @@ hpgmg-fv = $(BINDIR)/hpgmg-fv
 hpgmg-fv : $(hpgmg-fv)
 hpgmg-fv-y.o := $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(hpgmg-fv-y.c)))
 $(BINDIR)/hpgmg-fv : $(hpgmg-fv-y.o) | $$(@D)/.DIR
-	$(call quiet,CLINKER) -o $@ $^ $(LDLIBS) $(HPGMG_LDLIBS) -lm
+	$(call quiet,CLINKER) -o $@ $^ $(HPGMG_LDFLAGS) $(LDLIBS) $(HPGMG_LDLIBS) $(LDLIBS) -lm
 
 $(OBJDIR)/%.o: $(OBJDIR)/%.c
 	$(HPGMG_COMPILE.c) $< -o $@
