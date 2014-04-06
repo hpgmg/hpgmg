@@ -43,7 +43,7 @@ ifeq ($(CONFIG_HBM),y)
   FEFAS_LDLIBS += /soft/perftools/hpctw/lib/libmpihpm.a /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a
 endif
 
-CONFIG_XLCOMPILER := $(if $(findstring IBM XL,$(shell $(CC) -qversion)),y,,)
+CONFIG_XLCOMPILER := $(if $(findstring IBM XL,$(shell $(CC) -qversion 2>/dev/null || true)),y,)
 
 libfefas = $(LIBDIR)/libfefas.$(AR_LIB_SUFFIX)
 libfefas : $(libfefas)
