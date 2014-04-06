@@ -1,1 +1,1 @@
-include $(call incsubdirs,finite-element)
+include $(call incsubdirs,finite-element finite-volume)

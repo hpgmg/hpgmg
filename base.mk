@@ -7,15 +7,18 @@
 OBJDIR ?= obj
 LIBDIR ?= lib
 BINDIR ?= bin
+INCDIR ?= include
 
 # function to prefix directory that contains most recently-parsed
 # makefile (current) if that derictory is not ./
 thisdir = $(addprefix $(dir $(lastword $(MAKEFILE_LIST))),$(1))
 incsubdirs = $(addsuffix /local.mk,$(call thisdir,$(1)))
+srctoobj = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(1)))
 
 hpgmg-fe-y.c :=
+hpgmg-fv-y.c :=
 
-all : hpgmg-fe
+all : hpgmg-fe hpgmg-fv
 
 # Recursively include files for all targets
 include $(SRCDIR)/local.mk
@@ -53,15 +56,21 @@ C_DEPFLAGS ?= -MMD -MP
 
 # GCC-style syntax for C99.  Use "make C99FLAGS=-qlanglvl=extc99" or similar
 # on systems that use different syntax to specify C99.
-C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(CFLAGS)),,$(if $(CONFIG_XLCOMPILER),-qlanglvl=extc99,-std=c99))
+C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(HPGMG_CFLAGS) $(CFLAGS)),,$(if $(CONFIG_XLCOMPILER),-qlanglvl=extc99,-std=c99))
 
-HPGMG_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLAGS) $(CFLAGS) $(C_DEPFLAGS)
+HPGMG_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) -I$(INCDIR) $(CCPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
 
 hpgmg-fe = $(BINDIR)/hpgmg-fe
 hpgmg-fe : $(hpgmg-fe)
-hpgmg-fe-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(hpgmg-fe-y.c))) $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(hpgmg-fe-y.c)))
+hpgmg-fe-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(hpgmg-fe-y.c))) $(call srctoobj,$(hpgmg-fe-y.c))
 $(BINDIR)/hpgmg-fe : $(hpgmg-fe-y.o) | $$(@D)/.DIR
 	$(call quiet,CLINKER) -o $@ $^ $(LDLIBS) $(HPGMG_LDLIBS) $(PETSC_SNES_LIB) $(LIBZ_LIB)
+
+hpgmg-fv = $(BINDIR)/hpgmg-fv
+hpgmg-fv : $(hpgmg-fv)
+hpgmg-fv-y.o := $(call srctoobj,$(hpgmg-fv-y.c))
+$(BINDIR)/hpgmg-fv : $(hpgmg-fv-y.o) | $$(@D)/.DIR
+	$(call quiet,CLINKER) -o $@ $^ $(HPGMG_LDFLAGS) $(LDLIBS) $(HPGMG_LDLIBS) $(LDLIBS) -lm
 
 $(OBJDIR)/%.o: $(OBJDIR)/%.c
 	$(HPGMG_COMPILE.c) $< -o $@
@@ -80,7 +89,7 @@ test-fe : $(hpgmg-fe)
 
 .PRECIOUS: %/.DIR
 
-.PHONY: all clean print hpgmg-fe test test-fe
+.PHONY: all clean print hpgmg-fe hpgmg-fv test test-fe
 
 clean:
 	rm -rf $(OBJDIR) $(LIBDIR) $(BINDIR)
@@ -89,8 +98,8 @@ clean:
 print:
 	@echo $($(VAR))
 
-srcs.c := $(hpgmg-fe-y.c)
-srcs.o := $(srcs.c:%.c=$(OBJDIR)/%.o)
+srcs.c := $(hpgmg-fe-y.c) $(hpgmg-fv-y.c)
+srcs.o := $(call srctoobj,$(srcs.c))
 srcs.d := $(srcs.o:%.o=%.d)
 # Tell make that srcs.d are all up to date.  Without this, the include
 # below has quadratic complexity, taking more than one second for a

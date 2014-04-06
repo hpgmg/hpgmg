@@ -10,6 +10,7 @@
 #include <math.h>
 //#include<instrinsics.h>
 //------------------------------------------------------------------------------------------------------------------------------
+#include <hpgmgconf.h>
 #include "timer.h"
 #include "defines.h"
 #include "level.h"

@@ -5,7 +5,7 @@
 //------------------------------------------------------------------------------------------------------------------------------
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
-inline void InterpolateBlock_PL(level_type *level_f, int id_f, double prescale_f, level_type *level_c, int id_c, blockCopy_type *block, int threads_per_block){
+static inline void InterpolateBlock_PL(level_type *level_f, int id_f, double prescale_f, level_type *level_c, int id_c, blockCopy_type *block, int threads_per_block){
   // interpolate 3D array from read_i,j,k of read[] to write_i,j,k in write[]
   int write_dim_i   = block->dim.i<<1; // calculate the dimensions of the resultant fine block
   int write_dim_j   = block->dim.j<<1;

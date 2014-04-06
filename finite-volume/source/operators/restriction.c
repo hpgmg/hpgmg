@@ -3,7 +3,7 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-inline void RestrictBlock(level_type *level_c, int id_c, level_type *level_f, int id_f, blockCopy_type *block, int restrictionType, int threads_per_block){
+static inline void RestrictBlock(level_type *level_c, int id_c, level_type *level_f, int id_f, blockCopy_type *block, int restrictionType, int threads_per_block){
   // restrict 3D array from read_i,j,k of read[] to write_i,j,k in write[]
   int   dim_i       = block->dim.i>>1; // calculate the dimensions of the resultant coarse block
   int   dim_j       = block->dim.j>>1;
