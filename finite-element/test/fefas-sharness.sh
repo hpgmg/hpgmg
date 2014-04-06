@@ -13,7 +13,7 @@
 # Usually takes four arguments:
 # $1 - Test description
 # $2 - Number of processes
-# $3 - Executable name (found in ${PETSC_ARCH}/bin/) followed by runtime options
+# $3 - Executable name (found in ${FEFAS_BINDIR}/) followed by runtime options
 # $4 - Expected output
 #
 # With five arguments, the first will be taken to be a prerequisite:
@@ -22,7 +22,7 @@
 #      put a "!" in front of it.
 # $2 - Test description
 # $3 - Number of processes
-# $4 - Executable name (found in ${PETSC_ARCH}/bin/) followed by runtime options
+# $4 - Executable name (found in ${FEFAS_BINDIR}/) followed by runtime options
 # $5 - Expected output
 #
 # Returns nothing.
@@ -35,7 +35,7 @@ test_expect_stdout() {
         say >&3 "expecting success: $2 $3"
         sed '1d;$d' <<<"$4" > reference.out
         diffoutput=
-        if "${MPIEXEC}" -n $2 "${SHARNESS_TEST_DIRECTORY}/../${PETSC_ARCH}/bin/"$3 > actual.out 2>&4 &&
+        if "${MPIEXEC}" -n $2 "${FEFAS_BINDIR}/"$3 > actual.out 2>&4 &&
             diffoutput=$(git diff --exit-code --no-index reference.out actual.out); then
             test_ok_ "$1"
         else
@@ -57,7 +57,7 @@ test_expect_stdout() {
 # Usually takes four arguments:
 # $1 - Test description
 # $2 - Number of processes
-# $3 - Executable name (found in ${PETSC_ARCH}/bin/) followed by runtime options
+# $3 - Executable name (found in ${FEFAS_BINDIR}/) followed by runtime options
 # $4 - Expected string in error message (stderr)
 #
 # With five arguments, the first will be taken to be a prerequisite:
@@ -66,7 +66,7 @@ test_expect_stdout() {
 #      put a "!" in front of it.
 # $2 - Test description
 # $3 - Number of processes
-# $4 - Executable name (found in ${PETSC_ARCH}/bin/) followed by runtime options
+# $4 - Executable name (found in ${FEFAS_BINDIR}/) followed by runtime options
 # $5 - Expected string in error message
 #
 # Returns nothing.
@@ -79,7 +79,7 @@ test_expect_error() {
         say >&3 "checking known breakage: $2 $3"
         expected_stderr=$(sed '1d' <<<"$4")
         # Don't check exit code because process managers do not always propagate correctly
-        "${MPIEXEC}" -n $2 "${SHARNESS_TEST_DIRECTORY}/../${PETSC_ARCH}/bin/"$3 > /dev/null 2> actual.err
+        "${MPIEXEC}" -n $2 "${FEFAS_BINDIR}/"$3 > /dev/null 2> actual.err
         if fgrep -q "${expected_stderr}" actual.err; then
             test_ok_ "$1"
         else

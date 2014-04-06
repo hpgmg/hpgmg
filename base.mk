@@ -1,16 +1,16 @@
+# This file is meant to be included from $(HPGMG_ARCH)/Makefile
+
 .SECONDEXPANSION:		# to expand $$(@D)/.DIR
 .SUFFIXES:	                # Clear .SUFFIXES because we don't use implicit rules
 .DELETE_ON_ERROR:               # Delete likely-corrupt target file if rule fails
 
-include $(PETSC_DIR)/conf/variables
-
-OBJDIR ?= $(PETSC_ARCH)/obj
-LIBDIR ?= $(PETSC_ARCH)/lib
-BINDIR ?= $(PETSC_ARCH)/bin
+OBJDIR ?= obj
+LIBDIR ?= lib
+BINDIR ?= bin
 
 # function to prefix directory that contains most recently-parsed
 # makefile (current) if that derictory is not ./
-thisdir = $(subst ./,,$(addprefix $(dir $(lastword $(MAKEFILE_LIST))),$(1)))
+thisdir = $(addprefix $(dir $(lastword $(MAKEFILE_LIST))),$(1))
 incsubdirs = $(addsuffix /local.mk,$(call thisdir,$(1)))
 
 libfefas-y.c :=
@@ -19,7 +19,7 @@ fefas-y.c :=
 all : fefas
 
 # Recursively include files for all targets
-include local.mk
+include $(SRCDIR)/local.mk
 
 #### Rules ####
 ifeq ($(V),)
@@ -64,18 +64,20 @@ FEFAS_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLA
 
 fefas = $(BINDIR)/fefas
 fefas : $(fefas)
-fefas-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(fefas-y.c))) $(patsubst %.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(fefas-y.c)))
+fefas-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(fefas-y.c))) $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(fefas-y.c)))
 $(BINDIR)/fefas : $(fefas-y.o) | $$(@D)/.DIR
 	$(call quiet,CLINKER) -o $@ $^ $(LDLIBS) $(FEFAS_LDLIBS) $(PETSC_SNES_LIB) $(LIBZ_LIB)
 
 $(OBJDIR)/%.o: $(OBJDIR)/%.c
-	$(FEFAS_COMPILE.c) -I. $(abspath $<) -o $@
+	$(FEFAS_COMPILE.c) $< -o $@
 
-$(OBJDIR)/%.o: %.c | $$(@D)/.DIR
-	$(FEFAS_COMPILE.c) $(abspath $<) -o $@
+$(OBJDIR)/%.o: $(SRCDIR)/%.c | $$(@D)/.DIR
+	$(FEFAS_COMPILE.c) $< -o $@
 
-test : $(fefas)
-	make -C test PETSC_ARCH=${PETSC_ARCH} all
+test: test-fe
+
+test-fe : $(fefas)
+	make -C "$(SRCDIR)/finite-element/test" PETSC_DIR="$(PETSC_DIR)" PETSC_ARCH="$(PETSC_ARCH)" FEFAS_BINDIR="$(abspath $(BINDIR))" all
 
 %/.DIR :
 	@mkdir -p $(@D)
@@ -83,7 +85,7 @@ test : $(fefas)
 
 .PRECIOUS: %/.DIR
 
-.PHONY: all clean print fefas libfefas test
+.PHONY: all clean print fefas libfefas test test-fe
 
 clean:
 	rm -rf $(OBJDIR) $(LIBDIR) $(BINDIR)

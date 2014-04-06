@@ -8,3 +8,5 @@ fefas-y.c += $(call thisdir, \
 
 $(register.c) : $(genregister) $(op-impls.c) | $$(@D)/.DIR
 	$(PYTHON) $(genregister) $@ $(op-impls.c)
+
+$(OBJDIR)/register.o : CFLAGS += -I$(call thisdir,..)
