@@ -36,6 +36,15 @@ else
   cc_name := CC
 endif
 
+# Detect HBM performance counting on ALCF Blue Gene/Q machines
+CONFIG_HBM := $(shell test -f /soft/perftools/hpctw/lib/libmpihpm.a -a -f /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a && echo y || true)
+ifeq ($(CONFIG_HBM),y)
+  CCPPFLAGS += -DCONFIG_HBM
+  FEFAS_LDLIBS += /soft/perftools/hpctw/lib/libmpihpm.a /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a
+endif
+
+CONFIG_XLCOMPILER := $(if $(findstring IBM XL,$(shell $(CC) -qversion)),y,,)
+
 libfefas = $(LIBDIR)/libfefas.$(AR_LIB_SUFFIX)
 libfefas : $(libfefas)
 $(libfefas) : $(libfefas-y.c:%.c=$(OBJDIR)/%.o)
@@ -49,7 +58,7 @@ C_DEPFLAGS ?= -MMD -MP
 
 # GCC-style syntax for C99.  Use "make C99FLAGS=-qlanglvl=extc99" or similar
 # on systems that use different syntax to specify C99.
-C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(CFLAGS)),,-std=c99)
+C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(CFLAGS)),,$(if $(CONFIG_XLCOMPILER),-qlanglvl=extc99,-std=c99))
 
 FEFAS_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLAGS) $(CFLAGS) $(C_DEPFLAGS)
 
@@ -57,7 +66,7 @@ fefas = $(BINDIR)/fefas
 fefas : $(fefas)
 fefas-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(fefas-y.c))) $(patsubst %.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(fefas-y.c)))
 $(BINDIR)/fefas : $(fefas-y.o) | $$(@D)/.DIR
-	$(call quiet,CLINKER) -o $@ $^ $(PETSC_SNES_LIB) $(LIBZ_LIB)
+	$(call quiet,CLINKER) -o $@ $^ $(LDLIBS) $(FEFAS_LDLIBS) $(PETSC_SNES_LIB) $(LIBZ_LIB)
 
 $(OBJDIR)/%.o: $(OBJDIR)/%.c
 	$(FEFAS_COMPILE.c) -I. $(abspath $<) -o $@

@@ -124,6 +124,9 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   MG mg;
   PetscReal L[3];
   PetscBool affine;
+#ifdef CONFIG_HBM
+  char eventname[256];
+#endif
 
   PetscFunctionBegin;
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
@@ -156,6 +159,10 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   ierr = MGMonitorSet(mg,monitor);CHKERRQ(ierr);
   ierr = MGSetUpPC(mg);CHKERRQ(ierr);
 
+#ifdef CONFIG_HBM
+  ierr = PetscSNPrintf(eventname,sizeof eventname,"Solve G[%D %D %D]",M[0],M[1],M[2]);CHKERRQ(ierr);
+  HPM_Start(eventname);
+#endif
   for (PetscInt i=0; i<nrepeat; i++) {
     PetscLogDouble t0,t1,elapsed,flops,eqs;
     ierr = VecZeroEntries(U);CHKERRQ(ierr);
@@ -171,6 +178,9 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
     eqs = (double)(M[0]*fedegree+1)*(M[1]*fedegree+1)*(M[2]*fedegree+1)*dof;
     ierr = PetscPrintf(comm,"Q%D G[%4D%4D%4D] P[%3D%3D%3D] %10.3e s  %10f GF  %10f MEq/s\n",fedegree,M[0],M[1],M[2],pgrid[0],pgrid[1],pgrid[2],t1-t0,flops/elapsed*1e-9,eqs/elapsed*1e-6);CHKERRQ(ierr);
   }
+#ifdef CONFIG_HBM
+  HPM_Stop(eventname);
+#endif
 
   if (memory) {ierr = PetscMemoryGetCurrentUsage(memory);CHKERRQ(ierr);}
   ierr = MGDestroy(&mg);CHKERRQ(ierr);
