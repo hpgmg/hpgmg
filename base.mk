@@ -13,6 +13,7 @@ INCDIR ?= include
 # makefile (current) if that derictory is not ./
 thisdir = $(addprefix $(dir $(lastword $(MAKEFILE_LIST))),$(1))
 incsubdirs = $(addsuffix /local.mk,$(call thisdir,$(1)))
+srctoobj = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(1)))
 
 hpgmg-fe-y.c :=
 hpgmg-fv-y.c :=
@@ -61,13 +62,13 @@ HPGMG_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) -I$(INCDI
 
 hpgmg-fe = $(BINDIR)/hpgmg-fe
 hpgmg-fe : $(hpgmg-fe)
-hpgmg-fe-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(hpgmg-fe-y.c))) $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(hpgmg-fe-y.c)))
+hpgmg-fe-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(hpgmg-fe-y.c))) $(call srctoobj,$(hpgmg-fe-y.c))
 $(BINDIR)/hpgmg-fe : $(hpgmg-fe-y.o) | $$(@D)/.DIR
 	$(call quiet,CLINKER) -o $@ $^ $(LDLIBS) $(HPGMG_LDLIBS) $(PETSC_SNES_LIB) $(LIBZ_LIB)
 
 hpgmg-fv = $(BINDIR)/hpgmg-fv
 hpgmg-fv : $(hpgmg-fv)
-hpgmg-fv-y.o := $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(hpgmg-fv-y.c)))
+hpgmg-fv-y.o := $(call srctoobj,$(hpgmg-fv-y.c))
 $(BINDIR)/hpgmg-fv : $(hpgmg-fv-y.o) | $$(@D)/.DIR
 	$(call quiet,CLINKER) -o $@ $^ $(HPGMG_LDFLAGS) $(LDLIBS) $(HPGMG_LDLIBS) $(LDLIBS) -lm
 
@@ -97,8 +98,8 @@ clean:
 print:
 	@echo $($(VAR))
 
-srcs.c := $(hpgmg-fe-y.c)
-srcs.o := $(srcs.c:%.c=$(OBJDIR)/%.o)
+srcs.c := $(hpgmg-fe-y.c) $(hpgmg-fv-y.c)
+srcs.o := $(call srctoobj,$(srcs.c))
 srcs.d := $(srcs.o:%.o=%.d)
 # Tell make that srcs.d are all up to date.  Without this, the include
 # below has quadratic complexity, taking more than one second for a
