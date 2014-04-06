@@ -155,9 +155,18 @@ int create_box(box_type *box, int numComponents, int dim, int ghosts){
   box->numComponents = numComponents;
   box->dim = dim;
   box->ghosts = ghosts;
-  box->jStride = (dim+2*ghosts);                // pencil... could pad to ensure j+/-1 is aligned
-  box->kStride = (dim+2*ghosts)*(dim+2*ghosts); // plane
+  #ifndef __SIMD_ALIGNMENT
+  #define __SIMD_ALIGNMENT 1 // allignment requirement for j+/-1
+  #endif
+  box->jStride = (dim+2*ghosts);while(box->jStride % __SIMD_ALIGNMENT)box->jStride++; // pencil
+  #ifndef __PLANE_PADDING
+  #define __PLANE_PADDING 32 // scratch space to avoid unrolled loop cleanup
+  #endif
+  box->kStride = box->jStride*(dim+2*ghosts); // plane
+  if(box->jStride<__PLANE_PADDING)box->kStride += (__PLANE_PADDING-box->jStride); // allow the ghost zone to be clobbered...
+  while(box->kStride % __SIMD_ALIGNMENT)box->kStride++;
 
+  #if 0
   // pad each plane such that 
   //   1. it is greater than a multiple of the maximum unrolling (or vector length)
   //   2. it carries the same alignement as the plane above/below.   i.e.  if ijk is aligned, ijkk+/-plane is aligned
@@ -170,6 +179,7 @@ int create_box(box_type *box, int numComponents, int dim, int ghosts){
   box->kStride  =( ((dim+2*ghosts)*box->jStride)+paddingToAvoidStencilCleanup+0x7) & ~0x7; // multiple of   64 bytes (required for MIC)
 //box->kStride  =( ((dim+2*ghosts)*box->jStride)+paddingToAvoidStencilCleanup+0x3) & ~0x3; // multiple of   32 bytes (required for AVX/QPX)
 //box->kStride  =( ((dim+2*ghosts)*box->jStride)+paddingToAvoidStencilCleanup+0x1) & ~0x1; // multiple of   16 bytes (required for SSE)
+  #endif
   box->volume = (dim+2*ghosts)*box->kStride;
 
 
@@ -177,10 +187,12 @@ int create_box(box_type *box, int numComponents, int dim, int ghosts){
   box->components = (double **)malloc(box->numComponents*sizeof(double*));
                   memory_allocated += box->numComponents*sizeof(double*);
   // allocate one aligned, double-precision array and divide it among components...
-  double * tmpbuf;
-  posix_memalign((void**)&tmpbuf,64,box->volume*box->numComponents*sizeof(double));
-                    memset(tmpbuf,0,box->volume*box->numComponents*sizeof(double)); // zero to avoid 0.0*NaN or 0.0*Inf
-                memory_allocated += box->volume*box->numComponents*sizeof(double);
+  uint64_t malloc_size = box->volume*box->numComponents*sizeof(double) + 4096; // shift pointer by up to 1 TLB page...
+  box->components_base = (double*)malloc(malloc_size);
+                     memory_allocated += malloc_size;
+  double * tmpbuf = box->components_base;
+  while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (4096-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
+  memset(tmpbuf,0,box->volume*box->numComponents*sizeof(double)); // zero to avoid 0.0*NaN or 0.0*Inf
   int c;for(c=0;c<box->numComponents;c++){box->components[c] = tmpbuf + c*box->volume;}
 
 
@@ -192,24 +204,27 @@ int create_box(box_type *box, int numComponents, int dim, int ghosts){
 //------------------------------------------------------------------------------------------------------------------------------
 void add_components_to_box(box_type *box, int numAdditionalComponents){
   if(numAdditionalComponents<=0)return;									// nothing to do
-  double * old_c0 = box->components[0];									// save a pointer to the old array
-  double ** old_c = box->components;									// save a pointer to the old array
+  double * old_bp = box->components_base;								// save a pointer to the base pointer for subsequent free...
+  double * old_c0 = box->components[0];									// save a pointer to the old FP data...
+  double ** old_c = box->components;									// save a pointer to the old array of pointers...
   box->numComponents+=numAdditionalComponents;								//
-  box->components = (double **)malloc(box->numComponents*sizeof(double*));				// malloc the pointers to components
-  double * tmpbuf;											//
-  // NOTE !!! realloc() cannot guarantee the same alignment... aligned malloc followed by a copy...
-  posix_memalign((void**)&tmpbuf,64,box->volume*box->numComponents*sizeof(double));			// one big malloc to hold all components...
-                    memset(tmpbuf,0,box->volume*box->numComponents*sizeof(double));			// zero to avoid 0.0*NaN or 0.0*Inf
+  box->components = (double **)malloc(box->numComponents*sizeof(double*));				// new array of pointers components
+  // NOTE !!! realloc() cannot guarantee the same alignment... malloc, allign, copy...
+  uint64_t malloc_size = box->volume*box->numComponents*sizeof(double) + 4096; // shift pointer by up to 1 TLB page...
+  box->components_base = (double*)malloc(malloc_size);
+  double * tmpbuf = box->components_base;
+  while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (4096-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
+  memset(tmpbuf,0,box->volume*box->numComponents*sizeof(double));	// zero to avoid 0.0*NaN or 0.0*Inf
   memcpy(tmpbuf,old_c0,box->volume*(box->numComponents-numAdditionalComponents)*sizeof(double));	// copy any existant data over...
   int c;for(c=0;c<box->numComponents;c++){box->components[c] = tmpbuf + c*box->volume;}			// pointer arithmetic...
-  free(old_c0);												// all components were created from one malloc + pointer arithmetic...
+  free(old_bp);												// all components were created from one malloc + pointer arithmetic...
   free(old_c );												// free the list of pointers...
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void destroy_box(box_type *box){
-  free(box->components[0]); // single allocate with pointer arithmetic...
+  free(box->components_base); // single allocate with pointer arithmetic...
   free(box->components);
 }
 

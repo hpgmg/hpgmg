@@ -54,6 +54,7 @@ typedef struct {
   int                jStride,kStride,volume;	// useful for offsets
   int                         numComponents;	//
   double   ** __restrict__       components;	// components[c] = pointer to 3D array for component c
+  double    * __restrict__  components_base;    // pointer used for malloc/free.  components[c] are shifted from this for alignment
 } box_type;
 
 
