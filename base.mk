@@ -32,11 +32,6 @@ else ifeq ($(V),0)		# Same, but do not print any help
 else				# Show the full command line
   quiet = $($1)
 endif
-ifeq ($(PETSC_LANGUAGE),CXXONLY)
-  cc_name := CXX
-else
-  cc_name := CC
-endif
 
 # Detect HBM performance counting on ALCF Blue Gene/Q machines
 CONFIG_HBM := $(shell test -f /soft/perftools/hpctw/lib/libmpihpm.a -a -f /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a && echo y || true)
@@ -58,7 +53,7 @@ C_DEPFLAGS ?= -MMD -MP
 # on systems that use different syntax to specify C99.
 C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(HPGMG_CFLAGS) $(CFLAGS)),,$(if $(CONFIG_XLCOMPILER),-qlanglvl=extc99,-std=c99))
 
-HPGMG_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
+HPGMG_COMPILE.c = $(call quiet,CC) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
 HPGMG_LINK = $(call quiet,CCLD) $(HPGMG_CFLAGS) $(CFLAGS) $(HPGMG_LDFLAGS) $(LDFLAGS) -o $@
 CC ?= $(HPGMG_CC)
 CCLD = $(if $(CLINKER),$(CLINKER),$(HPGMG_CC))
