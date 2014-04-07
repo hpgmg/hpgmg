@@ -18,7 +18,7 @@ srctoobj = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(1))
 hpgmg-fe-y.c :=
 hpgmg-fv-y.c :=
 
-all : hpgmg-fe hpgmg-fv
+all : hpgmg-fe $(if $(CONFIG_FV),hpgmg-fv)
 
 # Recursively include files for all targets
 include $(SRCDIR)/local.mk

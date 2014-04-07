@@ -19,6 +19,7 @@ def main():
     cf.add_argument('--LDFLAGS', help='Flags to pass to linker', default='')
     cf.add_argument('--LDLIBS', help='Libraries to pass to linker', default='')
     fv = parser.add_argument_group('Finite Volume options')
+    fv.add_argument('--no-fv', action='store_false', dest='fv', help='Do not build the Finite-Volume solver')
     fv.add_argument('--fv-mpi', action='store_true', help='Use MPI', default=True)
     fv.add_argument('--fv-cycle', help='Use U-, V-, or F-cycles', default='F', type=str)
     fv.add_argument('--fv-bicgstab', action='store_true', help='Use BiCGStab as a bottom (coarse grid) solver', default=False)
@@ -48,8 +49,9 @@ def configure(args):
             'PETSC_ARCH = %s' % args.petsc_arch,
             'PYTHON = %s' % sys.executable,
             'SRCDIR = %s' % os.path.abspath(os.path.dirname(__name__)),
-            'CONFIG_X86 = %s' % ('y' if args.fv_timer == 'x86' else 'n'),
-            'CONFIG_BGQ = %s' % ('y' if args.fv_timer == 'bgq' else 'n'),
+            'CONFIG_FV = %s' % ('y' if args.fv else ''),
+            'CONFIG_X86 = %s' % ('y' if args.fv_timer == 'x86' else ''),
+            'CONFIG_BGQ = %s' % ('y' if args.fv_timer == 'bgq' else ''),
             'include $(PETSC_DIR)/conf/variables',
             'include $(SRCDIR)/base.mk',
         ]))
