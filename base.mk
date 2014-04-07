@@ -59,6 +59,7 @@ C_DEPFLAGS ?= -MMD -MP
 C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(HPGMG_CFLAGS) $(CFLAGS)),,$(if $(CONFIG_XLCOMPILER),-qlanglvl=extc99,-std=c99))
 
 HPGMG_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) -I$(INCDIR) $(CCPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
+CLINKER ?= $(HPGMG_CC)
 
 hpgmg-fe = $(BINDIR)/hpgmg-fe
 hpgmg-fe : $(hpgmg-fe)

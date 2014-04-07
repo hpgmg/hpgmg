@@ -39,22 +39,22 @@ def configure(args):
     mkdir_p(os.path.join(args.arch, 'include'))
     with open(os.path.join(args.arch, 'include', 'hpgmgconf.h'), 'w') as f:
         f.write(hpgmgconf_h(args))
-        open(os.path.join(args.arch,'Makefile'), 'w').write('\n'.join([
-            'HPGMG_ARCH = %s' % args.arch,
-            'HPGMG_CC = %s' % args.CC,
-            'HPGMG_CFLAGS = %s' % args.CFLAGS,
-            'HPGMG_LDFLAGS = %s' % args.LDFLAGS,
-            'HPGMG_LDLIBS = %s' % args.LDLIBS,
-            'PETSC_DIR = %s' % args.petsc_dir,
-            'PETSC_ARCH = %s' % args.petsc_arch,
-            'PYTHON = %s' % sys.executable,
-            'SRCDIR = %s' % os.path.abspath(os.path.dirname(__name__)),
-            'CONFIG_FV = %s' % ('y' if args.fv else ''),
-            'CONFIG_X86 = %s' % ('y' if args.fv_timer == 'x86' else ''),
-            'CONFIG_BGQ = %s' % ('y' if args.fv_timer == 'bgq' else ''),
-            'include $(PETSC_DIR)/conf/variables',
-            'include $(SRCDIR)/base.mk',
-        ]))
+    open(os.path.join(args.arch,'Makefile'), 'w').write('\n'.join([
+        'HPGMG_ARCH = %s' % args.arch,
+        'HPGMG_CC = %s' % args.CC,
+        'HPGMG_CFLAGS = %s' % args.CFLAGS,
+        'HPGMG_LDFLAGS = %s' % args.LDFLAGS,
+        'HPGMG_LDLIBS = %s' % args.LDLIBS,
+        'PETSC_DIR = %s' % args.petsc_dir,
+        'PETSC_ARCH = %s' % args.petsc_arch,
+        'PYTHON = %s' % sys.executable,
+        'SRCDIR = %s' % os.path.abspath(os.path.dirname(__name__)),
+        'CONFIG_FV = %s' % ('y' if args.fv else ''),
+        'CONFIG_X86 = %s' % ('y' if args.fv_timer == 'x86' else ''),
+        'CONFIG_BGQ = %s' % ('y' if args.fv_timer == 'bgq' else ''),
+        ('# ' if not args.petsc_dir else '') + 'include $(PETSC_DIR)/conf/variables',
+        'include $(SRCDIR)/base.mk',
+    ]))
     reconfname = os.path.join(args.arch,'reconfigure-%s.py' % args.arch)
     open(reconfname, 'w').write('\n'.join([
                 '#!'+sys.executable,
