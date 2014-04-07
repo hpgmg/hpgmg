@@ -59,19 +59,20 @@ C_DEPFLAGS ?= -MMD -MP
 C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(HPGMG_CFLAGS) $(CFLAGS)),,$(if $(CONFIG_XLCOMPILER),-qlanglvl=extc99,-std=c99))
 
 HPGMG_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) -I$(INCDIR) $(CCPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
-CLINKER ?= $(HPGMG_CC)
+HPGMG_LINK = $(call quiet,CCLD) $(HPGMG_CFLAGS) $(CFLAGS) $(HPGMG_LDFLAGS) $(LDFLAGS) -o $@
+CCLD = $(if $(CLINKER),$(CLINKER),$(HPGMG_CC))
 
 hpgmg-fe = $(BINDIR)/hpgmg-fe
 hpgmg-fe : $(hpgmg-fe)
 hpgmg-fe-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(hpgmg-fe-y.c))) $(call srctoobj,$(hpgmg-fe-y.c))
 $(BINDIR)/hpgmg-fe : $(hpgmg-fe-y.o) | $$(@D)/.DIR
-	$(call quiet,CLINKER) -o $@ $^ $(LDLIBS) $(HPGMG_LDLIBS) $(PETSC_SNES_LIB) $(LIBZ_LIB)
+	$(HPGMG_LINK) $^ $(HPGMG_LDLIBS) $(LDLIBS) $(PETSC_SNES_LIB)
 
 hpgmg-fv = $(BINDIR)/hpgmg-fv
 hpgmg-fv : $(hpgmg-fv)
 hpgmg-fv-y.o := $(call srctoobj,$(hpgmg-fv-y.c))
 $(BINDIR)/hpgmg-fv : $(hpgmg-fv-y.o) | $$(@D)/.DIR
-	$(call quiet,CLINKER) -o $@ $^ $(HPGMG_LDFLAGS) $(LDLIBS) $(HPGMG_LDLIBS) $(LDLIBS) -lm
+	$(HPGMG_LINK) $^ $(HPGMG_LDLIBS) $(LDLIBS) -lm
 
 $(OBJDIR)/%.o: $(OBJDIR)/%.c
 	$(HPGMG_COMPILE.c) $< -o $@
