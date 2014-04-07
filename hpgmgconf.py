@@ -14,11 +14,12 @@ def main():
     parser.add_argument('--arch', help='Name of this configuration', default=None)
     parser.add_argument('--petsc-dir', help='PETSC_DIR', default=os.environ.get('PETSC_DIR',''))
     parser.add_argument('--petsc-arch', help='PETSC_ARCH', default=os.environ.get('PETSC_ARCH',''))
+    parser.add_argument('--with-hbm', help='Use libHBM profiling library on Blue Gene')
     cf = parser.add_argument_group('Compilers and flags')
-    cf.add_argument('--CC', help='Path to C compiler', default='mpicc')
-    cf.add_argument('--CFLAGS', help='Flags for C compiler', default='-Wall')
-    cf.add_argument('--LDFLAGS', help='Flags to pass to linker', default='')
-    cf.add_argument('--LDLIBS', help='Libraries to pass to linker', default='')
+    cf.add_argument('--CC', help='Path to C compiler', default=os.environ.get('CC',''))
+    cf.add_argument('--CFLAGS', help='Flags for C compiler', default=os.environ.get('CFLAGS',''))
+    cf.add_argument('--LDFLAGS', help='Flags to pass to linker', default=os.environ.get('LDFLAGS',''))
+    cf.add_argument('--LDLIBS', help='Libraries to pass to linker', default=os.environ.get('LDLIBS',''))
     fv = parser.add_argument_group('Finite Volume options')
     fv.add_argument('--no-fv', action='store_false', dest='fv', help='Do not build the Finite-Volume solver')
     fv.add_argument('--fv-mpi', action='store_true', help='Use MPI', default=True)
@@ -51,8 +52,12 @@ def configure(args):
     print('To build: make -j3 -C %s' % args.arch)
 
 def makefile(args):
+    if args.petsc_dir and not args.CC:
+        CC = '$(PCC)'
+    else:
+        CC = args.CC
     m = ['HPGMG_ARCH = %s' % args.arch,
-        'HPGMG_CC = %s' % args.CC,
+        'HPGMG_CC = %s' % CC,
         'HPGMG_CFLAGS = %s' % args.CFLAGS,
         'HPGMG_LDFLAGS = %s' % args.LDFLAGS,
         'HPGMG_LDLIBS = %s' % args.LDLIBS,
@@ -60,6 +65,17 @@ def makefile(args):
         'PETSC_ARCH = %s' % args.petsc_arch,
         'PYTHON = %s' % sys.executable,
         'SRCDIR = %s' % os.path.abspath(os.path.dirname(__name__)),]
+    if args.petsc_dir:
+        m.append('HPGMG_CFLAGS += $(PCC_FLAGS) $(CCPPFLAGS)')
+    if args.with_hbm:
+        m.append('CONFIG_HBM = y')
+        hbm_lib = args.with_hbm
+        if not isinstance(hbm_lib,str): # ALCF location
+            hbm_lib = '/soft/perftools/hpctw/lib/libmpihpm.a /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a'
+        for p in hbm_lib.split():
+            assert os.path.exists(p), "HBM path '%s' not found" % p
+        m.append('HPGMG_LDLIBS += ' + hbm_lib)
+        m.append('HPGMG_CPPFLAGS += -DCONFIG_HBM')
     if args.fv:
         m.append('CONFIG_FV = y')
     if args.petsc_dir:

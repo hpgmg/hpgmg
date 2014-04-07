@@ -33,13 +33,6 @@ else				# Show the full command line
   quiet = $($1)
 endif
 
-# Detect HBM performance counting on ALCF Blue Gene/Q machines
-CONFIG_HBM := $(shell test -f /soft/perftools/hpctw/lib/libmpihpm.a -a -f /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a && echo y || true)
-ifeq ($(CONFIG_HBM),y)
-  CCPPFLAGS += -DCONFIG_HBM
-  HPGMG_LDLIBS += /soft/perftools/hpctw/lib/libmpihpm.a /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a
-endif
-
 CONFIG_XLCOMPILER := $(if $(findstring IBM XL,$(shell $(CC) -qversion 2>/dev/null || true)),y,)
 
 %.$(AR_LIB_SUFFIX) : | $$(@D)/.DIR
@@ -53,9 +46,9 @@ C_DEPFLAGS ?= -MMD -MP
 # on systems that use different syntax to specify C99.
 C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(HPGMG_CFLAGS) $(CFLAGS)),,$(if $(CONFIG_XLCOMPILER),-qlanglvl=extc99,-std=c99))
 
-HPGMG_COMPILE.c = $(call quiet,CC) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
+HPGMG_COMPILE.c = $(call quiet,CC) -c $(C99FLAGS) $(HPGMG_CPPFLAGS) $(CPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
 HPGMG_LINK = $(call quiet,CCLD) $(HPGMG_CFLAGS) $(CFLAGS) $(HPGMG_LDFLAGS) $(LDFLAGS) -o $@
-CC ?= $(HPGMG_CC)
+CC = $(HPGMG_CC)
 CCLD = $(if $(CLINKER),$(CLINKER),$(HPGMG_CC))
 
 hpgmg-fe = $(BINDIR)/hpgmg-fe
