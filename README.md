@@ -12,14 +12,20 @@ the second coarsening 6 times, etc.
 # HPGMG-FV: Finite Volume solver
 
 The finite-volume solver uses cell-centered methods with constant or
-variable coefficients.
+variable coefficients.  This implementation requires OpenMP and cannot
+be configured at run-time.  See `./configure --help` for configuration
+options.  Be sure to pass suitable OpenMP flags, e.g.,
 
-TODO: explain method and installation
+    $ ./configure CC=/path/to/mpicc --CFLAGS=-fopenmp
+
+The finite volume solver can be disabled by configuring with `--no-fv`.
 
 # HPGMG-FE: Finite Element FAS solver
 
-The finite-element solver has higher arithmetic intensity due to
-quadrature, metric terms, and higher approximation order.
+The finite-element full approximation scheme (FAS) solver has higher
+arithmetic intensity due to quadrature, metric terms, and higher
+approximation order.  HPGMG-FE configuration is via run-time options
+described below.
 
 ## Installation
 
