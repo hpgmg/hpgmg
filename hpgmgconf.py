@@ -80,6 +80,8 @@ def makefile(args):
         'SRCDIR = %s' % os.path.abspath(os.path.dirname(__name__)),]
     if args.fv:
         m.append('CONFIG_FV = y')
+    if args.petsc_dir:
+        m.append('CONFIG_FE = y')
     m.append('CONFIG_TIMER_%s = y' % args.fv_timer.upper())
     if args.petsc_dir:
         m.append('include $(PETSC_DIR)/conf/variables')
