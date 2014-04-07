@@ -9,7 +9,6 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
-#include <hpgmgconf.h>
 #include "defines.h"
 #include "level.h"
 #include "operators.h"

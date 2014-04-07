@@ -36,9 +36,6 @@ def main():
     configure(args)
 
 def configure(args):
-    mkdir_p(os.path.join(args.arch, 'include'))
-    with open(os.path.join(args.arch, 'include', 'hpgmgconf.h'), 'w') as f:
-        f.write(hpgmgconf_h(args))
     open(os.path.join(args.arch,'Makefile'), 'w').write(makefile(args))
     reconfname = os.path.join(args.arch,'reconfigure-%s.py' % args.arch)
     open(reconfname, 'w').write('\n'.join([
@@ -52,21 +49,6 @@ def configure(args):
     os.chmod(reconfname,0o755)
     print('Configuration complete in: %s' % os.path.realpath(args.arch))
     print('To build: make -j3 -C %s' % args.arch)
-
-def hpgmgconf_h(args):
-    defines = []
-    if args.fv_mpi:
-        defines.append('MPI')
-    defines.append('USE_%s' % args.fv_coarse_solver.upper())
-    if args.fv_subcomm:
-        defines.append('USE_SUBCOMM')
-    defines.append('USE_%sCYCLES' % args.fv_cycle.upper())
-    defines.append('USE_%s' % args.fv_smoother.upper())
-    return """#ifndef _hpgmgconf_h
-#define _hpgmgconf_h
-%s
-#endif
-""" % '\n'.join('#define __%s 1'%d for d in defines)
 
 def makefile(args):
     m = ['HPGMG_ARCH = %s' % args.arch,
@@ -83,7 +65,19 @@ def makefile(args):
     if args.petsc_dir:
         m.append('CONFIG_FE = y')
     m.append('CONFIG_TIMER_%s = y' % args.fv_timer.upper())
+    m.append('CONFIG_FV_CFLAGS = ' + hpgmg_fv_cflags(args))
     if args.petsc_dir:
         m.append('include $(PETSC_DIR)/conf/variables')
     m.append('include $(SRCDIR)/base.mk\n')
     return '\n'.join(m)
+
+def hpgmg_fv_cflags(args):
+    defines = []
+    if args.fv_mpi:
+        defines.append('MPI')
+    defines.append('USE_%s' % args.fv_coarse_solver.upper())
+    if args.fv_subcomm:
+        defines.append('USE_SUBCOMM')
+    defines.append('USE_%sCYCLES' % args.fv_cycle.upper())
+    defines.append('USE_%s' % args.fv_smoother.upper())
+    return ' '.join('-D__%s=1'%d for d in defines)

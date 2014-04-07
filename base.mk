@@ -58,8 +58,9 @@ C_DEPFLAGS ?= -MMD -MP
 # on systems that use different syntax to specify C99.
 C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(HPGMG_CFLAGS) $(CFLAGS)),,$(if $(CONFIG_XLCOMPILER),-qlanglvl=extc99,-std=c99))
 
-HPGMG_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) -I$(INCDIR) $(CCPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
+HPGMG_COMPILE.c = $(call quiet,$(cc_name)) -c $(C99FLAGS) $(PCC_FLAGS) $(CCPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
 HPGMG_LINK = $(call quiet,CCLD) $(HPGMG_CFLAGS) $(CFLAGS) $(HPGMG_LDFLAGS) $(LDFLAGS) -o $@
+CC ?= $(HPGMG_CC)
 CCLD = $(if $(CLINKER),$(CLINKER),$(HPGMG_CC))
 
 hpgmg-fe = $(BINDIR)/hpgmg-fe
@@ -71,6 +72,7 @@ $(BINDIR)/hpgmg-fe : $(hpgmg-fe-y.o) | $$(@D)/.DIR
 hpgmg-fv = $(BINDIR)/hpgmg-fv
 hpgmg-fv : $(hpgmg-fv)
 hpgmg-fv-y.o := $(call srctoobj,$(hpgmg-fv-y.c))
+$(hpgmg-fv-y.o) : CFLAGS += $(CONFIG_FV_CFLAGS)
 $(BINDIR)/hpgmg-fv : $(hpgmg-fv-y.o) | $$(@D)/.DIR
 	$(HPGMG_LINK) $^ $(HPGMG_LDLIBS) $(LDLIBS) -lm
 
