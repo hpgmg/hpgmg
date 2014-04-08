@@ -63,26 +63,32 @@ Although no make file currently exists, compilation is straightforward.
 
 There are a few basic arguments that should be used.  Most are selfexplanatory.  
 
--D__MPI                                 // compiles the distributed (MPI) version
--D__USE_BICGSTAB                        // use BiCGStab as a bottom (coarse grid) solver
--D__USE_SUBCOMM				// build a subcommunicator for each level in the MG v-cycle to minimize the scope of MPI_AllReduce()
+-DUSE_MPI		// compiles the distributed (MPI) version
+-DUSE_BICGSTAB		// use BiCGStab as a bottom (coarse grid) solver
+-DUSE_CABICGSTAB	// use CABiCGStab as a bottom (coarse grid) solver (makes more sense with U-Cycles)
+-DUSE_SUBCOMM		// build a subcommunicator for each level in the MG v-cycle to minimize the scope of MPI_AllReduce()
 
--D__USE_UCYCLES                         // use truncated V-Cycles (U-Cycles) in the multigrid solver
--D__USE_VCYCLES                         // use true distributed V-Cycles in the multigrid solver
--D__USE_FCYCLES                         // use the Full Multigrid (FMG) solver.  Note, the choice of FMG is orthogonal from U-Cycles and V-Cycles
+-DUSE_FCYCLES		// use the Full Multigrid (FMG) solver... HPGMG benchmark should include this option
+			// note, the choice of FMG is orthogonal from U-Cycles and V-Cycles
+-DUSE_VCYCLES		// use true distributed V-Cycles in the multigrid solver... this is the suggested option
+-DUSE_UCYCLES		// use truncated V-Cycles (U-Cycles) in the multigrid solver... a legacy option for understanding the performance implications
 
--D__USE_CHEBY				// use a Chebyshev Polynomial smoother (degree is specified with __CHEBYSHEV_DEGREE)
--D__USE_GSRB				// use the GSRB smoother (the number of pre/posts smooths is specified by __NUM_SMOOTHS)
--D__USE_JACOBI				// use a weighted Jacobi smoother with a weight of 2/3
--D__USE_L1JACOBI			// use a L1 Jacobi smoother (each row's weight is the L1 norm of that row)
+-DUSE_CHEBY		// use a Chebyshev Polynomial smoother (degree is specified with CHEBYSHEV_DEGREE)
+-DUSE_GSRB		// use the GSRB smoother (the number of pre/posts smooths is specified by NUM_SMOOTHS)
+-DUSE_JACOBI		// use a weighted Jacobi smoother with a weight of 2/3
+-DUSE_L1JACOBI		// use a L1 Jacobi smoother (each row's weight is the L1 norm of that row)
+
+-DSTENCIL_FUSE_DINV	// recompute the inverse of the diagonal on the fly (more flops including a divide, but eliminates an array)
+-DSTENCIL_FUSE_BC  	// recompute the inverse of the diagonal on the fly (more flops including a divide, but eliminates an array)
+
 
 
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
-cc -O3 -fno-alias -fno-fnalias -xAVX -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.x86.c -D__MPI  -D__USE_SUBCOMM -D__USE_FCYCLES -D__USE_CHEBY -D__USE_BICGSTAB -o run.avx
+cc -O3 -fno-alias -fno-fnalias -xAVX -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.omp.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.avx
 
 On Mira (an IBM BlueGene/Q), one can use the following...
 soft add +mpiwrapper-xl
-mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.bgq.c -D__MPI -D__USE_FCYCLES -D__USE_CHEBY -D__USE_BICGSTAB -o run.bgq
+mpixlc_r -O5 -qsmp=omp:noauto                level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.omp.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.bgq
 
 
 

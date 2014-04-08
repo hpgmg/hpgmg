@@ -23,6 +23,9 @@ copies to the public, perform publicly and display publicly, and to
 permit others to do so.
 ****************************
 
-This directory contains both the current HPGMG benchmark.
-Additionally, there are CPU and CUDA versions of the older miniGMG benchmark.
+This directory contains both the current HPGMG benchmark as well as
+CPU and CUDA versions of the older miniGMG benchmark.
+
+Please see source/README for details on how to compiler, run, 
+optimize, and examine the output of the hpgmg finite-volume benchmark.
 

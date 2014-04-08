@@ -9,12 +9,12 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
-#ifdef __MPI
+#ifdef USE_MPI
 #include <mpi.h>
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-#define __BC_PERIODIC  0
-#define __BC_DIRICHLET 1
+#define BC_PERIODIC  0
+#define BC_DIRICHLET 1
 //------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
   struct {int i, j, k;}dim;			// dimensions of the block to copy
@@ -38,7 +38,7 @@ typedef struct {
     double ** __restrict__     send_buffers;	//   MPI send buffer for each neighbor...  send_buffers[neighbor][ send_sizes[neighbor] ]
     int                       num_blocks[3];	//   number of blocks in each list...  num_blocks[pack,local,unpack]
     blockCopy_type *              blocks[3];	//   list of block copies...               blocks[pack,local,unpack]
-    #ifdef __MPI
+    #ifdef USE_MPI
     MPI_Request * __restrict__     requests;
     MPI_Status  * __restrict__       status;
     #endif
@@ -76,7 +76,7 @@ typedef struct {
   communicator_type exchange_ghosts[2];		// mini program that performs a neighbor ghost zone exchange for [0=all,1=justFaces]
   communicator_type restriction;		// mini program that performs restriction and agglomeration...
   communicator_type interpolation;		// mini program that performs interpolation and dissemination...
-  #ifdef __MPI
+  #ifdef USE_MPI
   MPI_Comm MPI_COMM_LEVEL;			// MPI sub communicator for just the ranks that have boxes on this level or any subsequent level... 
   #endif
   double dominant_eigenvalue_of_DinvA;		// estimate on the dominate eigenvalue of D^{-1}A
@@ -138,5 +138,6 @@ void add_components_to_box(box_type *box, int numAdditionalComponents);
 void destroy_box(box_type *box);
 void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_components, int domain_boundary_condition, int MPI_Rank, int MPI_Tasks);
 void destroy_level(level_type *level);
+void reset_level_timers(level_type *level);
 int qsortInt(const void *a, const void *b);
 //------------------------------------------------------------------------------------------------------------------------------

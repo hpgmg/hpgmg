@@ -1,4 +1,3 @@
-- calculate Dinv on the fly
 - subdivide ghost zone exchange block copies to increase (easy) thread-parallelism
 - more efficient ghost zone exchange (box intersection algebra) when communicating edges and corners
 - communication-avoiding smoothers (wavefront, simdized)

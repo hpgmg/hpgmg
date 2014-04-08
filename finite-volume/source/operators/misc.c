@@ -16,7 +16,7 @@ void zero_grid(level_type * level, int component_id){
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid = level->my_boxes[box].components[component_id] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
     for(k=-ghosts;k<dim+ghosts;k++){
     for(j=-ghosts;j<dim+ghosts;j++){
     for(i=-ghosts;i<dim+ghosts;i++){
@@ -40,14 +40,14 @@ void initialize_valid_region(level_type * level){
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ valid = level->my_boxes[box].components[__valid] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE
+    double * __restrict__ valid = level->my_boxes[box].components[STENCIL_VALID] + ghosts*(1+jStride+kStride);
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
     for(k=-ghosts;k<dim+ghosts;k++){
     for(j=-ghosts;j<dim+ghosts;j++){
     for(i=-ghosts;i<dim+ghosts;i++){
       int ijk = i + j*jStride + k*kStride;
       valid[ijk] = 1.0; // i.e. all cells including ghosts are valid for periodic BC's
-      if(level->domain_boundary_condition == __BC_DIRICHLET){ // cells outside the domain boundaries are not valid
+      if(level->domain_boundary_condition == BC_DIRICHLET){ // cells outside the domain boundaries are not valid
         if(i + level->my_boxes[box].low.i <             0)valid[ijk] = 0.0;
         if(j + level->my_boxes[box].low.j <             0)valid[ijk] = 0.0;
         if(k + level->my_boxes[box].low.k <             0)valid[ijk] = 0.0;
@@ -75,7 +75,7 @@ void initialize_grid_to_scalar(level_type * level, int component_id, double scal
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid = level->my_boxes[box].components[component_id] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
     for(k=-ghosts;k<dim+ghosts;k++){
     for(j=-ghosts;j<dim+ghosts;j++){
     for(i=-ghosts;i<dim+ghosts;i++){
@@ -104,7 +104,7 @@ void add_grids(level_type * level, int id_c, double scale_a, int id_a, double sc
     double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_b = level->my_boxes[box].components[id_b] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -132,7 +132,7 @@ void mul_grids(level_type * level, int id_c, double scale, int id_a, int id_b){ 
     double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_b = level->my_boxes[box].components[id_b] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -159,7 +159,7 @@ void invert_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -186,7 +186,7 @@ void scale_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]=
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -216,7 +216,7 @@ double dot(level_type * level, int id_a, int id_b){
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double * __restrict__ grid_b = level->my_boxes[box].components[id_b] + ghosts*(1+jStride+kStride);
     double a_dot_b_box = 0.0;
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(+:a_dot_b_box) schedule(static) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(+:a_dot_b_box) schedule(static) OMP_COLLAPSE
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -227,7 +227,7 @@ double dot(level_type * level, int id_a, int id_b){
   }
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 
-  #ifdef __MPI
+  #ifdef USE_MPI
   uint64_t _timeStartAllReduce = CycleTime();
   double send = a_dot_b_level;
   MPI_Allreduce(&send,&a_dot_b_level,1,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_LEVEL);
@@ -254,7 +254,7 @@ double norm(level_type * level, int component_id){ // implements the max norm
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid   = level->my_boxes[box].components[component_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double box_norm = 0.0;
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(max:box_norm) schedule(static) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(max:box_norm) schedule(static) OMP_COLLAPSE
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -266,7 +266,7 @@ double norm(level_type * level, int component_id){ // implements the max norm
   } // box list
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 
-  #ifdef __MPI
+  #ifdef USE_MPI
   uint64_t _timeStartAllReduce = CycleTime();
   double send = max_norm;
   MPI_Allreduce(&send,&max_norm,1,MPI_DOUBLE,MPI_MAX,level->MPI_COMM_LEVEL);
@@ -293,7 +293,7 @@ double mean(level_type * level, int id_a){
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double sum_box = 0.0;
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(+:sum_box) schedule(static) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(+:sum_box) schedule(static) OMP_COLLAPSE
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -305,7 +305,7 @@ double mean(level_type * level, int id_a){
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
   double ncells_level = (double)level->dim.i*(double)level->dim.j*(double)level->dim.k;
 
-  #ifdef __MPI
+  #ifdef USE_MPI
   uint64_t _timeStartAllReduce = CycleTime();
   double send = sum_level;
   MPI_Allreduce(&send,&sum_level,1,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_LEVEL);
@@ -333,7 +333,7 @@ void shift_grid(level_type * level, int id_c, int id_a, double shift_a){
     double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
 
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -364,7 +364,7 @@ void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir)
       case 1: stride = jStride;break;//j-direction
       case 2: stride = kStride;break;//k-direction
     }
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
     for(k=0;k<=dim;k++){ // <= to ensure you do low and high faces
     for(j=0;j<=dim;j++){
     for(i=0;i<=dim;i++){
@@ -380,7 +380,7 @@ void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir)
 //------------------------------------------------------------------------------------------------------------------------------
 double error(level_type * level, int id_a, int id_b){
   double h3 = level->h * level->h * level->h;
-                 add_grids(level,__temp,1.0,id_a,-1.0,id_b);       // __temp = __u_exact - __u
-  double   max =      norm(level,__temp);           return(max);   // max norm of error function
-  double    L2 = sqrt( dot(level,__temp,__temp)*h3);return( L2);   // normalized L2 error ?
+                 add_grids(level,STENCIL_TEMP,1.0,id_a,-1.0,id_b);       // STENCIL_TEMP = id_a - id_b
+  double   max =      norm(level,STENCIL_TEMP);                 return(max);   // max norm of error function
+  double    L2 = sqrt( dot(level,STENCIL_TEMP,STENCIL_TEMP)*h3);return( L2);   // normalized L2 error ?
 }

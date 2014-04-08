@@ -3,7 +3,10 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-extern const char __STENCIL_STRING[];
+#define RESTRICT_CELL   0
+#define RESTRICT_FACE_I 1
+#define RESTRICT_FACE_J 2
+#define RESTRICT_FACE_K 3
 //------------------------------------------------------------------------------------------------------------------------------
   void                  apply_op(level_type * level, int Ax_id,  int x_id, double a, double b);
   void                  residual(level_type * level, int res_id, int x_id, int rhs_id, double a, double b);

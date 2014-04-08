@@ -8,8 +8,10 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 //------------------------------------------------------------------------------------------------------------------------------
-#ifdef __MPI
+//#include <hpgmgconf.h>
+#ifdef USE_MPI
 #include <mpi.h>
 #endif
 #include <omp.h>
@@ -17,12 +19,19 @@
 #include "timer.h"
 #include "defines.h"
 #include "level.h"
-#include "mg.h"
 #include "operators.h"
 #include "solvers.h"
+#include "mg.h"
 //------------------------------------------------------------------------------------------------------------------------------
-#define __BOX_DIM_THRESHOLD     4
-#define __DOMAIN_DIM_THRESHOLD 13
+#ifndef BOX_DIM_THRESHOLD
+#define BOX_DIM_THRESHOLD     4
+#endif
+#ifndef DOMAIN_DIM_THRESHOLD
+#define DOMAIN_DIM_THRESHOLD 13
+#endif
+#ifndef DEFAULT_BOTTOM_NORM
+#define DEFAULT_BOTTOM_NORM  1e-3
+#endif
 //------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
   int sendRank;
@@ -69,7 +78,7 @@ void MGPrintTiming(mg_type *all_grids){
   total=0;printf("Boundary Conditions       ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.boundary_conditions;  total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("Restriction               ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.restriction_total;    total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  local restriction       ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.restriction_local;    total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
-  #ifdef __MPI
+  #ifdef USE_MPI
   total=0;printf("  pack MPI buffers        ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.restriction_pack;     total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  unpack MPI buffers      ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.restriction_unpack;   total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  MPI_Isend               ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.restriction_send;     total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
@@ -78,7 +87,7 @@ void MGPrintTiming(mg_type *all_grids){
   #endif
   total=0;printf("Interpolation             ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.interpolation_total;  total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  local interpolation     ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.interpolation_local;  total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
-  #ifdef __MPI
+  #ifdef USE_MPI
   total=0;printf("  pack MPI buffers        ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.interpolation_pack;   total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  unpack MPI buffers      ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.interpolation_unpack; total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  MPI_Isend               ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.interpolation_send;   total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
@@ -87,30 +96,30 @@ void MGPrintTiming(mg_type *all_grids){
   #endif
   total=0;printf("Ghost Zone Exchange       ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.ghostZone_total;      total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  local exchange          ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.ghostZone_local;      total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
-  #ifdef __MPI
+  #ifdef USE_MPI
   total=0;printf("  pack MPI buffers        ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.ghostZone_pack;       total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  unpack MPI buffers      ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.ghostZone_unpack;     total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  MPI_Isend               ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.ghostZone_send;       total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  MPI_Irecv               ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.ghostZone_recv;       total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   total=0;printf("  MPI_Waitall             ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.ghostZone_wait;       total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   #endif
-  #ifdef __MPI
+  #ifdef USE_MPI
   total=0;printf("MPI_collectives           ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.collectives;          total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
   #endif
   total=0;printf("------------------        ");for(level=0;level<(num_levels+1);level++){printf("------------ ");}printf("\n");
   total=0;printf("Total by level            ");for(level=0;level<(num_levels  );level++){this=scale*(double)all_grids->levels[level]->cycles.Total;                total+=this;printf("%12.6f ",this);}printf("%12.6f\n",total);
 
   printf("\n");
-  printf( "   Total time in MGBuild  %12.6f\n",SecondsPerCycle*(double)all_grids->cycles.MGBuild);
-  printf( "   Total time in MGSolve  %12.6f\n",scale*(double)all_grids->cycles.MGSolve);
+  printf( "   Total time in MGBuild  %12.6f seconds\n",SecondsPerCycle*(double)all_grids->cycles.MGBuild);
+  printf( "   Total time in MGSolve  %12.6f seconds\n",scale*(double)all_grids->cycles.MGSolve);
   printf( "      number of v-cycles  %12d\n"  ,all_grids->levels[0]->vcycles_from_this_level/all_grids->MGSolves_performed);
   printf( "Bottom solver iterations  %12d\n"  ,all_grids->levels[num_levels-1]->Krylov_iterations/all_grids->MGSolves_performed);
-  #if defined(__USE_CABICGSTAB) || defined(__USE_CACG)
+  #if defined(USE_CABICGSTAB) || defined(USE_CACG)
   printf( "     formations of G[][]  %12d\n"  ,all_grids->levels[num_levels-1]->CAKrylov_formations_of_G/all_grids->MGSolves_performed);
   #endif
   printf("\n");
   double numDOF = (double)all_grids->levels[0]->dim.i*(double)all_grids->levels[0]->dim.j*(double)all_grids->levels[0]->dim.k;
-  printf( "     Performance (DOF/s)  %12.3e\n",numDOF/(scale*(double)all_grids->cycles.MGSolve));
+  printf( "            Performance   %12.3e DOF/s\n",numDOF/(scale*(double)all_grids->cycles.MGSolve));
   printf("\n\n");fflush(stdout);
 }
 
@@ -363,7 +372,7 @@ void build_interpolation(mg_type *all_grids){
   } // all levels
 
 
-  #ifdef __MPI
+  #ifdef USE_MPI
   for(level=0;level<all_grids->num_levels;level++){
   // malloc MPI requests/status arrays
   // FIX, shouldn't it be the max of sends or recvs ???
@@ -625,7 +634,7 @@ void build_restriction(mg_type *all_grids){
   } // level loop
 
 
-  #ifdef __MPI
+  #ifdef USE_MPI
   for(level=0;level<all_grids->num_levels;level++){
   // malloc MPI requests/status arrays
   // FIX shouldn't it be max of sends or recvs
@@ -671,9 +680,9 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     int boxes_in_i = -1;
     int box_ghosts      = all_grids->levels[level-1]->box_ghosts;
     int box_components  = all_grids->levels[level-1]->box_components;
-//  if( (fine_domain_dim % 2 == 0) && (fine_domain_dim/2 <= __DOMAIN_DIM_THRESHOLD) ){box_dim=fine_domain_dim/2;boxes_in_i=1;                doRestrict=1;}else // FIX... agglomerate everything !!!
-    if( (fine_box_dim    % 2 == 0) && (fine_box_dim > __BOX_DIM_THRESHOLD)          ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;   doRestrict=1;}else
-    #ifndef __USE_UCYCLES
+//  if( (fine_domain_dim % 2 == 0) && (fine_domain_dim/2 <= DOMAIN_DIM_THRESHOLD) ){box_dim=fine_domain_dim/2;boxes_in_i=1;                doRestrict=1;}else // FIX... agglomerate everything !!!
+    if( (fine_box_dim    % 2 == 0) && (fine_box_dim > BOX_DIM_THRESHOLD)          ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;   doRestrict=1;}else
+    #ifndef USE_UCYCLES
     if(                               (fine_boxes_in_i %  2 == 0)                   ){box_dim=   fine_box_dim;  boxes_in_i=fine_boxes_in_i/2; doRestrict=1;}else //    8-way gather
     if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  3 == 0)                   ){box_dim= 3*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/3; doRestrict=1;}else //   27-way gather
     if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  5 == 0)                   ){box_dim= 5*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/5; doRestrict=1;}else //  125-way gather
@@ -717,32 +726,31 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
 
 
   // build subcommunicators...
-  #ifdef __USE_SUBCOMM
+  #ifdef USE_MPI
+  #ifdef USE_SUBCOMM
   for(level=1;level<all_grids->num_levels;level++){
     if(all_grids->my_rank==0){printf("  Building MPI subcommunicator for level %d...",level);fflush(stdout);}
     all_grids->levels[level]->active=0;
     int ll;for(ll=level;ll<all_grids->num_levels;ll++)if(all_grids->levels[ll]->num_my_boxes>0)all_grids->levels[level]->active=1;
     if(all_grids->levels[level]->active)MPI_Comm_split(MPI_COMM_WORLD,0                                  ,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL);
                                    else MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->my_rank+1,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL);
-  //MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->active,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL);
-  //printf("level=%2d rank=%3d active=%d\n",level,all_grids->levels[level]->my_rank,all_grids->levels[level]->active);MPI_Barrier(MPI_COMM_WORLD);
     if(all_grids->my_rank==0){printf("done\n");fflush(stdout);}
   }
   #endif
+  #endif
 
 
-  // rebuild various coefficients for the operator
+  // rebuild various coefficients for the operator... must occur after build_restriction !!!
   for(level=1;level<all_grids->num_levels;level++){
     rebuild_operator(all_grids->levels[level],(level>0)?all_grids->levels[level-1]:NULL,a,b);
   }
 
   // used for quick test for poisson
   for(level=0;level<all_grids->num_levels;level++){
-    all_grids->levels[level]->alpha_is_zero = (dot(all_grids->levels[level],__alpha,__alpha) == 0.0);
+    all_grids->levels[level]->alpha_is_zero = (dot(all_grids->levels[level],STENCIL_ALPHA,STENCIL_ALPHA) == 0.0);
   }
 
 
-  MPI_Barrier(MPI_COMM_WORLD);
   all_grids->cycles.MGBuild += (uint64_t)(CycleTime()-_timeStartMGBuild);
 }
 
@@ -755,7 +763,7 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
   // bottom solve...
   if(level==all_grids->num_levels-1){
     uint64_t _timeBottomStart = CycleTime();
-    IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,__DEFAULT_BOTTOM_NORM);
+    IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,DEFAULT_BOTTOM_NORM);
     all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_timeBottomStart);
     return;
   }
@@ -763,8 +771,8 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
   // down...
   _LevelStart = CycleTime();
        smooth(all_grids->levels[level  ],e_id,R_id,a,b);
-     residual(all_grids->levels[level  ],__temp,e_id,R_id,a,b);
-  restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],__temp,__RESTRICT_CELL);
+     residual(all_grids->levels[level  ],STENCIL_TEMP,e_id,R_id,a,b);
+  restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],STENCIL_TEMP,RESTRICT_CELL);
     zero_grid(all_grids->levels[level+1],e_id);
   all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
 
@@ -784,8 +792,8 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
   all_grids->MGSolves_performed++;
   if(!all_grids->levels[0]->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  int e_id = __u;
-  int R_id = __f_minus_Av;
+  int e_id = u_id; // __u FIX
+  int R_id = STENCIL_F_MINUS_AV;
   int v;
   int maxVCycles = 20;
 
@@ -799,8 +807,8 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
    zero_grid(all_grids->levels[0],e_id);                  // ee = 0
   scale_grid(all_grids->levels[0],R_id,1.0,F_id);         // R_id = F_id
   #else
-   mul_grids(all_grids->levels[0],e_id,1.0,__Dinv,F_id);  // e_id = Dinv*F_id
-  scale_grid(all_grids->levels[0],R_id,1.0,F_id);         // R_id = F_id
+   mul_grids(all_grids->levels[0],e_id,1.0,STENCIL_DINV,F_id);  // e_id = Dinv*F_id
+  scale_grid(all_grids->levels[0],R_id,1.0,F_id);               // R_id = F_id
   #endif
 
 
@@ -815,14 +823,14 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
 
     // now calculate the norm of the residual...
     uint64_t _timeStart = CycleTime();
-    if( (all_grids->levels[level]->domain_boundary_condition==__BC_PERIODIC) && ((a==0) || (all_grids->levels[level]->alpha_is_zero==1)) ){
+    if( (all_grids->levels[level]->domain_boundary_condition==BC_PERIODIC) && ((a==0) || (all_grids->levels[level]->alpha_is_zero==1)) ){
       // Poisson with Periodic Boundary Conditions... by convention, we assume the solution sums to zero... so eliminate any constants from the solution...
       double average_value_of_e = mean(all_grids->levels[level],e_id);
       shift_grid(all_grids->levels[level],e_id,e_id,-average_value_of_e);
     }
-    residual(all_grids->levels[level],__temp,e_id,F_id,a,b);
-    mul_grids(all_grids->levels[level],__temp,1.0,__temp,__Dinv); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
-    double norm_of_residual = norm(all_grids->levels[level],__temp);
+    residual(all_grids->levels[level],STENCIL_TEMP,e_id,F_id,a,b);
+    mul_grids(all_grids->levels[level],STENCIL_TEMP,1.0,STENCIL_TEMP,STENCIL_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+    double norm_of_residual = norm(all_grids->levels[level],STENCIL_TEMP);
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
     if(all_grids->levels[level]->my_rank==0){printf("v-cycle=%2d, norm=%22.20f (%1.15e)\n",v+1,norm_of_residual,norm_of_residual);fflush(stdout);}
@@ -844,7 +852,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   int v;
   int level;
   int e_id = u_id;
-  int R_id = __f_minus_Av;
+  int R_id = STENCIL_F_MINUS_AV;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   if(all_grids->levels[0]->my_rank==0){printf("FMGSolve...\n");fflush(stdout);}
   uint64_t _timeStartMGSolve = CycleTime();
@@ -863,7 +871,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   // restrict RHS to bottom (coarsest grids)
   for(level=0;level<(all_grids->num_levels-1);level++){
     uint64_t _LevelStart = CycleTime();
-    restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],R_id,__RESTRICT_CELL);
+    restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],R_id,RESTRICT_CELL);
     all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
   }
 
@@ -872,7 +880,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
     uint64_t _timeBottomStart = CycleTime();
     level = all_grids->num_levels-1;
     if(level>0)zero_grid(all_grids->levels[level],e_id);//else use whatever was the initial guess
-    IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,__DEFAULT_BOTTOM_NORM);  // -1 == exact solution
+    IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,DEFAULT_BOTTOM_NORM);  // -1 == exact solution
     all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_timeBottomStart);
 
 
@@ -900,14 +908,14 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
 
     // now calculate the norm of the residual...
     uint64_t _timeStart = CycleTime();
-    if( (all_grids->levels[level]->domain_boundary_condition==__BC_PERIODIC) && ((a==0) || (all_grids->levels[level]->alpha_is_zero==1)) ){
+    if( (all_grids->levels[level]->domain_boundary_condition==BC_PERIODIC) && ((a==0) || (all_grids->levels[level]->alpha_is_zero==1)) ){
       // Poisson with Periodic Boundary Conditions... by convention, we assume the solution sums to zero... so eliminate any constants from the solution...
       double average_value_of_e = mean(all_grids->levels[level],e_id);
       shift_grid(all_grids->levels[level],e_id,e_id,-average_value_of_e);
     }
-    residual(all_grids->levels[level],__temp,e_id,F_id,a,b);
-    mul_grids(all_grids->levels[level],__temp,1.0,__temp,__Dinv); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
-    double norm_of_residual = norm(all_grids->levels[level],__temp);
+    residual(all_grids->levels[level],STENCIL_TEMP,e_id,F_id,a,b);
+    mul_grids(all_grids->levels[level],STENCIL_TEMP,1.0,STENCIL_TEMP,STENCIL_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+    double norm_of_residual = norm(all_grids->levels[level],STENCIL_TEMP);
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
     if(all_grids->levels[level]->my_rank==0){if(v>=0)printf("v-cycle=%2d, norm=%22.20f (%1.15e)\n",v+1,norm_of_residual,norm_of_residual);else

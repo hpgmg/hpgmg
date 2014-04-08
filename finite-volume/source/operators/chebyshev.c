@@ -7,15 +7,15 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   if( (level->dominant_eigenvalue_of_DinvA<=0.0) && (level->my_rank==0) )printf("dominant_eigenvalue_of_DinvA <= 0.0 !\n");
-  if((__CHEBYSHEV_DEGREE*__NUM_SMOOTHS)&1){
-    printf("error... __CHEBYSHEV_DEGREE*__NUM_SMOOTHS must be even for the chebyshev smoother...\n");
+  if((CHEBYSHEV_DEGREE*NUM_SMOOTHS)&1){
+    printf("error... CHEBYSHEV_DEGREE*NUM_SMOOTHS must be even for the chebyshev smoother...\n");
     exit(0);
   }
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   int box,s;
   int ghosts = level->box_ghosts;
-  int radius     = __STENCIL_RADIUS;
-  int starShaped = __STENCIL_STAR_SHAPED;
+  int radius     = STENCIL_RADIUS;
+  int starShaped = STENCIL_STAR_SHAPED;
   int communicationAvoiding = ghosts > radius; 
 
 
@@ -29,11 +29,11 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   double delta    = 0.5*(beta-alpha);		// major axis?
   double sigma = theta/delta;
   double rho_n = 1/sigma;			// rho_0
-  double chebyshev_c1[__CHEBYSHEV_DEGREE];	// + c1*(x_n-x_nm1) == rho_n*rho_nm1
-  double chebyshev_c2[__CHEBYSHEV_DEGREE];	// + c2*(b-Ax_n)
+  double chebyshev_c1[CHEBYSHEV_DEGREE];	// + c1*(x_n-x_nm1) == rho_n*rho_nm1
+  double chebyshev_c2[CHEBYSHEV_DEGREE];	// + c2*(b-Ax_n)
   chebyshev_c1[0] = 0.0;
   chebyshev_c2[0] = 1/theta;
-  for(s=1;s<__CHEBYSHEV_DEGREE;s++){
+  for(s=1;s<CHEBYSHEV_DEGREE;s++){
     double rho_nm1 = rho_n;
     rho_n = 1.0/(2.0*sigma - rho_nm1);
     chebyshev_c1[s] = rho_n*rho_nm1;
@@ -44,10 +44,10 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   // if communication-avoiding, need updated RHS for stencils in ghost zones
   if(communicationAvoiding)exchange_boundary(level,rhs_id,0); 
 
-  for(s=0;s<__CHEBYSHEV_DEGREE*__NUM_SMOOTHS;s+=ghosts){
-    // Chebyshev ping pongs between x_id and __temp
-    if((s&1)==0){exchange_boundary(level,  x_id,starShaped && !communicationAvoiding);apply_BCs(level,  x_id);}
-            else{exchange_boundary(level,__temp,starShaped && !communicationAvoiding);apply_BCs(level,__temp);}
+  for(s=0;s<CHEBYSHEV_DEGREE*NUM_SMOOTHS;s+=ghosts){
+    // Chebyshev ping pongs between x_id and STENCIL_TEMP
+    if((s&1)==0){exchange_boundary(level,        x_id,starShaped && !communicationAvoiding);apply_BCs(level,        x_id);}
+            else{exchange_boundary(level,STENCIL_TEMP,starShaped && !communicationAvoiding);apply_BCs(level,STENCIL_TEMP);}
     
     // now do ghosts communication-avoiding smooths on each box...
     uint64_t _timeStart = CycleTime();
@@ -58,28 +58,28 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       const int kStride = level->my_boxes[box].kStride;
       const int     dim = level->my_boxes[box].dim;
       const double h2inv = 1.0/(level->h*level->h);
-      const double * __restrict__ rhs      = level->my_boxes[box].components[  rhs_id] + ghosts*(1+jStride+kStride);
-      const double * __restrict__ alpha    = level->my_boxes[box].components[__alpha ] + ghosts*(1+jStride+kStride);
-      const double * __restrict__ beta_i   = level->my_boxes[box].components[__beta_i] + ghosts*(1+jStride+kStride);
-      const double * __restrict__ beta_j   = level->my_boxes[box].components[__beta_j] + ghosts*(1+jStride+kStride);
-      const double * __restrict__ beta_k   = level->my_boxes[box].components[__beta_k] + ghosts*(1+jStride+kStride);
-      const double * __restrict__ Dinv     = level->my_boxes[box].components[__Dinv  ] + ghosts*(1+jStride+kStride);
-      const double * __restrict__ valid    = level->my_boxes[box].components[__valid ] + ghosts*(1+jStride+kStride); // cell is inside the domain
+      const double * __restrict__ rhs      = level->my_boxes[box].components[        rhs_id] + ghosts*(1+jStride+kStride);
+      const double * __restrict__ alpha    = level->my_boxes[box].components[STENCIL_ALPHA ] + ghosts*(1+jStride+kStride);
+      const double * __restrict__ beta_i   = level->my_boxes[box].components[STENCIL_BETA_I] + ghosts*(1+jStride+kStride);
+      const double * __restrict__ beta_j   = level->my_boxes[box].components[STENCIL_BETA_J] + ghosts*(1+jStride+kStride);
+      const double * __restrict__ beta_k   = level->my_boxes[box].components[STENCIL_BETA_K] + ghosts*(1+jStride+kStride);
+      const double * __restrict__ Dinv     = level->my_boxes[box].components[STENCIL_DINV  ] + ghosts*(1+jStride+kStride);
+      const double * __restrict__ valid    = level->my_boxes[box].components[STENCIL_VALID ] + ghosts*(1+jStride+kStride); // cell is inside the domain
 
       int ghostsToOperateOn=ghosts-1;
       for(ss=s;ss<s+ghosts;ss++,ghostsToOperateOn--){
               double * __restrict__ x_np1;
         const double * __restrict__ x_n;
         const double * __restrict__ x_nm1;
-              if((ss&1)==0){x_n    = level->my_boxes[box].components[    x_id] + ghosts*(1+jStride+kStride);
-                            x_nm1  = level->my_boxes[box].components[  __temp] + ghosts*(1+jStride+kStride); 
-                            x_np1  = level->my_boxes[box].components[  __temp] + ghosts*(1+jStride+kStride);}
-                       else{x_n    = level->my_boxes[box].components[  __temp] + ghosts*(1+jStride+kStride);
-                            x_nm1  = level->my_boxes[box].components[    x_id] + ghosts*(1+jStride+kStride); 
-                            x_np1  = level->my_boxes[box].components[    x_id] + ghosts*(1+jStride+kStride);}
-        const double c1 = chebyshev_c1[ss%__CHEBYSHEV_DEGREE]; // limit polynomial to degree __CHEBYSHEV_DEGREE.
-        const double c2 = chebyshev_c2[ss%__CHEBYSHEV_DEGREE]; // limit polynomial to degree __CHEBYSHEV_DEGREE.
-        #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) __OMP_COLLAPSE
+              if((ss&1)==0){x_n    = level->my_boxes[box].components[        x_id] + ghosts*(1+jStride+kStride);
+                            x_nm1  = level->my_boxes[box].components[STENCIL_TEMP] + ghosts*(1+jStride+kStride); 
+                            x_np1  = level->my_boxes[box].components[STENCIL_TEMP] + ghosts*(1+jStride+kStride);}
+                       else{x_n    = level->my_boxes[box].components[STENCIL_TEMP] + ghosts*(1+jStride+kStride);
+                            x_nm1  = level->my_boxes[box].components[        x_id] + ghosts*(1+jStride+kStride); 
+                            x_np1  = level->my_boxes[box].components[        x_id] + ghosts*(1+jStride+kStride);}
+        const double c1 = chebyshev_c1[ss%CHEBYSHEV_DEGREE]; // limit polynomial to degree CHEBYSHEV_DEGREE.
+        const double c2 = chebyshev_c2[ss%CHEBYSHEV_DEGREE]; // limit polynomial to degree CHEBYSHEV_DEGREE.
+        #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
         for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
         for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
         for(i=0-ghostsToOperateOn;i<dim+ghostsToOperateOn;i++){
@@ -87,9 +87,9 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
           // According to Saad... but his was missing a Dinv[ijk] == D^{-1} !!!
           //  x_{n+1} = x_{n} + rho_{n} [ rho_{n-1}(x_{n} - x_{n-1}) + (2/delta)(b-Ax_{n}) ]
           //  x_temp[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_temp[ijk]) + c2*Dinv[ijk]*(rhs[ijk]-Ax_n);
-          double Ax_n     = __apply_op(x_n);
-          double Dinv_ijk = __calculate_Dinv();
-          x_np1[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_nm1[ijk]) + c2*Dinv_ijk*(rhs[ijk]-Ax_n);
+          double Ax_n   = apply_op_ijk(x_n);
+          double lambda =     Dinv_ijk();
+          x_np1[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_nm1[ijk]) + c2*lambda*(rhs[ijk]-Ax_n);
         }}}
       } // ss-loop
     } // box-loop

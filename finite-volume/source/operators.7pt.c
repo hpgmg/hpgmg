@@ -10,31 +10,34 @@
 #include <math.h>
 //#include<instrinsics.h>
 //------------------------------------------------------------------------------------------------------------------------------
+//#include <hpgmgconf.h>
 #include "timer.h"
 #include "defines.h"
 #include "level.h"
 #include "operators.h"
 //------------------------------------------------------------------------------------------------------------------------------
-#define __STENCIL_STAR_SHAPED 1
-#define __STENCIL_RADIUS      1
-#define __STENCIL_VARIABLE_COEFFICIENT
-#define __STENCIL_FUSE_BC
+#define STENCIL_STAR_SHAPED 1
+#define STENCIL_RADIUS      1
 //------------------------------------------------------------------------------------------------------------------------------
-#ifndef __OMP_COLLAPSE
-#define __OMP_COLLAPSE collapse(2)
+#define STENCIL_VARIABLE_COEFFICIENT
+//#define STENCIL_FUSE_BC
+//#define STENCIL_FUSE_DINV
+//------------------------------------------------------------------------------------------------------------------------------
+#ifndef OMP_COLLAPSE
+#define OMP_COLLAPSE collapse(2)
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 // fix... make #define...
 void apply_BCs(level_type * level, int x_id){
-  #ifndef __STENCIL_FUSE_BC
-  // This is a failure mode if (trying to do communication-avoiding) && (BC!=__BC_PERIODIC)
+  #ifndef STENCIL_FUSE_BC
+  // This is a failure mode if (trying to do communication-avoiding) && (BC!=BC_PERIODIC)
   apply_BCs_linear(level,x_id);
   #endif
 }
 //------------------------------------------------------------------------------------------------------------------------------
 // calculate Dinv?
-#ifdef __STENCIL_VARIABLE_COEFFICIENT
-  #define __recalculate_Dinv()                                  \
+#ifdef STENCIL_VARIABLE_COEFFICIENT
+  #define calculate_Dinv()                                      \
   (                                                             \
     1.0 / (a*alpha[ijk] - b*h2inv*(                             \
              + beta_i[ijk        ]*( valid[ijk-1      ] - 2.0 ) \
@@ -46,7 +49,7 @@ void apply_BCs(level_type * level, int x_id){
           ))                                                    \
   )
 #else // constant coefficient case... 
-  #define __recalculate_Dinv()      \
+  #define calculate_Dinv()          \
   (                                 \
     1.0 / (a - b*h2inv*(            \
              + valid[ijk-1      ]   \
@@ -60,17 +63,16 @@ void apply_BCs(level_type * level, int x_id){
   )
 #endif
 
-#if defined(__STENCIL_DINV) && defined(__STENCIL_FUSE_BC)
-#define __calculate_Dinv() __recalculate_Dinv() // recalculate it
+#if defined(STENCIL_FUSE_DINV) && defined(STENCIL_FUSE_BC)
+#define Dinv_ijk() calculate_Dinv() // recalculate it
 #else
-#define __calculate_Dinv() Dinv[ijk]            // simply retriev it rather than recalculating it
+#define Dinv_ijk() Dinv[ijk]        // simply retriev it rather than recalculating it
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-#ifdef __STENCIL_FUSE_BC
+#ifdef STENCIL_FUSE_BC
 
-  #ifdef __STENCIL_VARIABLE_COEFFICIENT
-    const char __STENCIL_STRING[] = "2nd-order, 7-point, variable-coefficient, finite volume helmholtz, with fused boundary conditions";
-    #define __apply_op(x)                                                                     \
+  #ifdef STENCIL_VARIABLE_COEFFICIENT
+    #define apply_op_ijk(x)                                                                     \
     (                                                                                         \
       a*alpha[ijk]*x[ijk] - b*h2inv*(                                                         \
         + beta_i[ijk        ]*( valid[ijk-1      ]*( x[ijk] + x[ijk-1      ] ) - 2.0*x[ijk] ) \
@@ -82,8 +84,7 @@ void apply_BCs(level_type * level, int x_id){
       )                                                                                       \
     )
   #else  // constant coefficient case...  
-    const char __STENCIL_STRING[] = "2nd-order, 7-point, constant-coefficient, finite volume helmholtz, with fused boundary conditions";
-    #define __apply_op(x)                                \
+    #define apply_op_ijk(x)                                \
     (                                                    \
       a*x[ijk] - b*h2inv*(                               \
         + valid[ijk-1      ]*( x[ijk] + x[ijk-1      ] ) \
@@ -101,11 +102,10 @@ void apply_BCs(level_type * level, int x_id){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-#ifndef __STENCIL_FUSE_BC
+#ifndef STENCIL_FUSE_BC
 
-  #ifdef __STENCIL_VARIABLE_COEFFICIENT
-    const char __STENCIL_STRING[] = "2nd-order, 7-point, variable-coefficient, finite volume helmholtz";
-    #define __apply_op(x)                                 \
+  #ifdef STENCIL_VARIABLE_COEFFICIENT
+    #define apply_op_ijk(x)                                 \
     (                                                     \
       a*alpha[ijk]*x[ijk] - b*h2inv*(                     \
         + beta_i[ijk+1      ]*( x[ijk+1      ] - x[ijk] ) \
@@ -117,8 +117,7 @@ void apply_BCs(level_type * level, int x_id){
       )                                                   \
     )
   #else  // constant coefficient case...  
-    const char __STENCIL_STRING[] = "2nd-order, 7-point, constant-coefficient, finite volume helmholtz";
-    #define __apply_op(x)            \
+    #define apply_op_ijk(x)            \
     (                                \
       a*x[ijk] - b*h2inv*(           \
         + x[ijk+1      ]             \
@@ -137,24 +136,24 @@ void apply_BCs(level_type * level, int x_id){
 
 //------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
-  if(level->my_rank==0){printf("  rebuilding operator for level h=%e: ",level->h);fflush(stdout);}
+  if(level->my_rank==0){printf("  rebuilding operator for level...  h=%e  ",level->h);fflush(stdout);}
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // form restriction of alpha[], beta_*[] coefficients from fromLevel
   if(fromLevel != NULL){
-    restriction(level,__alpha ,fromLevel,__alpha ,__RESTRICT_CELL  );
-    restriction(level,__beta_i,fromLevel,__beta_i,__RESTRICT_FACE_I);
-    restriction(level,__beta_j,fromLevel,__beta_j,__RESTRICT_FACE_J);
-    restriction(level,__beta_k,fromLevel,__beta_k,__RESTRICT_FACE_K);
+    restriction(level,STENCIL_ALPHA ,fromLevel,STENCIL_ALPHA ,RESTRICT_CELL  );
+    restriction(level,STENCIL_BETA_I,fromLevel,STENCIL_BETA_I,RESTRICT_FACE_I);
+    restriction(level,STENCIL_BETA_J,fromLevel,STENCIL_BETA_J,RESTRICT_FACE_J);
+    restriction(level,STENCIL_BETA_K,fromLevel,STENCIL_BETA_K,RESTRICT_FACE_K);
   } // else case assumes alpha/beta have been set
 
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange alpha/beta/...  (must be done before calculating Dinv)
-  exchange_boundary(level,__alpha ,0); // must be 0(faces,edges,corners) for CA version or 27pt
-  exchange_boundary(level,__beta_i,0);
-  exchange_boundary(level,__beta_j,0);
-  exchange_boundary(level,__beta_k,0);
+  exchange_boundary(level,STENCIL_ALPHA ,0); // must be 0(faces,edges,corners) for CA version or 27pt
+  exchange_boundary(level,STENCIL_BETA_I,0);
+  exchange_boundary(level,STENCIL_BETA_J,0);
+  exchange_boundary(level,STENCIL_BETA_K,0);
 
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -175,15 +174,15 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
     double h2inv = 1.0/(level->h*level->h);
-    double * __restrict__ alpha  = level->my_boxes[box].components[__alpha ] + ghosts*(1+jStride+kStride);
-    double * __restrict__ beta_i = level->my_boxes[box].components[__beta_i] + ghosts*(1+jStride+kStride);
-    double * __restrict__ beta_j = level->my_boxes[box].components[__beta_j] + ghosts*(1+jStride+kStride);
-    double * __restrict__ beta_k = level->my_boxes[box].components[__beta_k] + ghosts*(1+jStride+kStride);
-    double * __restrict__   Dinv = level->my_boxes[box].components[  __Dinv] + ghosts*(1+jStride+kStride);
-    double * __restrict__  L1inv = level->my_boxes[box].components[ __L1inv] + ghosts*(1+jStride+kStride);
-    double * __restrict__  valid = level->my_boxes[box].components[ __valid] + ghosts*(1+jStride+kStride);
+    double * __restrict__ alpha  = level->my_boxes[box].components[STENCIL_ALPHA ] + ghosts*(1+jStride+kStride);
+    double * __restrict__ beta_i = level->my_boxes[box].components[STENCIL_BETA_I] + ghosts*(1+jStride+kStride);
+    double * __restrict__ beta_j = level->my_boxes[box].components[STENCIL_BETA_J] + ghosts*(1+jStride+kStride);
+    double * __restrict__ beta_k = level->my_boxes[box].components[STENCIL_BETA_K] + ghosts*(1+jStride+kStride);
+    double * __restrict__   Dinv = level->my_boxes[box].components[STENCIL_DINV  ] + ghosts*(1+jStride+kStride);
+    double * __restrict__  L1inv = level->my_boxes[box].components[STENCIL_L1INV ] + ghosts*(1+jStride+kStride);
+    double * __restrict__  valid = level->my_boxes[box].components[STENCIL_VALID ] + ghosts*(1+jStride+kStride);
     double box_eigenvalue = -1e9;
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(max:box_eigenvalue) schedule(static) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(max:box_eigenvalue) schedule(static) OMP_COLLAPSE
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -238,44 +237,44 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Reduce the local estimates dominant eigenvalue to a global estimate
-  #ifdef __MPI
+  #ifdef USE_MPI
   uint64_t _timeStartAllReduce = CycleTime();
   double send = dominant_eigenvalue;
   MPI_Allreduce(&send,&dominant_eigenvalue,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
   uint64_t _timeEndAllReduce = CycleTime();
   level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
-  if(level->my_rank==0){printf("  eigenvalue_max <= %e\n",dominant_eigenvalue);fflush(stdout);}
+  if(level->my_rank==0){printf("eigenvalue_max<%e\n",dominant_eigenvalue);fflush(stdout);}
   level->dominant_eigenvalue_of_DinvA = dominant_eigenvalue;
 
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange Dinv/L1inv/...
-  exchange_boundary(level,__Dinv ,0); // must be 0(faces,edges,corners) for CA version
-  exchange_boundary(level,__L1inv,0);
+  exchange_boundary(level,STENCIL_DINV ,0); // must be 0(faces,edges,corners) for CA version
+  exchange_boundary(level,STENCIL_L1INV,0);
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-#ifdef  __USE_GSRB
-#define __NUM_SMOOTHS      2 // RBRB
+#ifdef  USE_GSRB
+#define NUM_SMOOTHS      2 // RBRB
 #include "operators/gsrb.c"
-#elif   __USE_CHEBY
-#define __NUM_SMOOTHS      1
-#define __CHEBYSHEV_DEGREE 4 // i.e. one degree-4 polynomial smoother
+#elif   USE_CHEBY
+#define NUM_SMOOTHS      1
+#define CHEBYSHEV_DEGREE 4 // i.e. one degree-4 polynomial smoother
 #include "operators/chebyshev.c"
-#elif   __USE_JACOBI
-#define __NUM_SMOOTHS      6
+#elif   USE_JACOBI
+#define NUM_SMOOTHS      6
 #include "operators/jacobi.c"
-#elif   __USE_L1JACOBI
-#define __NUM_SMOOTHS      8
+#elif   USE_L1JACOBI
+#define NUM_SMOOTHS      8
 #include "operators/jacobi.c"
-#elif   __USE_SYMGS
-#define __NUM_SMOOTHS      2
+#elif   USE_SYMGS
+#define NUM_SMOOTHS      2
 #include "operators/symgs.c"
 #else
-#error You must compile with either -D__USE_GSRB, -D__USE_CHEBY, or -D__USE_JACOBI
+#error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, or -DUSE_JACOBI
 #endif
 #include "operators/residual.c"
 #include "operators/apply_op.c"

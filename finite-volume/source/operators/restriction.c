@@ -38,8 +38,8 @@ static inline void RestrictBlock(level_type *level_c, int id_c, level_type *leve
 
   int i,j,k;
   switch(restrictionType){
-    case __RESTRICT_CELL:
-         #pragma omp parallel for num_threads(threads_per_block) __OMP_COLLAPSE
+    case RESTRICT_CELL:
+         #pragma omp parallel for num_threads(threads_per_block) OMP_COLLAPSE
          for(k=0;k<dim_k;k++){
          for(j=0;j<dim_j;j++){
          for(i=0;i<dim_i;i++){
@@ -50,8 +50,8 @@ static inline void RestrictBlock(level_type *level_c, int id_c, level_type *leve
                                 read[read_ijk               +read_kStride]+read[read_ijk+1             +read_kStride] +
                                 read[read_ijk  +read_jStride+read_kStride]+read[read_ijk+1+read_jStride+read_kStride] ) * 0.125;
          }}}break;
-    case __RESTRICT_FACE_I:
-         #pragma omp parallel for num_threads(threads_per_block) __OMP_COLLAPSE
+    case RESTRICT_FACE_I:
+         #pragma omp parallel for num_threads(threads_per_block) OMP_COLLAPSE
          for(k=0;k<dim_k;k++){
          for(j=0;j<dim_j;j++){
          for(i=0;i<dim_i;i++){
@@ -62,8 +62,8 @@ static inline void RestrictBlock(level_type *level_c, int id_c, level_type *leve
                                 read[read_ijk             +read_kStride] +
                                 read[read_ijk+read_jStride+read_kStride] ) * 0.25;
          }}}break;
-    case __RESTRICT_FACE_J:
-         #pragma omp parallel for num_threads(threads_per_block) __OMP_COLLAPSE
+    case RESTRICT_FACE_J:
+         #pragma omp parallel for num_threads(threads_per_block) OMP_COLLAPSE
          for(k=0;k<dim_k;k++){
          for(j=0;j<dim_j;j++){
          for(i=0;i<dim_i;i++){
@@ -74,8 +74,8 @@ static inline void RestrictBlock(level_type *level_c, int id_c, level_type *leve
                                 read[read_ijk  +read_kStride] +
                                 read[read_ijk+1+read_kStride] ) * 0.25;
          }}}break;
-    case __RESTRICT_FACE_K:
-         #pragma omp parallel for num_threads(threads_per_block) __OMP_COLLAPSE
+    case RESTRICT_FACE_K:
+         #pragma omp parallel for num_threads(threads_per_block) OMP_COLLAPSE
          for(k=0;k<dim_k;k++){
          for(j=0;j<dim_j;j++){
          for(i=0;i<dim_i;i++){
@@ -85,15 +85,6 @@ static inline void RestrictBlock(level_type *level_c, int id_c, level_type *leve
                                 read[read_ijk+1             ] +
                                 read[read_ijk  +read_jStride] +
                                 read[read_ijk+1+read_jStride] ) * 0.25;
-         }}}break;
-    case __RESTRICT_NODAL:
-         #pragma omp parallel for num_threads(threads_per_block) __OMP_COLLAPSE
-         for(k=0;k<dim_k;k++){
-         for(j=0;j<dim_j;j++){
-         for(i=0;i<dim_i;i++){
-           int write_ijk = ((i   )+write_i) + ((j   )+write_j)*write_jStride + ((k   )+write_k)*write_kStride;
-           int  read_ijk = ((i<<1)+ read_i) + ((j<<1)+ read_j)* read_jStride + ((k<<1)+ read_k)* read_kStride;
-           write[write_ijk] = ( read[read_ijk               ] );
          }}}break;
   }
 
@@ -111,11 +102,11 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
 
 
 
-  #ifdef __MPI
+  #ifdef USE_MPI
 
   // loop through packed list of MPI receives and prepost Irecv's...
   _timeStart = CycleTime();
-  #ifdef __MPI_THREAD_MULTIPLE
+  #ifdef USE_MPI_THREAD_MULTIPLE
   #pragma omp parallel for schedule(dynamic,1)
   #endif
   for(n=0;n<level_c->restriction.num_recvs;n++){
@@ -142,7 +133,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
  
   // loop through MPI send buffers and post Isend's...
   _timeStart = CycleTime();
-  #ifdef __MPI_THREAD_MULTIPLE
+  #ifdef USE_MPI_THREAD_MULTIPLE
   #pragma omp parallel for schedule(dynamic,1)
   #endif
   for(n=0;n<level_f->restriction.num_sends;n++){
@@ -169,7 +160,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
 
 
   // wait for MPI to finish...
-  #ifdef __MPI 
+  #ifdef USE_MPI 
   _timeStart = CycleTime();
   if(level_f->restriction.num_sends)MPI_Waitall(level_f->restriction.num_sends,level_f->restriction.requests,level_f->restriction.status);
   if(level_c->restriction.num_recvs)MPI_Waitall(level_c->restriction.num_recvs,level_c->restriction.requests,level_c->restriction.status);

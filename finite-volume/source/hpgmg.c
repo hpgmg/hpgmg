@@ -33,8 +33,9 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
+//#include <hpgmgconf.h>
 #include <omp.h>
-#ifdef __MPI
+#ifdef USE_MPI
 #include <mpi.h>
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
@@ -61,7 +62,7 @@ int main(int argc, char **argv){
   //omp_set_nested(1);
     
 
-  #ifdef __MPI
+  #ifdef USE_MPI
 //#warning Compiling for MPI...
   //FIX... replace with ifdefs or env variables...
   int MPI_threadingModel          = -1;
@@ -99,7 +100,7 @@ int main(int argc, char **argv){
      target_boxes_per_rank=atoi(argv[2]);
   }else{
     if(MPI_Rank==0){printf("usage: ./a.out  [log2_box_dim]  [target_boxes_per_rank]\n");}
-    #ifdef __MPI
+    #ifdef USE_MPI
     MPI_Finalize();
     #endif
     exit(0);
@@ -107,7 +108,7 @@ int main(int argc, char **argv){
 
   if(log2_box_dim<4){
     if(MPI_Rank==0){printf("log2_box_dim must be at least 4\n");}
-    #ifdef __MPI
+    #ifdef USE_MPI
     MPI_Finalize();
     #endif
     exit(0);
@@ -115,7 +116,7 @@ int main(int argc, char **argv){
 
   if(target_boxes_per_rank<1){
     if(MPI_Rank==0){printf("target_boxes_per_rank must be at least 1\n");}
-    #ifdef __MPI
+    #ifdef USE_MPI
     MPI_Finalize();
     #endif
     exit(0);
@@ -135,15 +136,13 @@ int main(int argc, char **argv){
   }
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(MPI_Rank==0)printf("%s\n" ,__STENCIL_STRING);
-  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // create the fine level...
   int ghosts=1;
   level_type fine_grid;
-  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Periodic
-  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Periodic
-  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Dirichlet
-    create_level(&fine_grid,boxes_in_i,box_dim,ghosts,__Components,__BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Dirichlet
+  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,COMPONENTS_RESERVED,BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Periodic
+  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,COMPONENTS_RESERVED,BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Periodic
+  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,COMPONENTS_RESERVED,BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Dirichlet
+    create_level(&fine_grid,boxes_in_i,box_dim,ghosts,COMPONENTS_RESERVED,BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Dirichlet
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   initialize_problem(&fine_grid,h0,a,b);
   rebuild_operator(&fine_grid,NULL,a,b); // i.e. calculate Dinv and lambda_max
@@ -153,17 +152,17 @@ int main(int argc, char **argv){
   MGBuild(&all_grids,&fine_grid,a,b,minCoarseDim);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   MGResetTimers(&all_grids);
-  #ifdef __USE_FCYCLES
-  int trial;for(trial=0;trial<20;trial++){zero_grid(all_grids.levels[0],__u);FMGSolve(&all_grids,__u,__f,a,b,1e-15);}
+  #ifdef USE_FCYCLES
+  int trial;for(trial=0;trial<20;trial++){zero_grid(all_grids.levels[0],STENCIL_U);FMGSolve(&all_grids,STENCIL_U,STENCIL_F,a,b,1e-15);}
   #else
-  int trial;for(trial=0;trial< 4;trial++){zero_grid(all_grids.levels[0],__u); MGSolve(&all_grids,__u,__f,a,b,1e-15);}
+  int trial;for(trial=0;trial< 5;trial++){zero_grid(all_grids.levels[0],STENCIL_U); MGSolve(&all_grids,STENCIL_U,STENCIL_F,a,b,1e-15);}
   #endif
-  double fine_error = error(&fine_grid,__u,__u_exact);if(MPI_Rank==0){printf("h = %e, error = %1.15e\n",h0,fine_error);}
+  double fine_error = error(&fine_grid,STENCIL_U,STENCIL_UTRUE);if(MPI_Rank==0){printf("h = %e, error = %1.15e\n",h0,fine_error);}
   MGPrintTiming(&all_grids);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // MGDestroy()
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  #ifdef __MPI
+  #ifdef USE_MPI
   MPI_Finalize();
   #endif
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

@@ -71,18 +71,18 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
 
   int box;
   for(box=0;box<level->num_my_boxes;box++){
-    memset(level->my_boxes[box].components[__alpha  ],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].components[__beta_i ],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].components[__beta_j ],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].components[__beta_k ],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].components[__u_exact],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].components[__f      ],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].components[STENCIL_ALPHA ],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].components[STENCIL_BETA_I],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].components[STENCIL_BETA_J],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].components[STENCIL_BETA_K],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].components[STENCIL_UTRUE ],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].components[STENCIL_F     ],0,level->my_boxes[box].volume*sizeof(double));
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    #pragma omp parallel for private(k,j,i) __OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_COLLAPSE
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -105,51 +105,51 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       Bi = 1.0;
       Bj = 1.0;
       Bk = 1.0;
-      #ifdef __STENCIL_VARIABLE_COEFFICIENT // variable coefficient problem...
+      #ifdef STENCIL_VARIABLE_COEFFICIENT // variable coefficient problem...
       evaluateBeta(x-hLevel*0.5,y           ,z           ,&Bi,&Bx,&By,&Bz); // face-centered value of Beta for beta_i
       evaluateBeta(x           ,y-hLevel*0.5,z           ,&Bj,&Bx,&By,&Bz); // face-centered value of Beta for beta_j
       evaluateBeta(x           ,y           ,z-hLevel*0.5,&Bk,&Bx,&By,&Bz); // face-centered value of Beta for beta_k
       evaluateBeta(x           ,y           ,z           ,&B ,&Bx,&By,&Bz); // cell-centered value of Beta
       #endif
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-      evaluateU(x,y,z,&U,&Ux,&Uy,&Uz,&Uxx,&Uyy,&Uzz, (level->domain_boundary_condition == __BC_PERIODIC) );
+      evaluateU(x,y,z,&U,&Ux,&Uy,&Uz,&Uxx,&Uyy,&Uzz, (level->domain_boundary_condition == BC_PERIODIC) );
       double F = a*A*U - b*( (Bx*Ux + By*Uy + Bz*Uz)  +  B*(Uxx + Uyy + Uzz) );
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-      level->my_boxes[box].components[__alpha  ][ijk] = A;
-      level->my_boxes[box].components[__beta_i ][ijk] = Bi;
-      level->my_boxes[box].components[__beta_j ][ijk] = Bj;
-      level->my_boxes[box].components[__beta_k ][ijk] = Bk;
-      level->my_boxes[box].components[__u_exact][ijk] = U;
-      level->my_boxes[box].components[__f      ][ijk] = F;
+      level->my_boxes[box].components[STENCIL_ALPHA ][ijk] = A;
+      level->my_boxes[box].components[STENCIL_BETA_I][ijk] = Bi;
+      level->my_boxes[box].components[STENCIL_BETA_J][ijk] = Bj;
+      level->my_boxes[box].components[STENCIL_BETA_K][ijk] = Bk;
+      level->my_boxes[box].components[STENCIL_UTRUE][ijk] = U;
+      level->my_boxes[box].components[STENCIL_F    ][ijk] = F;
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
     }}}
   }
 
 
-  if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,__alpha,__alpha) == 0.0);
+  if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,STENCIL_ALPHA,STENCIL_ALPHA) == 0.0);
 
 
   // FIX... Periodic Boundary Conditions...
-  if(level->domain_boundary_condition == __BC_PERIODIC){
-    double average_value_of_f = mean(level,__f);
+  if(level->domain_boundary_condition == BC_PERIODIC){
+    double average_value_of_f = mean(level,STENCIL_F);
     if(average_value_of_f!=0.0)if(level->my_rank==0){printf("\n  WARNING... Periodic boundary conditions, but f does not sum to zero... mean(f)=%e\n",average_value_of_f);}
    
     if((a==0.0) || (level->alpha_is_zero==1) ){ // poisson... by convention, we assume u sums to zero...
-      double average_value_of_u = mean(level,__u_exact);
+      double average_value_of_u = mean(level,STENCIL_UTRUE);
       if(level->my_rank==0){printf("\n  average value of u = %20.12e... shifting u to ensure it sums to zero...\n",average_value_of_u);fflush(stdout);}
-      shift_grid(level,__u_exact,__u_exact,-average_value_of_u);
-      shift_grid(level,__f,__f,-average_value_of_f);
+      shift_grid(level,STENCIL_UTRUE,STENCIL_UTRUE,-average_value_of_u);
+      shift_grid(level,STENCIL_F,STENCIL_F,-average_value_of_f);
     }
     //}else{ // helmholtz...
     // FIX... for helmoltz, does the fine grid RHS have to sum to zero ???
-    //double average_value_of_f = mean(level,__f);
+    //double average_value_of_f = mean(level,STENCIL_F);
     //if(level->my_rank==0){printf("\n");}
     //if(level->my_rank==0){printf("  average value of f = %20.12e... shifting to ensure f sums to zero...\n",average_value_of_f);fflush(stdout);}
     //if(a!=0){
-    //  shift_grid(level,__f      ,__f      ,-average_value_of_f);
-    //  shift_grid(level,__u_exact,__u_exact,-average_value_of_f/a);
+    //  shift_grid(level,STENCIL_F      ,STENCIL_F      ,-average_value_of_f);
+    //  shift_grid(level,STENCIL_UTRUE,STENCIL_UTRUE,-average_value_of_f/a);
     //}
-    //average_value_of_f = mean(level,__f);
+    //average_value_of_f = mean(level,STENCIL_F);
     //if(level->my_rank==0){printf("  average value of f = %20.12e after shifting\n",average_value_of_f);fflush(stdout);}
     //}
   }

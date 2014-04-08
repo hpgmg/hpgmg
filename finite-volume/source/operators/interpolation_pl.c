@@ -27,8 +27,8 @@ static inline void InterpolateBlock_PL(level_type *level_f, int id_f, double pre
   double * __restrict__ write = block->write.ptr;
   double * __restrict__ valid;
   if(block->read.box >=0){
-     read = level_c->my_boxes[ block->read.box].components[   id_c] + level_c->my_boxes[ block->read.box].ghosts*(1+level_c->my_boxes[ block->read.box].jStride+level_c->my_boxes[ block->read.box].kStride);
-     valid= level_c->my_boxes[ block->read.box].components[__valid] + level_c->my_boxes[ block->read.box].ghosts*(1+level_c->my_boxes[ block->read.box].jStride+level_c->my_boxes[ block->read.box].kStride);
+     read = level_c->my_boxes[ block->read.box].components[         id_c] + level_c->my_boxes[ block->read.box].ghosts*(1+level_c->my_boxes[ block->read.box].jStride+level_c->my_boxes[ block->read.box].kStride);
+     valid= level_c->my_boxes[ block->read.box].components[STENCIL_VALID] + level_c->my_boxes[ block->read.box].ghosts*(1+level_c->my_boxes[ block->read.box].jStride+level_c->my_boxes[ block->read.box].kStride);
      read_jStride = level_c->my_boxes[block->read.box ].jStride;
      read_kStride = level_c->my_boxes[block->read.box ].kStride;
   }
@@ -43,7 +43,7 @@ static inline void InterpolateBlock_PL(level_type *level_f, int id_f, double pre
   double cim1,cip1;
   double cjm1,cjp1;
   double ckm1,ckp1;
-  #pragma omp parallel for num_threads(threads_per_block) __OMP_COLLAPSE
+  #pragma omp parallel for num_threads(threads_per_block) OMP_COLLAPSE
   for(k=0;k<write_dim_k;k++){
   for(j=0;j<write_dim_j;j++){
   for(i=0;i<write_dim_i;i++){
@@ -125,11 +125,11 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
   int buffer=0;
   int sendBox,recvBox,n;
 
-  #ifdef __MPI
+  #ifdef USE_MPI
 
   // loop through packed list of MPI receives and prepost Irecv's...
   _timeStart = CycleTime();
-  #ifdef __MPI_THREAD_MULTIPLE
+  #ifdef USE_MPI_THREAD_MULTIPLE
   #pragma omp parallel for schedule(dynamic,1)
   #endif
   for(n=0;n<level_f->interpolation.num_recvs;n++){
@@ -156,7 +156,7 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
  
   // loop through MPI send buffers and post Isend's...
   _timeStart = CycleTime();
-  #ifdef __MPI_THREAD_MULTIPLE
+  #ifdef USE_MPI_THREAD_MULTIPLE
   #pragma omp parallel for schedule(dynamic,1)
   #endif
   for(n=0;n<level_c->interpolation.num_sends;n++){
@@ -183,7 +183,7 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
 
 
   // wait for MPI to finish...
-  #ifdef __MPI 
+  #ifdef USE_MPI 
   _timeStart = CycleTime();
   if(level_c->interpolation.num_sends)MPI_Waitall(level_c->interpolation.num_sends,level_c->interpolation.requests,level_c->interpolation.status);
   if(level_f->interpolation.num_recvs)MPI_Waitall(level_f->interpolation.num_recvs,level_f->interpolation.requests,level_f->interpolation.status);

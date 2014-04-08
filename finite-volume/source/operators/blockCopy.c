@@ -46,7 +46,7 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block, i
       write[write_ijk+3] = read[read_ijk+3];
     }}
   }else{
-    #pragma omp parallel for private(i,j,k) num_threads(threads_per_block) __OMP_COLLAPSE
+    #pragma omp parallel for private(i,j,k) num_threads(threads_per_block) OMP_COLLAPSE
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
     for(i=0;i<dim_i;i++){
@@ -92,7 +92,7 @@ static inline void IncrementBlock(level_type *level, int id, double prescale, bl
   }
 
   int i,j,k;
-  #pragma omp parallel for private(i,j,k) num_threads(threads_per_block) __OMP_COLLAPSE
+  #pragma omp parallel for private(i,j,k) num_threads(threads_per_block) OMP_COLLAPSE
   for(k=0;k<dim_k;k++){
   for(j=0;j<dim_j;j++){
   for(i=0;i<dim_i;i++){

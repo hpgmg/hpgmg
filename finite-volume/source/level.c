@@ -9,11 +9,13 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
-#ifdef __MPI
+#ifdef USE_MPI
 #include <mpi.h>
 #endif
+#include <omp.h>
 //------------------------------------------------------------------------------------------------------------------------------
 #include "level.h"
+//#include "operators.h"
 //------------------------------------------------------------------------------------------------------------------------------
 //
 //    / 24 25 26 /
@@ -155,16 +157,16 @@ int create_box(box_type *box, int numComponents, int dim, int ghosts){
   box->numComponents = numComponents;
   box->dim = dim;
   box->ghosts = ghosts;
-  #ifndef __SIMD_ALIGNMENT
-  #define __SIMD_ALIGNMENT 1 // allignment requirement for j+/-1
+  #ifndef BOX_SIMD_ALIGNMENT
+  #define BOX_SIMD_ALIGNMENT 1 // allignment requirement for j+/-1
   #endif
-  box->jStride = (dim+2*ghosts);while(box->jStride % __SIMD_ALIGNMENT)box->jStride++; // pencil
-  #ifndef __PLANE_PADDING
-  #define __PLANE_PADDING 32 // scratch space to avoid unrolled loop cleanup
+  box->jStride = (dim+2*ghosts);while(box->jStride % BOX_SIMD_ALIGNMENT)box->jStride++; // pencil
+  #ifndef BOX_PLANE_PADDING
+  #define BOX_PLANE_PADDING  8 // scratch space to avoid unrolled loop cleanup
   #endif
   box->kStride = box->jStride*(dim+2*ghosts); // plane
-  if(box->jStride<__PLANE_PADDING)box->kStride += (__PLANE_PADDING-box->jStride); // allow the ghost zone to be clobbered...
-  while(box->kStride % __SIMD_ALIGNMENT)box->kStride++;
+  if(box->jStride<BOX_PLANE_PADDING)box->kStride += (BOX_PLANE_PADDING-box->jStride); // allow the ghost zone to be clobbered...
+  while(box->kStride % BOX_SIMD_ALIGNMENT)box->kStride++;
 
   #if 0
   // pad each plane such that 
@@ -619,7 +621,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // malloc MPI requests/status arrays
-  #ifdef __MPI
+  #ifdef USE_MPI
   level->exchange_ghosts[justFaces].requests = (MPI_Request*)malloc((level->exchange_ghosts[justFaces].num_sends+level->exchange_ghosts[justFaces].num_recvs)*sizeof(MPI_Request));
   level->exchange_ghosts[justFaces].status   = (MPI_Status *)malloc((level->exchange_ghosts[justFaces].num_sends+level->exchange_ghosts[justFaces].num_recvs)*sizeof(MPI_Status ));
   #endif
@@ -636,7 +638,8 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   int box;
   int TotalBoxes = boxes_in_i*boxes_in_i*boxes_in_i;
 
-  if(MPI_Rank==0){printf("attempting to create a %5d^3 level using a %3d^3 grid of %3d^3 boxes with a target of %6.3f boxes per process... ",box_dim*boxes_in_i,boxes_in_i,box_dim,(double)TotalBoxes/(double)MPI_Tasks);fflush(stdout);}
+  //if(MPI_Rank==0){printf("attempting to create a %5d^3 level using a %3d^3 grid of %3d^3 boxes with a target of %6.3f boxes per process...\n",box_dim*boxes_in_i,boxes_in_i,box_dim,(double)TotalBoxes/(double)MPI_Tasks);fflush(stdout);}
+  if(MPI_Rank==0){printf("\nattempting to create a %5d^3 level using a %3d^3 grid of %3d^3 boxes...\n",box_dim*boxes_in_i,boxes_in_i,box_dim);fflush(stdout);}
 
   int omp_threads = 1;
   int omp_nested  = 0;
@@ -689,6 +692,11 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   if(level->threads_per_box<1          )level->threads_per_box = 1;
   if(level->threads_per_box>omp_threads)level->threads_per_box = omp_threads;
   level->concurrent_boxes = omp_threads/level->threads_per_box;
+  }
+  if(MPI_Rank==0){
+    if(omp_nested)printf("  OMP_NESTED=TRUE  OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
+             else printf("  OMP_NESTED=FALSE OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
+    fflush(stdout);
   }
 
 
@@ -753,24 +761,23 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
 
   // duplicate MPI_COMM_WORLD to be the communicator for each level
-  #ifdef __MPI
+  #ifdef USE_MPI
   MPI_Comm_dup(MPI_COMM_WORLD,&level->MPI_COMM_LEVEL);
   #endif
     
   // report on potential load imbalance
   uint64_t BoxesPerProcess = level->num_my_boxes;
-  #ifdef __MPI
+  #ifdef USE_MPI
   uint64_t send = level->num_my_boxes;
   MPI_Allreduce(&send,&BoxesPerProcess,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
   #endif
-  //if(MPI_Rank==0){printf("done (up to %3ld boxes per process)\n",BoxesPerProcess);fflush(stdout);}
-  if(MPI_Rank==0){printf("done (up to %3ld boxes per process) (%d,%d) -> (%d,%d)\n",BoxesPerProcess,omp_threads,omp_nested,level->concurrent_boxes,level->threads_per_box);fflush(stdout);}
+  if(MPI_Rank==0){printf("  calculating boxes per process... target=%0.3f, max=%ld\n",(double)TotalBoxes/(double)MPI_Tasks,BoxesPerProcess);fflush(stdout);}
 }
 
 
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
-reset_level_timers(level_type *level){
+void reset_level_timers(level_type *level){
   // cycle counters information...
   level->cycles.smooth                  = 0;
   level->cycles.apply_op                = 0;

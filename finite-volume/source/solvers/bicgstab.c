@@ -9,80 +9,80 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
-#define DiagonallyPrecondition
+#define KRYLOV_DIAGONAL_PRECONDITION
 //------------------------------------------------------------------------------------------------------------------------------
 void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double desired_reduction_in_norm){
   // Algorithm 7.7 in Iterative Methods for Sparse Linear Systems(Yousef Saad)
   // uses "right" preconditioning...  AD^{-1}(Dx) = b ... AD^{-1}y = b ... solve for y, then solve for x = D^{-1}y
-  int  __r0 = __Components+0;
-  int  __r  = __Components+1;
-  int  __p  = __Components+2;
-  int  __s  = __Components+3;
-  int  __Ap = __Components+4;
-  int  __As = __Components+5;
+  int  r0_id = COMPONENTS_RESERVED+0;
+  int  r_id  = COMPONENTS_RESERVED+1;
+  int   p_id = COMPONENTS_RESERVED+2;
+  int   s_id = COMPONENTS_RESERVED+3;
+  int  Ap_id = COMPONENTS_RESERVED+4;
+  int  As_id = COMPONENTS_RESERVED+5;
 
   int jMax=200;
   int j=0;
   int BiCGStabFailed    = 0;
   int BiCGStabConverged = 0;
-  residual(level,__r0,x_id,R_id,a,b);                                           // r0[] = R_id[] - A(x_id)
-  scale_grid(level,__r,1.0,__r0);                                               // r[] = r0[]
-  scale_grid(level,__p,1.0,__r0);                                               // p[] = r0[]
-  double r_dot_r0 = dot(level,__r,__r0);                                        // r_dot_r0 = dot(r,r0)
-  double norm_of_r0 = norm(level,__r);                                          // the norm of the initial residual...
+  residual(level,r0_id,x_id,R_id,a,b);                                          // r0[] = R_id[] - A(x_id)
+  scale_grid(level,r_id,1.0,r0_id);                                             // r[] = r0[]
+  scale_grid(level,p_id,1.0,r0_id);                                             // p[] = r0[]
+  double r_dot_r0 = dot(level,r_id,r0_id);                                      // r_dot_r0 = dot(r,r0)
+  double norm_of_r0 = norm(level,r_id);                                         // the norm of the initial residual...
   if(r_dot_r0   == 0.0){BiCGStabConverged=1;}                                   // entered BiCGStab with exact solution
   if(norm_of_r0 == 0.0){BiCGStabConverged=1;}                                   // entered BiCGStab with exact solution
   while( (j<jMax) && (!BiCGStabFailed) && (!BiCGStabConverged) ){               // while(not done){
     j++;level->Krylov_iterations++;                                             //
-    #ifdef DiagonallyPrecondition                                               //
-    mul_grids(level,__temp,1.0,__Dinv,__p);                                     //   temp[] = Dinv[]*p[]
-    apply_op(level,__Ap,__temp,a,b);                                            //   Ap = AD^{-1}(p)
+    #ifdef KRYLOV_DIAGONAL_PRECONDITION                                         //
+    mul_grids(level,STENCIL_TEMP,1.0,STENCIL_DINV,p_id);                              //   temp[] = Dinv[]*p[]
+    apply_op(level,Ap_id,STENCIL_TEMP,a,b);                                           //   Ap = AD^{-1}(p)
     #else                                                                       //
-    apply_op(level,__Ap,__p,a,b);                                               //   Ap = A(p)
+    apply_op(level,Ap_id,p_id,a,b);                                            //   Ap = A(p)
     #endif                                                                      //
-    double Ap_dot_r0 = dot(level,__Ap,__r0);                                    //   Ap_dot_r0 = dot(Ap,r0)
+    double Ap_dot_r0 = dot(level,Ap_id,r0_id);                                  //   Ap_dot_r0 = dot(Ap,r0)
     if(Ap_dot_r0 == 0.0){BiCGStabFailed=1;break;}                               //   pivot breakdown ???
     double alpha = r_dot_r0 / Ap_dot_r0;                                        //   alpha = r_dot_r0 / Ap_dot_r0
     if(isinf(alpha)){BiCGStabFailed=2;break;}                                   //   pivot breakdown ???
-    add_grids(level,x_id,1.0,x_id, alpha,__p );                                 //   x_id[] = x_id[] + alpha*p[]
-    add_grids(level,__s ,1.0,__r ,-alpha,__Ap);                                 //   s[]    = r[]    - alpha*Ap[]   (intermediate residual?)
-    double norm_of_s = norm(level,__s);                                         //   FIX - redundant??  norm of intermediate residual
+    add_grids(level,x_id,1.0,x_id, alpha, p_id);                                //   x_id[] = x_id[] + alpha*p[]
+    add_grids(level,s_id,1.0,r_id,-alpha,Ap_id);                                //   s[]    = r[]    - alpha*Ap[]   (intermediate residual?)
+    double norm_of_s = norm(level,s_id);                                        //   FIX - redundant??  norm of intermediate residual
   //if(level->my_rank==0)printf("norm(s)/norm(r0) = %e\n",norm_of_s/norm_of_r0);
     if(norm_of_s == 0.0){BiCGStabConverged=1;break;}                            //   FIX - redundant??  if As_dot_As==0, then As must be 0 which implies s==0
     if(norm_of_s < desired_reduction_in_norm*norm_of_r0){BiCGStabConverged=1;break;}
-    #ifdef DiagonallyPrecondition                                               //
-    mul_grids(level,__temp,1.0,__Dinv,__s);                                     //   temp[] = Dinv[]*s[]
-    apply_op(level,__As,__temp,a,b);                                            //   As = AD^{-1}(s)
+    #ifdef KRYLOV_DIAGONAL_PRECONDITION                                         //
+    mul_grids(level,STENCIL_TEMP,1.0,STENCIL_DINV,s_id);                              //   temp[] = Dinv[]*s[]
+    apply_op(level,As_id,STENCIL_TEMP,a,b);                                           //   As = AD^{-1}(s)
     #else                                                                       //
-    apply_op(level,__As,__s,a,b);                                               //   As = A(s)
+    apply_op(level,As_id,s_id,a,b);                                             //   As = A(s)
     #endif                                                                      //
-    double As_dot_As = dot(level,__As,__As);                                    //   As_dot_As = dot(As,As)
-    double As_dot_s  = dot(level,__As, __s);                                    //   As_dot_s  = dot(As, s)
+    double As_dot_As = dot(level,As_id,As_id);                                  //   As_dot_As = dot(As,As)
+    double As_dot_s  = dot(level,As_id, s_id);                                  //   As_dot_s  = dot(As, s)
     if(As_dot_As == 0.0){BiCGStabConverged=1;break;}                            //   converged ?
     double omega = As_dot_s / As_dot_As;                                        //   omega = As_dot_s / As_dot_As
     if(omega == 0.0){BiCGStabFailed=3;break;}                                   //   stabilization breakdown ???
     if(isinf(omega)){BiCGStabFailed=4;break;}                                   //   stabilization breakdown ???
-    add_grids(level,  x_id,  1.0,x_id, omega,__s   );                           //   x_id[] = x_id[] + omega*s[]
-    add_grids(level,__r   ,  1.0,__s ,-omega,__As  );                           //   r[]    = s[]    - omega*As[]  (recursively computed / updated residual)
-    double norm_of_r = norm(level,__r);                                         //   norm of recursively computed residual (good enough??)
+    add_grids(level,x_id,1.0,x_id, omega, s_id);                                //   x_id[] = x_id[] + omega*s[]
+    add_grids(level,r_id,1.0,s_id,-omega,As_id);                                //   r[]    = s[]    - omega*As[]  (recursively computed / updated residual)
+    double norm_of_r = norm(level,r_id);                                        //   norm of recursively computed residual (good enough??)
   //if(level->my_rank==0)printf("norm(r)/norm(r0) = %e\n",norm_of_r/norm_of_r0);
     if(norm_of_r == 0.0){BiCGStabConverged=1;break;}                            //
     if(norm_of_r < desired_reduction_in_norm*norm_of_r0){BiCGStabConverged=1;break;}
     #ifdef __DEBUG                                                              //
-    residual(level,__temp,x_id,R_id,a,b);                                       //
-    double norm_of_residual = norm(level,__temp);                               //
+    residual(level,STENCIL_TEMP,x_id,R_id,a,b);                                       //
+    double norm_of_residual = norm(level,STENCIL_TEMP);                               //
     if(level->my_rank==0)printf("j=%8d, norm=%12.6e, norm_inital=%12.6e, reduction=%e\n",j,norm_of_residual,norm_of_r0,norm_of_residual/norm_of_r0);   //
     #endif                                                                      //
-    double r_dot_r0_new = dot(level,__r,__r0);                                  //   r_dot_r0_new = dot(r,r0)
+    double r_dot_r0_new = dot(level,r_id,r0_id);                                //   r_dot_r0_new = dot(r,r0)
     if(r_dot_r0_new == 0.0){BiCGStabFailed=5;break;}                            //   Lanczos breakdown ???
     double beta = (r_dot_r0_new/r_dot_r0) * (alpha/omega);                      //   beta = (r_dot_r0_new/r_dot_r0) * (alpha/omega)
     if(isinf(beta)){BiCGStabFailed=6;break;}                                    //   ???
-    add_grids(level,__temp,1.0,__p,-omega,__Ap  );                              //   __temp =         (p[]-omega*Ap[])
-    add_grids(level,__p   ,1.0,__r,  beta,__temp);                              //   p[] = r[] + beta*(p[]-omega*Ap[])
+    add_grids(level,STENCIL_TEMP,1.0,p_id,-omega, Ap_id);                             //   STENCIL_TEMP =         (p[]-omega*Ap[])
+    add_grids(level,        p_id,1.0,r_id,  beta,STENCIL_TEMP);                             //   p[] = r[] + beta*(p[]-omega*Ap[])
     r_dot_r0 = r_dot_r0_new;                                                    //   r_dot_r0 = r_dot_r0_new   (save old r_dot_r0)
   }                                                                             // }
-    #ifdef DiagonallyPrecondition                                               //
-    mul_grids(level,x_id,1.0,__Dinv,x_id);                                      //   x_id[] = Dinv[]*x_id[] // i.e. x = D^{-1}x'
+    #ifdef KRYLOV_DIAGONAL_PRECONDITION                                         //
+    mul_grids(level,x_id,1.0,STENCIL_DINV,x_id);                                //   x_id[] = Dinv[]*x_id[] // i.e. x = D^{-1}x'
     #endif                                                                      //
   #ifdef __DEBUG
   if(BiCGStabFailed)if(level->my_rank==0)printf("BiCGStab Failed... error = %d\n",BiCGStabFailed);

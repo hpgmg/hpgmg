@@ -15,12 +15,12 @@ void exchange_boundary(level_type * level, int id, int justFaces){
 
   if(justFaces)justFaces=1;else justFaces=0;  // must be 0 or 1 in order to index into exchange_ghosts[]
 
-  #ifdef __MPI
+  #ifdef USE_MPI
   int nMessages = level->exchange_ghosts[justFaces].num_recvs + level->exchange_ghosts[justFaces].num_sends;
 
   // loop through packed list of MPI receives and prepost Irecv's...
   _timeStart = CycleTime();
-  #ifdef __MPI_THREAD_MULTIPLE
+  #ifdef USE_MPI_THREAD_MULTIPLE
   #pragma omp parallel for schedule(dynamic,1)
   #endif
   for(n=0;n<level->exchange_ghosts[justFaces].num_recvs;n++){
@@ -47,7 +47,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
  
   // loop through MPI send buffers and post Isend's...
   _timeStart = CycleTime();
-  #ifdef __MPI_THREAD_MULTIPLE
+  #ifdef USE_MPI_THREAD_MULTIPLE
   #pragma omp parallel for schedule(dynamic,1)
   #endif
   for(n=0;n<level->exchange_ghosts[justFaces].num_sends;n++){
@@ -74,7 +74,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
 
 
   // wait for MPI to finish...
-  #ifdef __MPI 
+  #ifdef USE_MPI 
   _timeStart = CycleTime();
   if(nMessages)MPI_Waitall(nMessages,level->exchange_ghosts[justFaces].requests,level->exchange_ghosts[justFaces].status);
   _timeEnd = CycleTime();
