@@ -90,6 +90,8 @@ On Mira (an IBM BlueGene/Q), one can use the following...
 soft add +mpiwrapper-xl
 mpixlc_r -O5 -qsmp=omp:noauto                level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.omp.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.bgq
 
+On Babbage (Xeon Phi cluster at NERSC), one can use
+mpiicc -O3 -fno-alias -fno-fnalias -mmic -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.omp.c -DUSE_MPI -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.babbage
 
 
 Running the benchmark
@@ -126,6 +128,9 @@ Will run the benchmark on 64 processes spread over 64 nodes with 1 process per
 node (c1) and 64 threads per process.  Each process is allocated 8 64^3 boxes. 
 At one point, the additional environment variables listed were found to 
 accelerate performance.
+
+On Babbage (the Xeon Phi Cluster at NERSC)
+mpirun.mic -n 8 -hostfile micfile.$PBS_JOBID -ppn 1 -env OMP_NUM_THREADS 120 -env KMP_AFFINITY balanced  ./run.babbage 7 1
 
 
 Understanding the Results

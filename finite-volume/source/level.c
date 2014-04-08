@@ -685,21 +685,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   //print_decomposition(level);// for debug purposes only
 
 
-  // Tune the OpenMP style of parallelism...
-  if(omp_nested){
-  int WorkPerThread = 32*32*16;
-  level->threads_per_box = (level->box_dim*level->box_dim*level->box_dim)/WorkPerThread;
-  if(level->threads_per_box<1          )level->threads_per_box = 1;
-  if(level->threads_per_box>omp_threads)level->threads_per_box = omp_threads;
-  level->concurrent_boxes = omp_threads/level->threads_per_box;
-  }
-  if(MPI_Rank==0){
-    if(omp_nested)printf("  OMP_NESTED=TRUE  OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
-             else printf("  OMP_NESTED=FALSE OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
-    fflush(stdout);
-  }
-
-
   // build my list of boxes...
   level->num_my_boxes=0;
   for(box=0;box<level->boxes_in.i*level->boxes_in.j*level->boxes_in.k;box++){if(level->rank_of_box[box]==level->my_rank)level->num_my_boxes++;} 
@@ -721,6 +706,24 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
       box++;
   }}}}
   initialize_valid_region(level); // define which cells are within the domain
+
+
+  // Tune the OpenMP style of parallelism...
+  // FIX !!! this approach can lead to imbalance...
+  // consider reordering the decisions to maximize load balancing across boxes...
+  if(omp_nested){
+  int WorkPerThread = 32*32*16;
+  level->threads_per_box = (level->box_dim*level->box_dim*level->box_dim)/WorkPerThread;
+  if(level->threads_per_box<1          )level->threads_per_box = 1;
+  if(level->threads_per_box>omp_threads)level->threads_per_box = omp_threads;
+  level->concurrent_boxes = omp_threads/level->threads_per_box;
+  if(level->concurrent_boxes>level->num_my_boxes)level->concurrent_boxes = level->num_my_boxes;
+  }
+  if(MPI_Rank==0){
+    if(omp_nested)printf("  OMP_NESTED=TRUE  OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
+             else printf("  OMP_NESTED=FALSE OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
+    fflush(stdout);
+  }
 
 
   // build an assist structure for Gauss Seidel Red Black that would facilitate unrolling and SIMDization...
