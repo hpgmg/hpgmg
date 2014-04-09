@@ -709,15 +709,19 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
 
   // Tune the OpenMP style of parallelism...
-  // FIX !!! this approach can lead to imbalance...
-  // consider reordering the decisions to maximize load balancing across boxes...
   if(omp_nested){
-  int WorkPerThread = 32*32*16;
-  level->threads_per_box = (level->box_dim*level->box_dim*level->box_dim)/WorkPerThread;
-  if(level->threads_per_box<1          )level->threads_per_box = 1;
-  if(level->threads_per_box>omp_threads)level->threads_per_box = omp_threads;
-  level->concurrent_boxes = omp_threads/level->threads_per_box;
-  if(level->concurrent_boxes>level->num_my_boxes)level->concurrent_boxes = level->num_my_boxes;
+  #ifndef OMP_STENCILS_PER_THREAD
+  #define OMP_STENCILS_PER_THREAD 64
+  #endif
+                                           level->concurrent_boxes = level->num_my_boxes;
+  if(level->concurrent_boxes > omp_threads)level->concurrent_boxes = omp_threads;
+  if(level->concurrent_boxes <           1)level->concurrent_boxes = 1;
+  level->threads_per_box = omp_threads / level->concurrent_boxes;
+  if(level->threads_per_box > level->box_dim*level->box_dim)
+     level->threads_per_box = level->box_dim*level->box_dim; // JK collapse
+  if(level->threads_per_box > level->box_dim*level->box_dim*level->box_dim/OMP_STENCILS_PER_THREAD )
+     level->threads_per_box = level->box_dim*level->box_dim*level->box_dim/OMP_STENCILS_PER_THREAD;
+  if(level->threads_per_box<1)level->threads_per_box = 1;
   }
   if(MPI_Rank==0){
     if(omp_nested)printf("  OMP_NESTED=TRUE  OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
