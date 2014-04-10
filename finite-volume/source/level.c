@@ -152,9 +152,9 @@ int qsortInt(const void *a, const void *b){
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
-int create_box(box_type *box, int numComponents, int dim, int ghosts){
+int create_box(box_type *box, int numVectors, int dim, int ghosts){
   uint64_t memory_allocated = 0;
-  box->numComponents = numComponents;
+  box->numVectors = numVectors;
   box->dim = dim;
   box->ghosts = ghosts;
   #ifndef BOX_SIMD_ALIGNMENT
@@ -185,17 +185,17 @@ int create_box(box_type *box, int numComponents, int dim, int ghosts){
   box->volume = (dim+2*ghosts)*box->kStride;
 
 
-  // allocate an array of pointers to components...
-  box->components = (double **)malloc(box->numComponents*sizeof(double*));
-                  memory_allocated += box->numComponents*sizeof(double*);
-  // allocate one aligned, double-precision array and divide it among components...
-  uint64_t malloc_size = box->volume*box->numComponents*sizeof(double) + 4096; // shift pointer by up to 1 TLB page...
-  box->components_base = (double*)malloc(malloc_size);
-                     memory_allocated += malloc_size;
-  double * tmpbuf = box->components_base;
+  // allocate an array of pointers to vectors...
+  box->vectors = (double **)malloc(box->numVectors*sizeof(double*));
+               memory_allocated += box->numVectors*sizeof(double*);
+  // allocate one aligned, double-precision array and divide it among vectors...
+  uint64_t malloc_size = box->volume*box->numVectors*sizeof(double) + 4096; // shift pointer by up to 1 TLB page...
+  box->vectors_base = (double*)malloc(malloc_size);
+                  memory_allocated += malloc_size;
+  double * tmpbuf = box->vectors_base;
   while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (4096-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
-  memset(tmpbuf,0,box->volume*box->numComponents*sizeof(double)); // zero to avoid 0.0*NaN or 0.0*Inf
-  int c;for(c=0;c<box->numComponents;c++){box->components[c] = tmpbuf + c*box->volume;}
+  memset(tmpbuf,0,box->volume*box->numVectors*sizeof(double)); // zero to avoid 0.0*NaN or 0.0*Inf
+  int c;for(c=0;c<box->numVectors;c++){box->vectors[c] = tmpbuf + c*box->volume;}
 
 
   // done... return the total amount of memory allocated...
@@ -204,30 +204,30 @@ int create_box(box_type *box, int numComponents, int dim, int ghosts){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void add_components_to_box(box_type *box, int numAdditionalComponents){
-  if(numAdditionalComponents<=0)return;									// nothing to do
-  double * old_bp = box->components_base;								// save a pointer to the base pointer for subsequent free...
-  double * old_c0 = box->components[0];									// save a pointer to the old FP data...
-  double ** old_c = box->components;									// save a pointer to the old array of pointers...
-  box->numComponents+=numAdditionalComponents;								//
-  box->components = (double **)malloc(box->numComponents*sizeof(double*));				// new array of pointers components
+void add_vectors_to_box(box_type *box, int numAdditionalVectors){
+  if(numAdditionalVectors<=0)return;									// nothing to do
+  double * old_bp = box->vectors_base;									// save a pointer to the base pointer for subsequent free...
+  double * old_v0 = box->vectors[0];									// save a pointer to the old FP data...
+  double ** old_v = box->vectors;									// save a pointer to the old array of pointers...
+  box->numVectors+=numAdditionalVectors;								//
+  box->vectors = (double **)malloc(box->numVectors*sizeof(double*));				// new array of pointers vectors
   // NOTE !!! realloc() cannot guarantee the same alignment... malloc, allign, copy...
-  uint64_t malloc_size = box->volume*box->numComponents*sizeof(double) + 4096; // shift pointer by up to 1 TLB page...
-  box->components_base = (double*)malloc(malloc_size);
-  double * tmpbuf = box->components_base;
+  uint64_t malloc_size = box->volume*box->numVectors*sizeof(double) + 4096; // shift pointer by up to 1 TLB page...
+  box->vectors_base = (double*)malloc(malloc_size);
+  double * tmpbuf = box->vectors_base;
   while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (4096-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
-  memset(tmpbuf,0,box->volume*box->numComponents*sizeof(double));	// zero to avoid 0.0*NaN or 0.0*Inf
-  memcpy(tmpbuf,old_c0,box->volume*(box->numComponents-numAdditionalComponents)*sizeof(double));	// copy any existant data over...
-  int c;for(c=0;c<box->numComponents;c++){box->components[c] = tmpbuf + c*box->volume;}			// pointer arithmetic...
-  free(old_bp);												// all components were created from one malloc + pointer arithmetic...
-  free(old_c );												// free the list of pointers...
+  memset(tmpbuf,0,box->volume*box->numVectors*sizeof(double));	// zero to avoid 0.0*NaN or 0.0*Inf
+  memcpy(tmpbuf,old_v0,box->volume*(box->numVectors-numAdditionalVectors)*sizeof(double));	// copy any existant data over...
+  int c;for(c=0;c<box->numVectors;c++){box->vectors[c] = tmpbuf + c*box->volume;}			// pointer arithmetic...
+  free(old_bp);												// all vectors were created from one malloc + pointer arithmetic...
+  free(old_v );												// free the list of pointers...
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void destroy_box(box_type *box){
-  free(box->components_base); // single allocate with pointer arithmetic...
-  free(box->components);
+  free(box->vectors_base); // single allocate with pointer arithmetic...
+  free(box->vectors);
 }
 
 
@@ -634,7 +634,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
 
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
-void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_components, int domain_boundary_condition, int MPI_Rank, int MPI_Tasks){
+void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_vectors, int domain_boundary_condition, int MPI_Rank, int MPI_Tasks){
   int box;
   int TotalBoxes = boxes_in_i*boxes_in_i*boxes_in_i;
 
@@ -655,7 +655,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->memory_allocated = 0;
   level->box_dim        = box_dim;
   level->box_ghosts     = box_ghosts;
-  level->box_components = box_components;
+  level->box_vectors    = box_vectors;
   level->boxes_in.i     = boxes_in_i;
   level->boxes_in.j     = boxes_in_i;
   level->boxes_in.k     = boxes_in_i;
@@ -698,7 +698,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
     int kStride = level->boxes_in.i*level->boxes_in.j;
     int b=i + j*jStride + k*kStride;
     if(level->rank_of_box[b]==level->my_rank){
-      level->memory_allocated += create_box(&level->my_boxes[box],level->box_components,level->box_dim,level->box_ghosts);
+      level->memory_allocated += create_box(&level->my_boxes[box],level->box_vectors,level->box_dim,level->box_ghosts);
       level->my_boxes[box].low.i = i*level->box_dim;
       level->my_boxes[box].low.j = j*level->box_dim;
       level->my_boxes[box].low.k = k*level->box_dim;

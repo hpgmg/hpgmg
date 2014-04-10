@@ -144,19 +144,19 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // form restriction of alpha[], beta_*[] coefficients from fromLevel
   if(fromLevel != NULL){
-    restriction(level,STENCIL_ALPHA ,fromLevel,STENCIL_ALPHA ,RESTRICT_CELL  );
-    restriction(level,STENCIL_BETA_I,fromLevel,STENCIL_BETA_I,RESTRICT_FACE_I);
-    restriction(level,STENCIL_BETA_J,fromLevel,STENCIL_BETA_J,RESTRICT_FACE_J);
-    restriction(level,STENCIL_BETA_K,fromLevel,STENCIL_BETA_K,RESTRICT_FACE_K);
+    restriction(level,VECTOR_ALPHA ,fromLevel,VECTOR_ALPHA ,RESTRICT_CELL  );
+    restriction(level,VECTOR_BETA_I,fromLevel,VECTOR_BETA_I,RESTRICT_FACE_I);
+    restriction(level,VECTOR_BETA_J,fromLevel,VECTOR_BETA_J,RESTRICT_FACE_J);
+    restriction(level,VECTOR_BETA_K,fromLevel,VECTOR_BETA_K,RESTRICT_FACE_K);
   } // else case assumes alpha/beta have been set
 
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange alpha/beta/...  (must be done before calculating Dinv)
-  exchange_boundary(level,STENCIL_ALPHA ,0); // must be 0(faces,edges,corners) for CA version or 27pt
-  exchange_boundary(level,STENCIL_BETA_I,0);
-  exchange_boundary(level,STENCIL_BETA_J,0);
-  exchange_boundary(level,STENCIL_BETA_K,0);
+  exchange_boundary(level,VECTOR_ALPHA ,0); // must be 0(faces,edges,corners) for CA version or 27pt
+  exchange_boundary(level,VECTOR_BETA_I,0);
+  exchange_boundary(level,VECTOR_BETA_J,0);
+  exchange_boundary(level,VECTOR_BETA_K,0);
 
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -177,13 +177,13 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
     double h2inv = 1.0/(level->h*level->h);
-    double * __restrict__ alpha  = level->my_boxes[box].components[STENCIL_ALPHA ] + ghosts*(1+jStride+kStride);
-    double * __restrict__ beta_i = level->my_boxes[box].components[STENCIL_BETA_I] + ghosts*(1+jStride+kStride);
-    double * __restrict__ beta_j = level->my_boxes[box].components[STENCIL_BETA_J] + ghosts*(1+jStride+kStride);
-    double * __restrict__ beta_k = level->my_boxes[box].components[STENCIL_BETA_K] + ghosts*(1+jStride+kStride);
-    double * __restrict__   Dinv = level->my_boxes[box].components[STENCIL_DINV  ] + ghosts*(1+jStride+kStride);
-    double * __restrict__  L1inv = level->my_boxes[box].components[STENCIL_L1INV ] + ghosts*(1+jStride+kStride);
-    double * __restrict__  valid = level->my_boxes[box].components[STENCIL_VALID ] + ghosts*(1+jStride+kStride);
+    double * __restrict__ alpha  = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);
+    double * __restrict__ beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride);
+    double * __restrict__ beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + ghosts*(1+jStride+kStride);
+    double * __restrict__ beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + ghosts*(1+jStride+kStride);
+    double * __restrict__   Dinv = level->my_boxes[box].vectors[VECTOR_DINV  ] + ghosts*(1+jStride+kStride);
+    double * __restrict__  L1inv = level->my_boxes[box].vectors[VECTOR_L1INV ] + ghosts*(1+jStride+kStride);
+    double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID ] + ghosts*(1+jStride+kStride);
     double box_eigenvalue = -1e9;
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(max:box_eigenvalue) schedule(static)
     for(k=0;k<dim;k++){
@@ -253,8 +253,8 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange Dinv/L1inv/...
-  exchange_boundary(level,STENCIL_DINV ,0); // must be 0(faces,edges,corners) for CA version
-  exchange_boundary(level,STENCIL_L1INV,0);
+  exchange_boundary(level,VECTOR_DINV ,0); // must be 0(faces,edges,corners) for CA version
+  exchange_boundary(level,VECTOR_L1INV,0);
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
 

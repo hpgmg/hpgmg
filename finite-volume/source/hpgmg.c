@@ -73,6 +73,9 @@ int main(int argc, char **argv){
   MPI_Init_thread(&argc, &argv, MPI_threadingModelRequested, &MPI_threadingModel);
   MPI_Comm_size(MPI_COMM_WORLD, &MPI_Tasks);
   MPI_Comm_rank(MPI_COMM_WORLD, &MPI_Rank);
+  #ifdef USE_HPM // IBM HPM counters for BGQ...
+  HPM_Init();
+  #endif
 
   if(MPI_threadingModel>MPI_threadingModelRequested)MPI_threadingModel=MPI_threadingModelRequested;
   if(MPI_Rank==0){
@@ -139,10 +142,10 @@ int main(int argc, char **argv){
   // create the fine level...
   int ghosts=1;
   level_type fine_grid;
-  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,COMPONENTS_RESERVED,BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Periodic
-  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,COMPONENTS_RESERVED,BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Periodic
-  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,COMPONENTS_RESERVED,BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Dirichlet
-    create_level(&fine_grid,boxes_in_i,box_dim,ghosts,COMPONENTS_RESERVED,BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Dirichlet
+  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Periodic
+  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,BC_PERIODIC ,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Periodic
+  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Dirichlet
+    create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,BC_DIRICHLET,MPI_Rank,MPI_Tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Dirichlet
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   initialize_problem(&fine_grid,h0,a,b);
   rebuild_operator(&fine_grid,NULL,a,b); // i.e. calculate Dinv and lambda_max
@@ -152,17 +155,26 @@ int main(int argc, char **argv){
   MGBuild(&all_grids,&fine_grid,a,b,minCoarseDim);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   MGResetTimers(&all_grids);
-  #ifdef USE_FCYCLES
-  int trial;for(trial=0;trial<20;trial++){zero_grid(all_grids.levels[0],STENCIL_U);FMGSolve(&all_grids,STENCIL_U,STENCIL_F,a,b,1e-15);}
-  #else
-  int trial;for(trial=0;trial< 5;trial++){zero_grid(all_grids.levels[0],STENCIL_U); MGSolve(&all_grids,STENCIL_U,STENCIL_F,a,b,1e-15);}
+  #ifdef USE_HPM // IBM performance counters for BGQ...
+  HPM_Start("FMGSolve()");
   #endif
-  double fine_error = error(&fine_grid,STENCIL_U,STENCIL_UTRUE);if(MPI_Rank==0){printf("h = %e, error = %1.15e\n",h0,fine_error);}
+  #ifdef USE_FCYCLES
+  int trial;for(trial=0;trial<20;trial++){zero_grid(all_grids.levels[0],VECTOR_U);FMGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
+  #else
+  int trial;for(trial=0;trial< 5;trial++){zero_grid(all_grids.levels[0],VECTOR_U); MGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
+  #endif
+  #ifdef USE_HPM // IBM performance counters for BGQ...
+  HPM_Stop("FMGSolve()");
+  #endif
+  double fine_error = error(&fine_grid,VECTOR_U,VECTOR_UTRUE);if(MPI_Rank==0){printf("h = %e, error = %1.15e\n",h0,fine_error);}
   MGPrintTiming(&all_grids);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // MGDestroy()
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef USE_MPI
+  #ifdef USE_HPM // IBM performance counters for BGQ...
+  HPM_Print();
+  #endif
   MPI_Finalize();
   #endif
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

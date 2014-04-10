@@ -50,10 +50,10 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
   // However, the formation of [P,R] is expensive ~ 4S+1 exchanges.  Moreover, formation of G[][] requires (4S+2)(4S+1) grid operations.
   //   When the required number of iterations is small, this overhead is large and can make the s-step version slower than vanilla BiCGStab
   //   Thus, this version is a telescoping s-step method that will start out with s=1, then do s=2, then s=4
-  int  rt_id   = COMPONENTS_RESERVED+0;
-  int  r_id    = COMPONENTS_RESERVED+1;
-  int   p_id    = COMPONENTS_RESERVED+2;
-  int  PRrt_id = COMPONENTS_RESERVED+3;
+  int    rt_id = VECTORS_RESERVED+0;
+  int     r_id = VECTORS_RESERVED+1;
+  int     p_id = VECTORS_RESERVED+2;
+  int  PRrt_id = VECTORS_RESERVED+3;
 
 
   // note: CA_KRYLOV_S should be tiny (2-8?).  As such, 4*CA_KRYLOV_S+1 is also tiny (9-33).  Just allocate on the stack...
@@ -124,8 +124,8 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
     scale_grid(level,P[0],1.0, p_id);                                                             // P[0] = A^0p =  p_id
     for(n=1;n<2*ca_krylov_s+1;n++){                                                           // naive way of calculating the monomial basis.
       #ifdef KRYLOV_DIAGONAL_PRECONDITION                                                             //
-      mul_grids(level,STENCIL_TEMP,1.0,STENCIL_DINV,P[n-1]);                                                //   temp[] = Dinv[]*P[n-1]
-      apply_op(level,P[n],STENCIL_TEMP,a,b);                                                          //   P[n] = AD^{-1}STENCIL_TEMP = AD^{-1}P[n-1] = ((AD^{-1})^n)p
+      mul_grids(level, VECTOR_TEMP,1.0, VECTOR_DINV,P[n-1]);                                                //   temp[] = Dinv[]*P[n-1]
+      apply_op(level,P[n], VECTOR_TEMP,a,b);                                                          //   P[n] = AD^{-1} VECTOR_TEMP = AD^{-1}P[n-1] = ((AD^{-1})^n)p
       #else                                                                                     //
       apply_op(level,P[n],P[n-1],a,b);                                                          //   P[n] = A(P[n-1]) = (A^n)p
       #endif                                                                                    //
@@ -133,8 +133,8 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
     scale_grid(level,R[0],1.0,r_id);                                                             // R[0] = A^0r = r_id
     for(n=1;n<2*ca_krylov_s;n++){                                                             // naive way of calculating the monomial basis.
       #ifdef KRYLOV_DIAGONAL_PRECONDITION                                                             //
-      mul_grids(level,STENCIL_TEMP,1.0,STENCIL_DINV,R[n-1]);                                                //   temp[] = Dinv[]*R[n-1]
-      apply_op(level,R[n],STENCIL_TEMP,a,b);                                                          //   R[n] = AD^{-1}STENCIL_TEMP = AD^{-1}R[n-1]
+      mul_grids(level, VECTOR_TEMP,1.0, VECTOR_DINV,R[n-1]);                                                //   temp[] = Dinv[]*R[n-1]
+      apply_op(level,R[n], VECTOR_TEMP,a,b);                                                          //   R[n] = AD^{-1} VECTOR_TEMP = AD^{-1}R[n-1]
       #else                                                                                     //
       apply_op(level,R[n],R[n-1],a,b);                                                          //   R[n] = A(R[n-1]) = (A^n)r
       #endif                                                                                    //
@@ -275,7 +275,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
   }                                                                                             // } // outer m loop
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   #ifdef KRYLOV_DIAGONAL_PRECONDITION
-  mul_grids(level,e_id,1.0,STENCIL_DINV,e_id);                                                        //   e_id[] = Dinv[]*e_id[] // i.e. e = D^{-1}e'
+  mul_grids(level,e_id,1.0, VECTOR_DINV,e_id);                                                        //   e_id[] = Dinv[]*e_id[] // i.e. e = D^{-1}e'
   #endif
 
 }
@@ -283,10 +283,10 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
 #else // CA_KRYLOV_TELESCOPING =0
 void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, double desired_reduction_in_norm){
   // based on Erin Carson/Jim Demmel/Nick Knight's s-Step BiCGStab Algorithm 3.4
-  int    rt_id = COMPONENTS_RESERVED+0;
-  int     r_id = COMPONENTS_RESERVED+1;
-  int     p_id = COMPONENTS_RESERVED+2;
-  int  PRrt_id = COMPONENTS_RESERVED+3;
+  int    rt_id = VECTORS_RESERVED+0;
+  int     r_id = VECTORS_RESERVED+1;
+  int     p_id = VECTORS_RESERVED+2;
+  int  PRrt_id = VECTORS_RESERVED+3;
 
   // note: CA_KRYLOV_S should be tiny (2-8?).  As such, 4*CA_KRYLOV_S+1 is also tiny (9-33).  Just allocate on the stack...
   double  temp1[4*CA_KRYLOV_S+1];                                               //
@@ -359,8 +359,8 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
     scale_grid(level,P[0],1.0, p_id);                                             // P[0] = A^0p =  p_id
     for(n=1;n<2*ca_krylov_s+1;n++){                                           // naive way of calculating the monomial basis.
       #ifdef KRYLOV_DIAGONAL_PRECONDITION                                             //
-      mul_grids(level,STENCIL_TEMP,1.0,STENCIL_DINV,P[n-1]);                           //   temp[] = Dinv[]*P[n-1]
-      apply_op(level,P[n],STENCIL_TEMP,a,b);                                          //   P[n] = AD^{-1}STENCIL_TEMP = AD^{-1}P[n-1] = ((AD^{-1})^n)p
+      mul_grids(level, VECTOR_TEMP,1.0, VECTOR_DINV,P[n-1]);                           //   temp[] = Dinv[]*P[n-1]
+      apply_op(level,P[n], VECTOR_TEMP,a,b);                                          //   P[n] = AD^{-1} VECTOR_TEMP = AD^{-1}P[n-1] = ((AD^{-1})^n)p
       #else                                                                     //
       apply_op(level,P[n],P[n-1],a,b);                                          //   P[n] = A(P[n-1]) = (A^n)p
       #endif                                                                    //
@@ -368,8 +368,8 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
     scale_grid(level,R[0],1.0,r_id);                                             // R[0] = A^0r = r_id
     for(n=1;n<2*ca_krylov_s;n++){                                             // naive way of calculating the monomial basis.
       #ifdef KRYLOV_DIAGONAL_PRECONDITION                                             //
-      mul_grids(level,STENCIL_TEMP,1.0,STENCIL_DINV,R[n-1]);                                //   temp[] = Dinv[]*R[n-1]
-      apply_op(level,R[n],STENCIL_TEMP,a,b);                                          //   R[n] = AD^{-1}STENCIL_TEMP = AD^{-1}R[n-1]
+      mul_grids(level, VECTOR_TEMP,1.0, VECTOR_DINV,R[n-1]);                                //   temp[] = Dinv[]*R[n-1]
+      apply_op(level,R[n], VECTOR_TEMP,a,b);                                          //   R[n] = AD^{-1} VECTOR_TEMP = AD^{-1}R[n-1]
       #else                                                                     //
       apply_op(level,R[n],R[n-1],a,b);                                          //   R[n] = A(R[n-1]) = (A^n)r
       #endif                                                                    //
@@ -509,7 +509,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
   }                                                                                             // } // outer m loop
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   #ifdef KRYLOV_DIAGONAL_PRECONDITION
-  mul_grids(level,e_id,1.0,STENCIL_DINV,e_id);                                                        //   e_id[] = Dinv[]*e_id[] // i.e. e = D^{-1}e'
+  mul_grids(level,e_id,1.0, VECTOR_DINV,e_id);                                                        //   e_id[] = Dinv[]*e_id[] // i.e. e = D^{-1}e'
   #endif
 }
 #endif // CA_KRYLOV_TELESCOPING

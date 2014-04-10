@@ -35,8 +35,8 @@ void apply_BCs_linear(level_type * level, int x_id){
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
     double h2inv = 1.0/(level->h*level->h);
-    double * __restrict__ x      = level->my_boxes[box].components[     x_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
-    double * __restrict__  valid = level->my_boxes[box].components[  STENCIL_VALID] + ghosts*(1+jStride+kStride);
+    double * __restrict__ x      = level->my_boxes[box].vectors[        x_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID] + ghosts*(1+jStride+kStride);
 
     if(level->domain_boundary_condition == BC_DIRICHLET){
       // why these and not -1, -5, +77 ???
@@ -135,8 +135,8 @@ void apply_BCs_4thOrder(level_type * level, int x_id){
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
     double h2inv = 1.0/(level->h*level->h);
-    double * __restrict__ x      = level->my_boxes[box].components[     x_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
-    double * __restrict__  valid = level->my_boxes[box].components[  STENCIL_VALID] + ghosts*(1+jStride+kStride);
+    double * __restrict__ x      = level->my_boxes[box].vectors[        x_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID] + ghosts*(1+jStride+kStride);
 
     if(level->domain_boundary_condition == BC_DIRICHLET){
                   k= -1;if((level->my_boxes[box].low.k     ==            0))for(j=0;j<dim;j++)for(i=0;i<dim;i++){BC_4thOrder_face(x,i+j*jStride+k*kStride, kStride);} // face
@@ -239,8 +239,8 @@ void apply_BCs_2ndOrder(level_type * level, int x_id){
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
     double h2inv = 1.0/(level->h*level->h);
-    double * __restrict__ x      = level->my_boxes[box].components[           x_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
-    double * __restrict__  valid = level->my_boxes[box].components[  STENCIL_VALID] + ghosts*(1+jStride+kStride);
+    double * __restrict__ x      = level->my_boxes[box].vectors[        x_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID] + ghosts*(1+jStride+kStride);
 
     if(level->domain_boundary_condition == BC_DIRICHLET){
                   k= -1;if((level->my_boxes[box].low.k     ==            0))for(j=0;j<dim;j++)for(i=0;i<dim;i++){BC_2ndOrder(x,i+j*jStride+k*kStride, kStride);} // face

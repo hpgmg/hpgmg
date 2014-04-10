@@ -41,10 +41,10 @@ static inline void zero(double * z, int n){ // z[n] = 0.0
 //------------------------------------------------------------------------------------------------------------------------------
 void CACG(level_type * level, int e_id, int R_id, double a, double b, double desired_reduction_in_norm){
   // based on Lauren Goodfriend, Yinghui Huang, and David Thorman's derivation in their Spring 2013 CS267 Report
-  int    r0_id = COMPONENTS_RESERVED+0;
-  int     r_id = COMPONENTS_RESERVED+1;
-  int     p_id = COMPONENTS_RESERVED+2;
-  int  PRrt_id = COMPONENTS_RESERVED+3;
+  int    r0_id = VECTORS_RESERVED+0;
+  int     r_id = VECTORS_RESERVED+1;
+  int     p_id = VECTORS_RESERVED+2;
+  int  PRrt_id = VECTORS_RESERVED+3;
 
   double  temp1[2*CA_KRYLOV_S+1];                                                             //
   double  temp2[2*CA_KRYLOV_S+1];                                                             //

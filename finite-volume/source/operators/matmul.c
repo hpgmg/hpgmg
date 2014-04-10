@@ -29,8 +29,8 @@ void matmul_grids(level_type * level, double *C, int * id_A, int * id_B, int row
       int kStride = level->my_boxes[box].kStride;
       int  ghosts = level->my_boxes[box].ghosts;
       int     dim = level->my_boxes[box].dim;
-      double * __restrict__ grid_a = level->my_boxes[box].components[id_A[mm]] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
-      double * __restrict__ grid_b = level->my_boxes[box].components[id_B[nn]] + ghosts*(1+jStride+kStride); 
+      double * __restrict__ grid_a = level->my_boxes[box].vectors[id_A[mm]] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+      double * __restrict__ grid_b = level->my_boxes[box].vectors[id_B[nn]] + ghosts*(1+jStride+kStride); 
       double a_dot_b_box = 0.0;
       for(k=0;k<dim;k++){
       for(j=0;j<dim;j++){

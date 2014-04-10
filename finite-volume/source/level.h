@@ -21,7 +21,7 @@ typedef struct {
   struct {int box, i, j, k, jStride, kStride;double * __restrict__ ptr;}read,write;
   // coordinates in the read grid to extract data, 
   // coordinates in the write grid to insert data
-  // if read/write.box<0, then use write/read.ptr, otherwise use boxes[box].components[id]
+  // if read/write.box<0, then use write/read.ptr, otherwise use boxes[box].vectors[id]
   // Thus, you can do grid->grid, grid->buf, buf->grid, or buf->buf
 } blockCopy_type;
 
@@ -52,9 +52,9 @@ typedef struct {
   int                                   dim;	// dimension of this box's core (owned)
   int                                ghosts;	// ghost zone depth
   int                jStride,kStride,volume;	// useful for offsets
-  int                         numComponents;	//
-  double   ** __restrict__       components;	// components[c] = pointer to 3D array for component c
-  double    * __restrict__  components_base;    // pointer used for malloc/free.  components[c] are shifted from this for alignment
+  int                            numVectors;	//
+  double   ** __restrict__          vectors;	// vectors[c] = pointer to 3D array for vector c
+  double    * __restrict__     vectors_base;    // pointer used for malloc/free.  vectors[c] are shifted from this for alignment
 } box_type;
 
 
@@ -66,7 +66,7 @@ typedef struct {
   int my_rank;					// my MPI rank
   int box_dim;					// dimension of each cubical box (not counting ghost zones)
   int box_ghosts;				// ghost zone depth for each box
-  int box_components;				// number of components stored in each box
+  int box_vectors;				// number of vectors stored in each box
   struct {int i, j, k;}boxes_in;		// total number of boxes in i,j,k across this level
   struct {int i, j, k;}dim;			// global dimensions at this level (NOTE: dim.i == boxes_in.i * box_dim)
   int domain_boundary_condition;		//
@@ -133,10 +133,10 @@ typedef struct {
 
 
 //------------------------------------------------------------------------------------------------------------------------------
- int create_box(box_type *box, int numComponents, int dim, int ghosts);
-void add_components_to_box(box_type *box, int numAdditionalComponents);
+ int create_box(box_type *box, int numVectors, int dim, int ghosts);
+void add_vectors_to_box(box_type *box, int numAdditionalVectors);
 void destroy_box(box_type *box);
-void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_components, int domain_boundary_condition, int MPI_Rank, int MPI_Tasks);
+void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_vectors, int domain_boundary_condition, int MPI_Rank, int MPI_Tasks);
 void destroy_level(level_type *level);
 void reset_level_timers(level_type *level);
 int qsortInt(const void *a, const void *b);

@@ -15,7 +15,7 @@ void zero_grid(level_type * level, int component_id){
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid = level->my_boxes[box].components[component_id] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid = level->my_boxes[box].vectors[component_id] + ghosts*(1+jStride+kStride);
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=-ghosts;k<dim+ghosts;k++){
     for(j=-ghosts;j<dim+ghosts;j++){
@@ -40,7 +40,7 @@ void initialize_valid_region(level_type * level){
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ valid = level->my_boxes[box].components[STENCIL_VALID] + ghosts*(1+jStride+kStride);
+    double * __restrict__ valid = level->my_boxes[box].vectors[VECTOR_VALID] + ghosts*(1+jStride+kStride);
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=-ghosts;k<dim+ghosts;k++){
     for(j=-ghosts;j<dim+ghosts;j++){
@@ -74,7 +74,7 @@ void initialize_grid_to_scalar(level_type * level, int component_id, double scal
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid = level->my_boxes[box].components[component_id] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid = level->my_boxes[box].vectors[component_id] + ghosts*(1+jStride+kStride);
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=-ghosts;k<dim+ghosts;k++){
     for(j=-ghosts;j<dim+ghosts;j++){
@@ -101,9 +101,9 @@ void add_grids(level_type * level, int id_c, double scale_a, int id_a, double sc
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
-    double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
-    double * __restrict__ grid_b = level->my_boxes[box].components[id_b] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_c = level->my_boxes[box].vectors[id_c] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_a = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_b = level->my_boxes[box].vectors[id_b] + ghosts*(1+jStride+kStride);
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
@@ -129,9 +129,9 @@ void mul_grids(level_type * level, int id_c, double scale, int id_a, int id_b){ 
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
-    double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
-    double * __restrict__ grid_b = level->my_boxes[box].components[id_b] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_c = level->my_boxes[box].vectors[id_c] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_a = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_b = level->my_boxes[box].vectors[id_b] + ghosts*(1+jStride+kStride);
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
@@ -157,8 +157,8 @@ void invert_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
-    double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_c = level->my_boxes[box].vectors[id_c] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_a = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride);
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
@@ -184,8 +184,8 @@ void scale_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]=
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
-    double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_c = level->my_boxes[box].vectors[id_c] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_a = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride);
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
@@ -213,8 +213,8 @@ double dot(level_type * level, int id_a, int id_b){
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
-    double * __restrict__ grid_b = level->my_boxes[box].components[id_b] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_a = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__ grid_b = level->my_boxes[box].vectors[id_b] + ghosts*(1+jStride+kStride);
     double a_dot_b_box = 0.0;
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(+:a_dot_b_box) schedule(static)
     for(k=0;k<dim;k++){
@@ -252,7 +252,7 @@ double norm(level_type * level, int component_id){ // implements the max norm
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid   = level->my_boxes[box].components[component_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__ grid   = level->my_boxes[box].vectors[component_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double box_norm = 0.0;
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(max:box_norm) schedule(static)
     for(k=0;k<dim;k++){
@@ -291,7 +291,7 @@ double mean(level_type * level, int id_a){
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__ grid_a = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double sum_box = 0.0;
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(+:sum_box) schedule(static)
     for(k=0;k<dim;k++){
@@ -330,8 +330,8 @@ void shift_grid(level_type * level, int id_c, int id_a, double shift_a){
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
-    double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__ grid_c = level->my_boxes[box].vectors[id_c] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__ grid_a = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
 
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
@@ -356,8 +356,8 @@ void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir)
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid_cell = level->my_boxes[box].components[id_cell] + ghosts*(1+jStride+kStride);
-    double * __restrict__ grid_face = level->my_boxes[box].components[id_face] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_cell = level->my_boxes[box].vectors[id_cell] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid_face = level->my_boxes[box].vectors[id_face] + ghosts*(1+jStride+kStride);
     int stride;
     switch(dir){
       case 0: stride =       1;break;//i-direction
@@ -380,7 +380,7 @@ void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir)
 //------------------------------------------------------------------------------------------------------------------------------
 double error(level_type * level, int id_a, int id_b){
   double h3 = level->h * level->h * level->h;
-                 add_grids(level,STENCIL_TEMP,1.0,id_a,-1.0,id_b);       // STENCIL_TEMP = id_a - id_b
-  double   max =      norm(level,STENCIL_TEMP);                 return(max);   // max norm of error function
-  double    L2 = sqrt( dot(level,STENCIL_TEMP,STENCIL_TEMP)*h3);return( L2);   // normalized L2 error ?
+                 add_grids(level,VECTOR_TEMP,1.0,id_a,-1.0,id_b);       // VECTOR_TEMP = id_a - id_b
+  double   max =      norm(level,VECTOR_TEMP);                 return(max);   // max norm of error function
+  double    L2 = sqrt( dot(level,VECTOR_TEMP,VECTOR_TEMP)*h3);return( L2);   // normalized L2 error ?
 }

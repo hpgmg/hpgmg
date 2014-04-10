@@ -23,8 +23,8 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block, i
 
   double * __restrict__  read = block->read.ptr;
   double * __restrict__ write = block->write.ptr;
-  if(block->read.box >=0) read = level->my_boxes[ block->read.box].components[id] + level->my_boxes[ block->read.box].ghosts*(1+level->my_boxes[ block->read.box].jStride+level->my_boxes[ block->read.box].kStride);
-  if(block->write.box>=0)write = level->my_boxes[block->write.box].components[id] + level->my_boxes[block->write.box].ghosts*(1+level->my_boxes[block->write.box].jStride+level->my_boxes[block->write.box].kStride);
+  if(block->read.box >=0) read = level->my_boxes[ block->read.box].vectors[id] + level->my_boxes[ block->read.box].ghosts*(1+level->my_boxes[ block->read.box].jStride+level->my_boxes[ block->read.box].kStride);
+  if(block->write.box>=0)write = level->my_boxes[block->write.box].vectors[id] + level->my_boxes[block->write.box].ghosts*(1+level->my_boxes[block->write.box].jStride+level->my_boxes[block->write.box].kStride);
 
 
   int i,j,k;
@@ -95,12 +95,12 @@ static inline void IncrementBlock(level_type *level, int id, double prescale, bl
   double * __restrict__  read = block->read.ptr;
   double * __restrict__ write = block->write.ptr;
   if(block->read.box >=0){
-     read = level->my_boxes[ block->read.box].components[id] + level->my_boxes[ block->read.box].ghosts*(1+level->my_boxes[ block->read.box].jStride+level->my_boxes[ block->read.box].kStride);
+     read = level->my_boxes[ block->read.box].vectors[id] + level->my_boxes[ block->read.box].ghosts*(1+level->my_boxes[ block->read.box].jStride+level->my_boxes[ block->read.box].kStride);
      read_jStride = level->my_boxes[block->read.box ].jStride;
      read_kStride = level->my_boxes[block->read.box ].kStride;
   }
   if(block->write.box>=0){
-    write = level->my_boxes[block->write.box].components[id] + level->my_boxes[block->write.box].ghosts*(1+level->my_boxes[block->write.box].jStride+level->my_boxes[block->write.box].kStride);
+    write = level->my_boxes[block->write.box].vectors[id] + level->my_boxes[block->write.box].ghosts*(1+level->my_boxes[block->write.box].jStride+level->my_boxes[block->write.box].kStride);
     write_jStride = level->my_boxes[block->write.box].jStride;
     write_kStride = level->my_boxes[block->write.box].kStride;
   }

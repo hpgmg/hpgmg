@@ -30,7 +30,7 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
   if(!level->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   double meanF;
-  if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,STENCIL_ALPHA,STENCIL_ALPHA) == 0.0);  // haven't determined if alpha[] == 0
+  if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);  // haven't determined if alpha[] == 0
   #ifdef MODIFY_BOTTOM_FOR_PERIODIC
   if(level->domain_boundary_condition == BC_PERIODIC){ // RHS should sum to zero !!!
     meanF = mean(level,f_id);
@@ -43,8 +43,8 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
     //  // Helmholtz with Periodic Boundary Conditions, but the RHS didn't sum to zero
     //  // let u' = u - (meanF/a)(1/alpha)
     //  // solve a alpha u' - b div beta grad u' = f' = f - meanF + b div beta grad (meanF/a)(1/alpha)
-    //  invert_grid(level,STENCIL_TEMP,meanF/a,STENCIL_ALPHA);  // FIX !!!  no element of alpha must ever be zero !!!
-    //  residual(level,f_id,STENCIL_TEMP,f_id,0.0,b); // f' = f - (0*STENCIL_TEMP - b div beta grad STENCIL_TEMP) = f + b div beta grad STENCIL_TEMP
+    //  invert_grid(level,VECTOR_TEMP,meanF/a,VECTOR_ALPHA);  // FIX !!!  no element of alpha must ever be zero !!!
+    //  residual(level,f_id,VECTOR_TEMP,f_id,0.0,b); // f' = f - (0*VECTOR_TEMP - b div beta grad VECTOR_TEMP) = f + b div beta grad VECTOR_TEMP
     //  shift_grid(level,f_id,f_id,-meanF);
     //}
   }
@@ -60,17 +60,17 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
     CACG(level,u_id,f_id,a,b,desired_reduction_in_norm);
   #else // just point relaxation via multiple smooth()'s
     #if 1 
-                     residual(level,STENCIL_TEMP,u_id,f_id,a,b);
-                    mul_grids(level,STENCIL_TEMP,1.0,STENCIL_TEMP,STENCIL_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
-     double norm_of_r0 = norm(level,STENCIL_TEMP);
+                     residual(level,VECTOR_TEMP,u_id,f_id,a,b);
+                    mul_grids(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+     double norm_of_r0 = norm(level,VECTOR_TEMP);
     int s=0,maxSmoothsBottom=10,converged=0;
     while( (s<maxSmoothsBottom) && !converged){
       s++;
       level->Krylov_iterations++;
                        smooth(level,u_id,f_id,a,b);
-                     residual(level,STENCIL_TEMP,u_id,f_id,a,b);
-                    mul_grids(level,STENCIL_TEMP,1.0,STENCIL_TEMP,STENCIL_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
-      double norm_of_r = norm(level,STENCIL_TEMP);
+                     residual(level,VECTOR_TEMP,u_id,f_id,a,b);
+                    mul_grids(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+      double norm_of_r = norm(level,VECTOR_TEMP);
       if(norm_of_r == 0.0){converged=1;break;}
       if(norm_of_r < desired_reduction_in_norm*norm_of_r0){converged=1;break;}
     }
@@ -93,8 +93,8 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
     //if( (meanF!=0.0) && (a!=0.0) && (level->alpha_is_zero==0) ){
     //  // Helmholtz with Periodic Boundary Conditions, but the RHS didn't sum to zero...
     //  // u = u' + (meanF/a)(1/alpha)
-    //  invert_grid(level,STENCIL_TEMP,meanF/a,STENCIL_ALPHA);  // FIX !!!  no element of alpha must ever be zero !!!
-    //  add_grids(level,u_id,1.0,u_id,1.0,STENCIL_TEMP);
+    //  invert_grid(level,VECTOR_TEMP,meanF/a,VECTOR_ALPHA);  // FIX !!!  no element of alpha must ever be zero !!!
+    //  add_grids(level,u_id,1.0,u_id,1.0,VECTOR_TEMP);
     //}
   } 
   #endif
@@ -103,7 +103,7 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-int IterativeSolver_NumComponents(){
+int IterativeSolver_NumVectors(){
   // additionally number of grids required by an iterative solver...
   #ifdef USE_BICGSTAB
   return(6);                  // BiCGStab requires additional grids r0,r,p,s,Ap,As

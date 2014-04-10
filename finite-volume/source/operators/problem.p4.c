@@ -71,12 +71,12 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
 
   int box;
   for(box=0;box<level->num_my_boxes;box++){
-    memset(level->my_boxes[box].components[STENCIL_ALPHA ],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].components[STENCIL_BETA_I],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].components[STENCIL_BETA_J],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].components[STENCIL_BETA_K],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].components[STENCIL_UTRUE ],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].components[STENCIL_F     ],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].vectors[VECTOR_ALPHA ],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].vectors[VECTOR_BETA_I],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].vectors[VECTOR_BETA_J],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].vectors[VECTOR_BETA_K],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].vectors[VECTOR_UTRUE ],0,level->my_boxes[box].volume*sizeof(double));
+    memset(level->my_boxes[box].vectors[VECTOR_F     ],0,level->my_boxes[box].volume*sizeof(double));
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
     int kStride = level->my_boxes[box].kStride;
@@ -115,41 +115,41 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       evaluateU(x,y,z,&U,&Ux,&Uy,&Uz,&Uxx,&Uyy,&Uzz, (level->domain_boundary_condition == BC_PERIODIC) );
       double F = a*A*U - b*( (Bx*Ux + By*Uy + Bz*Uz)  +  B*(Uxx + Uyy + Uzz) );
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-      level->my_boxes[box].components[STENCIL_ALPHA ][ijk] = A;
-      level->my_boxes[box].components[STENCIL_BETA_I][ijk] = Bi;
-      level->my_boxes[box].components[STENCIL_BETA_J][ijk] = Bj;
-      level->my_boxes[box].components[STENCIL_BETA_K][ijk] = Bk;
-      level->my_boxes[box].components[STENCIL_UTRUE][ijk] = U;
-      level->my_boxes[box].components[STENCIL_F    ][ijk] = F;
+      level->my_boxes[box].vectors[VECTOR_ALPHA ][ijk] = A;
+      level->my_boxes[box].vectors[VECTOR_BETA_I][ijk] = Bi;
+      level->my_boxes[box].vectors[VECTOR_BETA_J][ijk] = Bj;
+      level->my_boxes[box].vectors[VECTOR_BETA_K][ijk] = Bk;
+      level->my_boxes[box].vectors[VECTOR_UTRUE][ijk] = U;
+      level->my_boxes[box].vectors[VECTOR_F    ][ijk] = F;
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
     }}}
   }
 
 
-  if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,STENCIL_ALPHA,STENCIL_ALPHA) == 0.0);
+  if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
 
 
   // FIX... Periodic Boundary Conditions...
   if(level->domain_boundary_condition == BC_PERIODIC){
-    double average_value_of_f = mean(level,STENCIL_F);
+    double average_value_of_f = mean(level,VECTOR_F);
     if(average_value_of_f!=0.0)if(level->my_rank==0){printf("\n  WARNING... Periodic boundary conditions, but f does not sum to zero... mean(f)=%e\n",average_value_of_f);}
    
     if((a==0.0) || (level->alpha_is_zero==1) ){ // poisson... by convention, we assume u sums to zero...
-      double average_value_of_u = mean(level,STENCIL_UTRUE);
+      double average_value_of_u = mean(level,VECTOR_UTRUE);
       if(level->my_rank==0){printf("\n  average value of u = %20.12e... shifting u to ensure it sums to zero...\n",average_value_of_u);fflush(stdout);}
-      shift_grid(level,STENCIL_UTRUE,STENCIL_UTRUE,-average_value_of_u);
-      shift_grid(level,STENCIL_F,STENCIL_F,-average_value_of_f);
+      shift_grid(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_u);
+      shift_grid(level,VECTOR_F,VECTOR_F,-average_value_of_f);
     }
     //}else{ // helmholtz...
     // FIX... for helmoltz, does the fine grid RHS have to sum to zero ???
-    //double average_value_of_f = mean(level,STENCIL_F);
+    //double average_value_of_f = mean(level,VECTOR_F);
     //if(level->my_rank==0){printf("\n");}
     //if(level->my_rank==0){printf("  average value of f = %20.12e... shifting to ensure f sums to zero...\n",average_value_of_f);fflush(stdout);}
     //if(a!=0){
-    //  shift_grid(level,STENCIL_F      ,STENCIL_F      ,-average_value_of_f);
-    //  shift_grid(level,STENCIL_UTRUE,STENCIL_UTRUE,-average_value_of_f/a);
+    //  shift_grid(level,VECTOR_F      ,VECTOR_F      ,-average_value_of_f);
+    //  shift_grid(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_f/a);
     //}
-    //average_value_of_f = mean(level,STENCIL_F);
+    //average_value_of_f = mean(level,VECTOR_F);
     //if(level->my_rank==0){printf("  average value of f = %20.12e after shifting\n",average_value_of_f);fflush(stdout);}
     //}
   }

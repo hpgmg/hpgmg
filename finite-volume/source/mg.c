@@ -679,7 +679,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     int box_dim    = -1;
     int boxes_in_i = -1;
     int box_ghosts      = all_grids->levels[level-1]->box_ghosts;
-    int box_components  = all_grids->levels[level-1]->box_components;
+    int box_vectors     = all_grids->levels[level-1]->box_vectors;
 //  if( (fine_domain_dim % 2 == 0) && (fine_domain_dim/2 <= DOMAIN_DIM_THRESHOLD) ){box_dim=fine_domain_dim/2;boxes_in_i=1;                doRestrict=1;}else // FIX... agglomerate everything !!!
     if( (fine_box_dim    % 2 == 0) && (fine_box_dim > BOX_DIM_THRESHOLD)          ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;   doRestrict=1;}else
     #ifndef USE_UCYCLES
@@ -700,7 +700,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
       all_grids->levels[level] = (level_type*)malloc(sizeof(level_type));
       int numRanks = all_grids->levels[level-1]->num_ranks;  
       // FIX... Consider using << numRanks as you descend
-      create_level(all_grids->levels[level],boxes_in_i,box_dim,box_ghosts,box_components,all_grids->levels[level-1]->domain_boundary_condition,all_grids->levels[level-1]->my_rank,numRanks);
+      create_level(all_grids->levels[level],boxes_in_i,box_dim,box_ghosts,box_vectors,all_grids->levels[level-1]->domain_boundary_condition,all_grids->levels[level-1]->my_rank,numRanks);
       all_grids->levels[level]->h = 2.0*all_grids->levels[level-1]->h;
       all_grids->num_levels++;
     }
@@ -709,12 +709,12 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   // bottom solver gets extra grids...
   level = all_grids->num_levels-1;
   int box,c;
-  int numAdditionalComponents = IterativeSolver_NumComponents();
-  all_grids->levels[level]->box_components += numAdditionalComponents;
-  if(numAdditionalComponents){
+  int numAdditionalVectors = IterativeSolver_NumVectors();
+  all_grids->levels[level]->box_vectors += numAdditionalVectors;
+  if(numAdditionalVectors){
     for(box=0;box<all_grids->levels[level]->num_my_boxes;box++){
-      add_components_to_box(all_grids->levels[level]->my_boxes+box,numAdditionalComponents);
-      all_grids->levels[level]->memory_allocated += numAdditionalComponents*all_grids->levels[level]->my_boxes[box].volume*sizeof(double);
+      add_vectors_to_box(all_grids->levels[level]->my_boxes+box,numAdditionalVectors);
+      all_grids->levels[level]->memory_allocated += numAdditionalVectors*all_grids->levels[level]->my_boxes[box].volume*sizeof(double);
     }
     //initialize_valid_region(all_grids->levels[level]); // define which cells are within the domain
   }
@@ -747,7 +747,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
 
   // used for quick test for poisson
   for(level=0;level<all_grids->num_levels;level++){
-    all_grids->levels[level]->alpha_is_zero = (dot(all_grids->levels[level],STENCIL_ALPHA,STENCIL_ALPHA) == 0.0);
+    all_grids->levels[level]->alpha_is_zero = (dot(all_grids->levels[level],VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
   }
 
 
@@ -771,8 +771,8 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
   // down...
   _LevelStart = CycleTime();
        smooth(all_grids->levels[level  ],e_id,R_id,a,b);
-     residual(all_grids->levels[level  ],STENCIL_TEMP,e_id,R_id,a,b);
-  restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],STENCIL_TEMP,RESTRICT_CELL);
+     residual(all_grids->levels[level  ],VECTOR_TEMP,e_id,R_id,a,b);
+  restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],VECTOR_TEMP,RESTRICT_CELL);
     zero_grid(all_grids->levels[level+1],e_id);
   all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
 
@@ -793,7 +793,7 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
   if(!all_grids->levels[0]->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   int e_id = u_id; // __u FIX
-  int R_id = STENCIL_F_MINUS_AV;
+  int R_id = VECTOR_F_MINUS_AV;
   int v;
   int maxVCycles = 20;
 
@@ -807,7 +807,7 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
    zero_grid(all_grids->levels[0],e_id);                  // ee = 0
   scale_grid(all_grids->levels[0],R_id,1.0,F_id);         // R_id = F_id
   #else
-   mul_grids(all_grids->levels[0],e_id,1.0,STENCIL_DINV,F_id);  // e_id = Dinv*F_id
+   mul_grids(all_grids->levels[0],e_id,1.0,VECTOR_DINV,F_id);  // e_id = Dinv*F_id
   scale_grid(all_grids->levels[0],R_id,1.0,F_id);               // R_id = F_id
   #endif
 
@@ -828,9 +828,9 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
       double average_value_of_e = mean(all_grids->levels[level],e_id);
       shift_grid(all_grids->levels[level],e_id,e_id,-average_value_of_e);
     }
-    residual(all_grids->levels[level],STENCIL_TEMP,e_id,F_id,a,b);
-    mul_grids(all_grids->levels[level],STENCIL_TEMP,1.0,STENCIL_TEMP,STENCIL_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
-    double norm_of_residual = norm(all_grids->levels[level],STENCIL_TEMP);
+    residual(all_grids->levels[level],VECTOR_TEMP,e_id,F_id,a,b);
+    mul_grids(all_grids->levels[level],VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+    double norm_of_residual = norm(all_grids->levels[level],VECTOR_TEMP);
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
     if(all_grids->levels[level]->my_rank==0){printf("v-cycle=%2d, norm=%22.20f (%1.15e)\n",v+1,norm_of_residual,norm_of_residual);fflush(stdout);}
@@ -852,7 +852,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   int v;
   int level;
   int e_id = u_id;
-  int R_id = STENCIL_F_MINUS_AV;
+  int R_id = VECTOR_F_MINUS_AV;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   if(all_grids->levels[0]->my_rank==0){printf("FMGSolve...\n");fflush(stdout);}
   uint64_t _timeStartMGSolve = CycleTime();
@@ -913,9 +913,9 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
       double average_value_of_e = mean(all_grids->levels[level],e_id);
       shift_grid(all_grids->levels[level],e_id,e_id,-average_value_of_e);
     }
-    residual(all_grids->levels[level],STENCIL_TEMP,e_id,F_id,a,b);
-    mul_grids(all_grids->levels[level],STENCIL_TEMP,1.0,STENCIL_TEMP,STENCIL_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
-    double norm_of_residual = norm(all_grids->levels[level],STENCIL_TEMP);
+    residual(all_grids->levels[level],VECTOR_TEMP,e_id,F_id,a,b);
+    mul_grids(all_grids->levels[level],VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+    double norm_of_residual = norm(all_grids->levels[level],VECTOR_TEMP);
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
     if(all_grids->levels[level]->my_rank==0){if(v>=0)printf("v-cycle=%2d, norm=%22.20f (%1.15e)\n",v+1,norm_of_residual,norm_of_residual);else
