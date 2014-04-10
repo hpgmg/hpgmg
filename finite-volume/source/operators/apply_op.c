@@ -14,7 +14,7 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // 
   uint64_t _timeStart = CycleTime();
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k,s;
     int jStride = level->my_boxes[box].jStride;
@@ -30,7 +30,7 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // 
     const double * __restrict__ beta_k = level->my_boxes[box].components[STENCIL_BETA_K] + ghosts*(1+jStride+kStride);
     const double * __restrict__  valid = level->my_boxes[box].components[STENCIL_VALID ] + ghosts*(1+jStride+kStride);
 
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){

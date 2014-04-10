@@ -16,7 +16,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
 
     // now do ghosts communication-avoiding smooths on each box...
     uint64_t _timeStart = CycleTime();
-    #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+    #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
     for(box=0;box<level->num_my_boxes;box++){
       int i,j,k;
       const int jStride = level->my_boxes[box].jStride;

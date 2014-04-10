@@ -51,7 +51,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
     
     // now do ghosts communication-avoiding smooths on each box...
     uint64_t _timeStart = CycleTime();
-    #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+    #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
     for(box=0;box<level->num_my_boxes;box++){
       int i,j,k,ss;
       const int jStride = level->my_boxes[box].jStride;
@@ -79,7 +79,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
                             x_np1  = level->my_boxes[box].components[        x_id] + ghosts*(1+jStride+kStride);}
         const double c1 = chebyshev_c1[ss%CHEBYSHEV_DEGREE]; // limit polynomial to degree CHEBYSHEV_DEGREE.
         const double c2 = chebyshev_c2[ss%CHEBYSHEV_DEGREE]; // limit polynomial to degree CHEBYSHEV_DEGREE.
-        #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+        #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
         for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
         for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
         for(i=0-ghostsToOperateOn;i<dim+ghostsToOperateOn;i++){

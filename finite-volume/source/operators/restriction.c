@@ -39,7 +39,7 @@ static inline void RestrictBlock(level_type *level_c, int id_c, level_type *leve
   int i,j,k;
   switch(restrictionType){
     case RESTRICT_CELL:
-         #pragma omp parallel for num_threads(threads_per_block) OMP_COLLAPSE
+         #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(threads_per_block)
          for(k=0;k<dim_k;k++){
          for(j=0;j<dim_j;j++){
          for(i=0;i<dim_i;i++){
@@ -51,7 +51,7 @@ static inline void RestrictBlock(level_type *level_c, int id_c, level_type *leve
                                 read[read_ijk  +read_jStride+read_kStride]+read[read_ijk+1+read_jStride+read_kStride] ) * 0.125;
          }}}break;
     case RESTRICT_FACE_I:
-         #pragma omp parallel for num_threads(threads_per_block) OMP_COLLAPSE
+         #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(threads_per_block)
          for(k=0;k<dim_k;k++){
          for(j=0;j<dim_j;j++){
          for(i=0;i<dim_i;i++){
@@ -63,7 +63,7 @@ static inline void RestrictBlock(level_type *level_c, int id_c, level_type *leve
                                 read[read_ijk+read_jStride+read_kStride] ) * 0.25;
          }}}break;
     case RESTRICT_FACE_J:
-         #pragma omp parallel for num_threads(threads_per_block) OMP_COLLAPSE
+         #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(threads_per_block)
          for(k=0;k<dim_k;k++){
          for(j=0;j<dim_j;j++){
          for(i=0;i<dim_i;i++){
@@ -75,7 +75,7 @@ static inline void RestrictBlock(level_type *level_c, int id_c, level_type *leve
                                 read[read_ijk+1+read_kStride] ) * 0.25;
          }}}break;
     case RESTRICT_FACE_K:
-         #pragma omp parallel for num_threads(threads_per_block) OMP_COLLAPSE
+         #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(threads_per_block)
          for(k=0;k<dim_k;k++){
          for(j=0;j<dim_j;j++){
          for(i=0;i<dim_i;i++){
@@ -125,7 +125,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
 
   // pack MPI send buffers...
   _timeStart = CycleTime();
-  #pragma omp parallel for num_threads(level_c->concurrent_boxes) schedule(static,1)
+  #pragma omp parallel for private(buffer) OMP_THREAD_ACROSS_BOXES(level_c->concurrent_boxes) schedule(static,1)
   for(buffer=0;buffer<level_f->restriction.num_blocks[0];buffer++){RestrictBlock(level_c,id_c,level_f,id_f,&level_f->restriction.blocks[0][buffer],restrictionType,level_c->threads_per_box);}
   _timeEnd = CycleTime();
   level_f->cycles.restriction_pack += (_timeEnd-_timeStart);
@@ -153,7 +153,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
 
   // perform local restriction... try and hide within Isend latency... 
   _timeStart = CycleTime();
-  #pragma omp parallel for num_threads(level_c->concurrent_boxes) schedule(static,1)
+  #pragma omp parallel for private(buffer) OMP_THREAD_ACROSS_BOXES(level_c->concurrent_boxes) schedule(static,1)
   for(buffer=0;buffer<level_f->restriction.num_blocks[1];buffer++){RestrictBlock(level_c,id_c,level_f,id_f,&level_f->restriction.blocks[1][buffer],restrictionType,level_c->threads_per_box);}
   _timeEnd = CycleTime();
   level_f->cycles.restriction_local += (_timeEnd-_timeStart);
@@ -170,7 +170,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
 
   // unpack MPI receive buffers 
   _timeStart = CycleTime();
-  #pragma omp parallel for num_threads(level_c->concurrent_boxes) schedule(static,1)
+  #pragma omp parallel for private(buffer) OMP_THREAD_ACROSS_BOXES(level_c->concurrent_boxes) schedule(static,1)
   for(buffer=0;buffer<level_c->restriction.num_blocks[2];buffer++){CopyBlock(level_c,id_c,&level_c->restriction.blocks[2][buffer],level_c->threads_per_box);}
   _timeEnd = CycleTime();
   level_f->cycles.restriction_unpack += (_timeEnd-_timeStart);

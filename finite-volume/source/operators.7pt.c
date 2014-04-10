@@ -23,9 +23,12 @@
 //#define STENCIL_FUSE_BC
 //#define STENCIL_FUSE_DINV
 //------------------------------------------------------------------------------------------------------------------------------
-#ifndef OMP_COLLAPSE
-#define OMP_COLLAPSE collapse(2)
-#endif
+#define OMP_THREAD_ACROSS_BOXES(thread_teams    ) if(thread_teams    >1) num_threads(thread_teams    )
+#define OMP_THREAD_WITHIN_A_BOX(threads_per_team) if(threads_per_team>1) num_threads(threads_per_team) collapse(2)
+//#define OMP_THREAD_ACROSS_BOXES(thread_teams    ) if(0)
+//#define OMP_THREAD_WITHIN_A_BOX(threads_per_team) collapse(2)
+//#define OMP_THREAD_ACROSS_BOXES(thread_teams    )
+//#define OMP_THREAD_WITHIN_A_BOX(threads_per_team) if(0)
 //------------------------------------------------------------------------------------------------------------------------------
 // fix... make #define...
 void apply_BCs(level_type * level, int x_id){
@@ -163,7 +166,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   int box;
 
   double dominant_eigenvalue = -1e9;
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes) reduction(max:dominant_eigenvalue) schedule(static)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes) reduction(max:dominant_eigenvalue) schedule(static)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int lowi    = level->my_boxes[box].low.i;
@@ -182,7 +185,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     double * __restrict__  L1inv = level->my_boxes[box].components[STENCIL_L1INV ] + ghosts*(1+jStride+kStride);
     double * __restrict__  valid = level->my_boxes[box].components[STENCIL_VALID ] + ghosts*(1+jStride+kStride);
     double box_eigenvalue = -1e9;
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(max:box_eigenvalue) schedule(static) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(max:box_eigenvalue) schedule(static)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){

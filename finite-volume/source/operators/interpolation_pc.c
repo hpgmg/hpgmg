@@ -36,7 +36,7 @@ static inline void InterpolateBlock_PC(level_type *level_f, int id_f, double pre
  
  
   int i,j,k;
-  #pragma omp parallel for num_threads(threads_per_block) OMP_COLLAPSE
+  #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(threads_per_block)
   for(k=0;k<dim_k;k++){
   for(j=0;j<dim_j;j++){
   for(i=0;i<dim_i;i++){
@@ -80,7 +80,7 @@ void interpolation_pc(level_type * level_f, int id_f, double prescale_f, level_t
 
   // pack MPI send buffers...
   _timeStart = CycleTime();
-  #pragma omp parallel for num_threads(level_f->concurrent_boxes) schedule(static,1)
+  #pragma omp parallel for private(buffer) OMP_THREAD_ACROSS_BOXES(level_f->concurrent_boxes) schedule(static,1)
   for(buffer=0;buffer<level_c->interpolation.num_blocks[0];buffer++){InterpolateBlock_PC(level_f,id_f,0.0,level_c,id_c,&level_c->interpolation.blocks[0][buffer],level_f->threads_per_box);} // !!! prescale==0 because you don't want to increment the MPI buffer
   _timeEnd = CycleTime();
   level_f->cycles.interpolation_pack += (_timeEnd-_timeStart);
@@ -108,7 +108,7 @@ void interpolation_pc(level_type * level_f, int id_f, double prescale_f, level_t
 
   // perform local interpolation... try and hide within Isend latency... 
   _timeStart = CycleTime();
-  #pragma omp parallel for num_threads(level_f->concurrent_boxes) schedule(static,1)
+  #pragma omp parallel for private(buffer) OMP_THREAD_ACROSS_BOXES(level_f->concurrent_boxes) schedule(static,1)
   for(buffer=0;buffer<level_c->interpolation.num_blocks[1];buffer++){InterpolateBlock_PC(level_f,id_f,prescale_f,level_c,id_c,&level_c->interpolation.blocks[1][buffer],level_f->threads_per_box);}
   _timeEnd = CycleTime();
   level_f->cycles.interpolation_local += (_timeEnd-_timeStart);
@@ -124,7 +124,7 @@ void interpolation_pc(level_type * level_f, int id_f, double prescale_f, level_t
 
   // unpack MPI receive buffers 
   _timeStart = CycleTime();
-  #pragma omp parallel for num_threads(level_f->concurrent_boxes) schedule(static,1)
+  #pragma omp parallel for private(buffer) OMP_THREAD_ACROSS_BOXES(level_f->concurrent_boxes) schedule(static,1)
   for(buffer=0;buffer<level_f->interpolation.num_blocks[2];buffer++){IncrementBlock(level_f,id_f,prescale_f,&level_f->interpolation.blocks[2][buffer],level_f->threads_per_box);}
   _timeEnd = CycleTime();
   level_f->cycles.interpolation_unpack += (_timeEnd-_timeStart);

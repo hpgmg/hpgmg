@@ -8,7 +8,7 @@ void zero_grid(level_type * level, int component_id){
   uint64_t _timeStart = CycleTime();
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -16,7 +16,7 @@ void zero_grid(level_type * level, int component_id){
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid = level->my_boxes[box].components[component_id] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=-ghosts;k<dim+ghosts;k++){
     for(j=-ghosts;j<dim+ghosts;j++){
     for(i=-ghosts;i<dim+ghosts;i++){
@@ -33,7 +33,7 @@ void initialize_valid_region(level_type * level){
   uint64_t _timeStart = CycleTime();
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -41,7 +41,7 @@ void initialize_valid_region(level_type * level){
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ valid = level->my_boxes[box].components[STENCIL_VALID] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=-ghosts;k<dim+ghosts;k++){
     for(j=-ghosts;j<dim+ghosts;j++){
     for(i=-ghosts;i<dim+ghosts;i++){
@@ -67,7 +67,7 @@ void initialize_grid_to_scalar(level_type * level, int component_id, double scal
   uint64_t _timeStart = CycleTime();
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -75,7 +75,7 @@ void initialize_grid_to_scalar(level_type * level, int component_id, double scal
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid = level->my_boxes[box].components[component_id] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=-ghosts;k<dim+ghosts;k++){
     for(j=-ghosts;j<dim+ghosts;j++){
     for(i=-ghosts;i<dim+ghosts;i++){
@@ -94,7 +94,7 @@ void add_grids(level_type * level, int id_c, double scale_a, int id_a, double sc
 
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -104,7 +104,7 @@ void add_grids(level_type * level, int id_c, double scale_a, int id_a, double sc
     double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_b = level->my_boxes[box].components[id_b] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -122,7 +122,7 @@ void mul_grids(level_type * level, int id_c, double scale, int id_a, int id_b){ 
 
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -132,7 +132,7 @@ void mul_grids(level_type * level, int id_c, double scale, int id_a, int id_b){ 
     double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_b = level->my_boxes[box].components[id_b] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -150,7 +150,7 @@ void invert_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]
 
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -159,7 +159,7 @@ void invert_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -177,7 +177,7 @@ void scale_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]=
 
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -186,7 +186,7 @@ void scale_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]=
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride);
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -206,7 +206,7 @@ double dot(level_type * level, int id_a, int id_b){
   int box;
   double a_dot_b_level =  0.0;
   // FIX, schedule(static) is a stand in to guarantee reproducibility...
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes) reduction(+:a_dot_b_level) schedule(static)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes) reduction(+:a_dot_b_level) schedule(static)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -216,7 +216,7 @@ double dot(level_type * level, int id_a, int id_b){
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double * __restrict__ grid_b = level->my_boxes[box].components[id_b] + ghosts*(1+jStride+kStride);
     double a_dot_b_box = 0.0;
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(+:a_dot_b_box) schedule(static) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(+:a_dot_b_box) schedule(static)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -245,7 +245,7 @@ double norm(level_type * level, int component_id){ // implements the max norm
   int box;
   double max_norm =  0.0;
   // FIX, schedule(static) is a stand in to guarantee reproducibility...
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes) reduction(max:max_norm) schedule(static)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes) reduction(max:max_norm) schedule(static)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -254,7 +254,7 @@ double norm(level_type * level, int component_id){ // implements the max norm
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid   = level->my_boxes[box].components[component_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double box_norm = 0.0;
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(max:box_norm) schedule(static) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(max:box_norm) schedule(static)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -284,7 +284,7 @@ double mean(level_type * level, int id_a){
 
   int box;
   double sum_level =  0.0;
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes) reduction(+:sum_level) schedule(static)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes) reduction(+:sum_level) schedule(static)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -293,7 +293,7 @@ double mean(level_type * level, int id_a){
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double sum_box = 0.0;
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) reduction(+:sum_box) schedule(static) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(+:sum_box) schedule(static)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -323,7 +323,7 @@ void shift_grid(level_type * level, int id_c, int id_a, double shift_a){
 
 
   int box;
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -333,7 +333,7 @@ void shift_grid(level_type * level, int id_c, int id_a, double shift_a){
     double * __restrict__ grid_c = level->my_boxes[box].components[id_c] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double * __restrict__ grid_a = level->my_boxes[box].components[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
 
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
@@ -349,7 +349,7 @@ void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir)
   uint64_t _timeStart = CycleTime();
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -364,7 +364,7 @@ void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir)
       case 1: stride = jStride;break;//j-direction
       case 2: stride = kStride;break;//k-direction
     }
-    #pragma omp parallel for private(k,j,i) num_threads(level->threads_per_box) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
     for(k=0;k<=dim;k++){ // <= to ensure you do low and high faces
     for(j=0;j<=dim;j++){
     for(i=0;i<=dim;i++){

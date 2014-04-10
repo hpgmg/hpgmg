@@ -27,7 +27,7 @@ void apply_BCs_linear(level_type * level, int x_id){
   int omp_within_a_box = 0;
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k,s;
     int jStride = level->my_boxes[box].jStride;
@@ -127,7 +127,7 @@ void apply_BCs_4thOrder(level_type * level, int x_id){
   int box;
   double OneThirtyFifth = 1.0/35.0;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k,s;
     int jStride = level->my_boxes[box].jStride;int jStride2 = jStride*2;int jStride3 = jStride*3;int jStride4 = jStride*4;
@@ -231,7 +231,7 @@ void apply_BCs_2ndOrder(level_type * level, int x_id){
   int omp_within_a_box = 0;
   int box;
 
-  #pragma omp parallel for private(box) num_threads(level->concurrent_boxes)
+  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k,s;
     int jStride = level->my_boxes[box].jStride;int jStride2 = jStride*2;int jStride3 = jStride*3;int jStride4 = jStride*4;

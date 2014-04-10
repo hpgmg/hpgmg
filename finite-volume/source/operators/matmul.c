@@ -17,7 +17,7 @@ void matmul_grids(level_type * level, double *C, int * id_A, int * id_B, int row
 
 
   uint64_t _timeStart = CycleTime();
-  #pragma omp parallel for schedule(static,1) OMP_COLLAPSE
+  #pragma omp parallel for schedule(static,1) collapse(2)
   for(mm=0;mm<rows;mm++){
   for(nn=0;nn<cols;nn++){
   if(nn>=mm){ // upper triangular

@@ -28,14 +28,28 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block, i
 
 
   int i,j,k;
-  if(dim_i==1){ // be smart and don't have an inner loop from 0 to 1
+  if(dim_i==1){ // be smart and don't have an inner loop from 0 to 0
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
       int  read_ijk = ( read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
       int write_ijk = (write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
       write[write_ijk] = read[read_ijk];
     }}
-  }else if(dim_i==4){ // be smart and don't have an inner loop from 0 to 4
+  }else if(dim_j==1){ // don't have a 0..0 loop
+    for(k=0;k<dim_k;k++){
+    for(i=0;i<dim_i;i++){
+      int  read_ijk = (i+ read_i) + ( read_j)* read_jStride + (k+ read_k)* read_kStride;
+      int write_ijk = (i+write_i) + (write_j)*write_jStride + (k+write_k)*write_kStride;
+      write[write_ijk] = read[read_ijk];
+    }}
+  }else if(dim_k==1){ // don't have a 0..0 loop
+    for(j=0;j<dim_j;j++){
+    for(i=0;i<dim_i;i++){
+      int  read_ijk = (i+ read_i) + (j+ read_j)* read_jStride + ( read_k)* read_kStride;
+      int write_ijk = (i+write_i) + (j+write_j)*write_jStride + (write_k)*write_kStride;
+      write[write_ijk] = read[read_ijk];
+    }}
+  }else if(dim_i==4){ // be smart and don't have an inner loop from 0 to 3
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
       int  read_ijk = ( read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
@@ -46,7 +60,7 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block, i
       write[write_ijk+3] = read[read_ijk+3];
     }}
   }else{
-    #pragma omp parallel for private(i,j,k) num_threads(threads_per_block) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(threads_per_block)
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
     for(i=0;i<dim_i;i++){
@@ -92,7 +106,7 @@ static inline void IncrementBlock(level_type *level, int id, double prescale, bl
   }
 
   int i,j,k;
-  #pragma omp parallel for private(i,j,k) num_threads(threads_per_block) OMP_COLLAPSE
+  #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(threads_per_block)
   for(k=0;k<dim_k;k++){
   for(j=0;j<dim_j;j++){
   for(i=0;i<dim_i;i++){

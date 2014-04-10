@@ -82,7 +82,7 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    #pragma omp parallel for private(k,j,i) OMP_COLLAPSE
+    #pragma omp parallel for private(k,j,i) collapse(2)
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){
