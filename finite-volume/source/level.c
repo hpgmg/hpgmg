@@ -321,33 +321,44 @@ void print_decomposition(level_type *level){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef GHOSTS_BLOCK_J
+#define GHOSTS_BLOCK_J 8
+#endif
+#ifndef GHOSTS_BLOCK_K
+#define GHOSTS_BLOCK_K 8
+#endif
 void append_block_to_list(blockCopy_type * blocks, int *tail, int doWrite,
                           int dim_i, int dim_j, int dim_k,
                           int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride,
                           int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride
                          ){
-  // FIX... partition into smaller blocks to increas TLP...
-  if(doWrite){
-    blocks[*tail].dim.i         = dim_i;
-    blocks[*tail].dim.j         = dim_j;
-    blocks[*tail].dim.k         = dim_k;
-    blocks[*tail].read.box      = read_box;
-    blocks[*tail].read.ptr      = read_ptr;
-    blocks[*tail].read.i        = read_i;
-    blocks[*tail].read.j        = read_j;
-    blocks[*tail].read.k        = read_k;
-    blocks[*tail].read.jStride  = read_jStride;
-    blocks[*tail].read.kStride  = read_kStride;
-    blocks[*tail].write.box     = write_box;
-    blocks[*tail].write.ptr     = write_ptr;
-    blocks[*tail].write.i       = write_i;
-    blocks[*tail].write.j       = write_j;
-    blocks[*tail].write.k       = write_k;
-    blocks[*tail].write.jStride = write_jStride;
-    blocks[*tail].write.kStride = write_kStride;
-  }       (*tail)++;
-  //}}
-
+  int jj,kk;
+  // Take a dim_j x dim_k iteration space and block it into smaller faces of size GHOSTS_BLOCK_J x GHOSTS_BLOCK_K
+  // This increases the number of blockCopies in the ghost zone exchange and thereby increases the thread-level parallelism
+  for(kk=0;kk<dim_k;kk+=GHOSTS_BLOCK_K){
+  for(jj=0;jj<dim_j;jj+=GHOSTS_BLOCK_J){
+    int dim_k_mod = dim_k-kk;if(dim_k_mod>GHOSTS_BLOCK_K)dim_k_mod=GHOSTS_BLOCK_K;
+    int dim_j_mod = dim_j-jj;if(dim_j_mod>GHOSTS_BLOCK_J)dim_j_mod=GHOSTS_BLOCK_J;
+    if(doWrite){
+      blocks[*tail].dim.i         = dim_i;
+      blocks[*tail].dim.j         = dim_j_mod;
+      blocks[*tail].dim.k         = dim_k_mod;
+      blocks[*tail].read.box      = read_box;
+      blocks[*tail].read.ptr      = read_ptr;
+      blocks[*tail].read.i        = read_i;
+      blocks[*tail].read.j        = read_j + jj;
+      blocks[*tail].read.k        = read_k + kk;
+      blocks[*tail].read.jStride  = read_jStride;
+      blocks[*tail].read.kStride  = read_kStride;
+      blocks[*tail].write.box     = write_box;
+      blocks[*tail].write.ptr     = write_ptr;
+      blocks[*tail].write.i       = write_i;
+      blocks[*tail].write.j       = write_j + jj;
+      blocks[*tail].write.k       = write_k + kk;
+      blocks[*tail].write.jStride = write_jStride;
+      blocks[*tail].write.kStride = write_kStride;
+    }       (*tail)++;
+  }}
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
