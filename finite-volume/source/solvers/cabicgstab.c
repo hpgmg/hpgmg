@@ -71,7 +71,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
   double      G[4*CA_KRYLOV_S+1][4*CA_KRYLOV_S+1];                                              // extracted from first 4*CA_KRYLOV_S+1 columns of Gg[][].  indexed as [row][col]
   double      g[4*CA_KRYLOV_S+1];                                                               // extracted from last [4*CA_KRYLOV_S+1] column of Gg[][].
   double    Gg[(4*CA_KRYLOV_S+1)*(4*CA_KRYLOV_S+2)];                                            // buffer to hold the Gram-like matrix produced by matmul().  indexed as [row*(4*CA_KRYLOV_S+2) + col]
-  int      PRrt[4*CA_KRYLOV_S+2];                                                               // grid_id's of the concatenation of the 2S+1 matrix powers of P, 2S matrix powers of R, and rt
+  int      PRrt[4*CA_KRYLOV_S+2];                                                               // vector_id's of the concatenation of the 2S+1 matrix powers of P, 2S matrix powers of R, and rt
 
   int mMax=200;
   int m=0,n;
@@ -83,8 +83,8 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   residual(level,rt_id,e_id,R_id,a,b);                                                           // rt[] = R_id[] - A(e_id)... note, if DPC, then rt = R-AD^-1De
-  scale_grid(level,r_id,1.0,rt_id);                                                               // r[] = rt[]
-  scale_grid(level, p_id,1.0,rt_id);                                                               // p[] = rt[]
+  scale_vector(level,r_id,1.0,rt_id);                                                               // r[] = rt[]
+  scale_vector(level, p_id,1.0,rt_id);                                                               // p[] = rt[]
   double norm_of_rt = norm(level,rt_id);                                                         // the norm of the initial residual...
   #ifdef VERBOSE
   if(level->my_rank==0)printf("m=%8d, norm   =%0.20f\n",m,norm_of_rt);
@@ -116,24 +116,24 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
 
     for(i=0;i<4*ca_krylov_s+1;i++){PRrt[              i] = PRrt_id+i;}                       // columns of PRrt map to the consecutive spare grid indices starting at PRrt_id
                                    PRrt[4*ca_krylov_s+1] = rt_id;                            // last column or PRrt (r tilde) maps to rt
-    int *P = PRrt+              0;                                                            // grid_id's of the 2S+1 Matrix Powers of P.  P[i] is the grid_id of A^i(p)
-    int *R = PRrt+2*ca_krylov_s+1;                                                            // grid_id's of the 2S   Matrix Powers of R.  R[i] is the grid_id of A^i(r)
+    int *P = PRrt+              0;                                                            // vector_id's of the 2S+1 Matrix Powers of P.  P[i] is the vector_id of A^i(p)
+    int *R = PRrt+2*ca_krylov_s+1;                                                            // vector_id's of the 2S   Matrix Powers of R.  R[i] is the vector_id of A^i(r)
 
     // Using the monomial basis, compute 2s+1 matrix powers on p[] and 2s matrix powers on r[] one power at a time 
     // (conventional approach applicable to CHOMBO and BoxLib)
-    scale_grid(level,P[0],1.0, p_id);                                                             // P[0] = A^0p =  p_id
+    scale_vector(level,P[0],1.0, p_id);                                                             // P[0] = A^0p =  p_id
     for(n=1;n<2*ca_krylov_s+1;n++){                                                           // naive way of calculating the monomial basis.
       #ifdef KRYLOV_DIAGONAL_PRECONDITION                                                             //
-      mul_grids(level, VECTOR_TEMP,1.0, VECTOR_DINV,P[n-1]);                                                //   temp[] = Dinv[]*P[n-1]
+      mul_vectors(level, VECTOR_TEMP,1.0, VECTOR_DINV,P[n-1]);                                                //   temp[] = Dinv[]*P[n-1]
       apply_op(level,P[n], VECTOR_TEMP,a,b);                                                          //   P[n] = AD^{-1} VECTOR_TEMP = AD^{-1}P[n-1] = ((AD^{-1})^n)p
       #else                                                                                     //
       apply_op(level,P[n],P[n-1],a,b);                                                          //   P[n] = A(P[n-1]) = (A^n)p
       #endif                                                                                    //
     }
-    scale_grid(level,R[0],1.0,r_id);                                                             // R[0] = A^0r = r_id
+    scale_vector(level,R[0],1.0,r_id);                                                             // R[0] = A^0r = r_id
     for(n=1;n<2*ca_krylov_s;n++){                                                             // naive way of calculating the monomial basis.
       #ifdef KRYLOV_DIAGONAL_PRECONDITION                                                             //
-      mul_grids(level, VECTOR_TEMP,1.0, VECTOR_DINV,R[n-1]);                                                //   temp[] = Dinv[]*R[n-1]
+      mul_vectors(level, VECTOR_TEMP,1.0, VECTOR_DINV,R[n-1]);                                                //   temp[] = Dinv[]*R[n-1]
       apply_op(level,R[n], VECTOR_TEMP,a,b);                                                          //   R[n] = AD^{-1} VECTOR_TEMP = AD^{-1}R[n-1]
       #else                                                                                     //
       apply_op(level,R[n],R[n-1],a,b);                                                          //   R[n] = A(R[n-1]) = (A^n)r
@@ -142,7 +142,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
 
     // Compute Gg[][] = [P,R]^T * [P,R,rt] (Matmul with grids with ghost zones but only one MPI_AllReduce)
     level->CAKrylov_formations_of_G++;                                                         //   Record the number of times CABiCGStab formed G[][]
-    matmul_grids(level,Gg,PRrt,PRrt,4*ca_krylov_s+1,4*ca_krylov_s+2,1);
+    matmul(level,Gg,PRrt,PRrt,4*ca_krylov_s+1,4*ca_krylov_s+2,1);
     for(i=0,k=0;i<4*ca_krylov_s+1;i++){                                                       // extract G[][] and g[] from Gg[]
     for(j=0    ;j<4*ca_krylov_s+1;j++){G[i][j] = Gg[k++];}                                    // first 4*ca_krylov_s+1 elements in each row go to G[][].
                                          g[i]    = Gg[k++];                                     // last element in row goes to g[].
@@ -263,19 +263,19 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
     }                                                                                           // inner n (j) loop
 
     // update iterates...
-    for(i=0;i<4*ca_krylov_s+1;i++){add_grids(level,e_id,1.0,e_id,ej[i],PRrt[i]);}             // e_id[] = [P,R]ej + e_id[]
+    for(i=0;i<4*ca_krylov_s+1;i++){add_vectors(level,e_id,1.0,e_id,ej[i],PRrt[i]);}             // e_id[] = [P,R]ej + e_id[]
     if(!BiCGStabFailed && !BiCGStabConverged){                                                  // if we're done, then there is no point in updating these
-                                     add_grids(level,  p_id,0.0,  p_id,aj[0],PRrt[0]);              //    p[] = [P,R]aj
-    for(i=1;i<4*ca_krylov_s+1;i++){add_grids(level,  p_id,1.0,  p_id,aj[i],PRrt[i]);}             //          ...
-                                     add_grids(level, r_id,0.0, r_id,cj[0],PRrt[0]);              //    r[] = [P,R]cj
-    for(i=1;i<4*ca_krylov_s+1;i++){add_grids(level, r_id,1.0, r_id,cj[i],PRrt[i]);}             //          ...
+                                   add_vectors(level,  p_id,0.0,  p_id,aj[0],PRrt[0]);              //    p[] = [P,R]aj
+    for(i=1;i<4*ca_krylov_s+1;i++){add_vectors(level,  p_id,1.0,  p_id,aj[i],PRrt[i]);}             //          ...
+                                   add_vectors(level, r_id,0.0, r_id,cj[0],PRrt[0]);              //    r[] = [P,R]cj
+    for(i=1;i<4*ca_krylov_s+1;i++){add_vectors(level, r_id,1.0, r_id,cj[i],PRrt[i]);}             //          ...
     }                                                                                           //
     m+=ca_krylov_s;                                                                           //   m+=ca_krylov_s;
     ca_krylov_s*=2;if(ca_krylov_s>CA_KRYLOV_S)ca_krylov_s=CA_KRYLOV_S;
   }                                                                                             // } // outer m loop
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   #ifdef KRYLOV_DIAGONAL_PRECONDITION
-  mul_grids(level,e_id,1.0, VECTOR_DINV,e_id);                                                        //   e_id[] = Dinv[]*e_id[] // i.e. e = D^{-1}e'
+  mul_vectors(level,e_id,1.0, VECTOR_DINV,e_id);                                                        //   e_id[] = Dinv[]*e_id[] // i.e. e = D^{-1}e'
   #endif
 
 }
@@ -303,9 +303,9 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
   double      G[4*CA_KRYLOV_S+1][4*CA_KRYLOV_S+1];                              // extracted from first 4*CA_KRYLOV_S+1 columns of Gg[][].  indexed as [row][col]
   double      g[4*CA_KRYLOV_S+1];                                               // extracted from last [4*CA_KRYLOV_S+1] column of Gg[][].
   double    Gg[(4*CA_KRYLOV_S+1)*(4*CA_KRYLOV_S+2)];                            // buffer to hold the Gram-like matrix produced by matmul().  indexed as [row*(4*CA_KRYLOV_S+2) + col]
-  int      PRrt[4*CA_KRYLOV_S+2];                                               // grid_id's of the concatenation of the 2S+1 matrix powers of P, 2S matrix powers of R, and rt
-  int *P = PRrt+                0;                                              // grid_id's of the 2S+1 Matrix Powers of P.  P[i] is the grid_id of A^i(p)
-  int *R = PRrt+2*CA_KRYLOV_S+1;                                                // grid_id's of the 2S   Matrix Powers of R.  R[i] is the grid_id of A^i(r)
+  int      PRrt[4*CA_KRYLOV_S+2];                                               // vector_id's of the concatenation of the 2S+1 matrix powers of P, 2S matrix powers of R, and rt
+  int *P = PRrt+                0;                                              // vector_id's of the 2S+1 Matrix Powers of P.  P[i] is the vector_id of A^i(p)
+  int *R = PRrt+2*CA_KRYLOV_S+1;                                                // vector_id's of the 2S   Matrix Powers of R.  R[i] is the vector_id of A^i(r)
 
   int mMax=200;
   int m=0,n;
@@ -317,8 +317,8 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   residual(level,rt_id,e_id,R_id,a,b);                                           // rt[] = R_id[] - A(e_id)... note, if DPC, then rt = R-AD^-1De
-  scale_grid(level,r_id,1.0,rt_id);                                               // r[] = rt[]
-  scale_grid(level, p_id,1.0,rt_id);                                               // p[] = rt[]
+  scale_vector(level,r_id,1.0,rt_id);                                               // r[] = rt[]
+  scale_vector(level, p_id,1.0,rt_id);                                               // p[] = rt[]
   double norm_of_rt = norm(level,rt_id);                                         // the norm of the initial residual...
   #ifdef VERBOSE
   if(level->my_rank==0)printf("m=%8d, norm   =%0.20f\n",m,norm_of_rt);
@@ -356,19 +356,19 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
 
     // Using the monomial basis, compute 2s+1 matrix powers on p[] and 2s matrix powers on r[] one power at a time 
     // (conventional approach applicable to CHOMBO and BoxLib)
-    scale_grid(level,P[0],1.0, p_id);                                             // P[0] = A^0p =  p_id
+    scale_vector(level,P[0],1.0, p_id);                                             // P[0] = A^0p =  p_id
     for(n=1;n<2*ca_krylov_s+1;n++){                                           // naive way of calculating the monomial basis.
       #ifdef KRYLOV_DIAGONAL_PRECONDITION                                             //
-      mul_grids(level, VECTOR_TEMP,1.0, VECTOR_DINV,P[n-1]);                           //   temp[] = Dinv[]*P[n-1]
+      mul_vectors(level, VECTOR_TEMP,1.0, VECTOR_DINV,P[n-1]);                           //   temp[] = Dinv[]*P[n-1]
       apply_op(level,P[n], VECTOR_TEMP,a,b);                                          //   P[n] = AD^{-1} VECTOR_TEMP = AD^{-1}P[n-1] = ((AD^{-1})^n)p
       #else                                                                     //
       apply_op(level,P[n],P[n-1],a,b);                                          //   P[n] = A(P[n-1]) = (A^n)p
       #endif                                                                    //
     }
-    scale_grid(level,R[0],1.0,r_id);                                             // R[0] = A^0r = r_id
+    scale_vector(level,R[0],1.0,r_id);                                             // R[0] = A^0r = r_id
     for(n=1;n<2*ca_krylov_s;n++){                                             // naive way of calculating the monomial basis.
       #ifdef KRYLOV_DIAGONAL_PRECONDITION                                             //
-      mul_grids(level, VECTOR_TEMP,1.0, VECTOR_DINV,R[n-1]);                                //   temp[] = Dinv[]*R[n-1]
+      mul_vectors(level, VECTOR_TEMP,1.0, VECTOR_DINV,R[n-1]);                                //   temp[] = Dinv[]*R[n-1]
       apply_op(level,R[n], VECTOR_TEMP,a,b);                                          //   R[n] = AD^{-1} VECTOR_TEMP = AD^{-1}R[n-1]
       #else                                                                     //
       apply_op(level,R[n],R[n-1],a,b);                                          //   R[n] = A(R[n-1]) = (A^n)r
@@ -377,7 +377,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
 
     // Compute Gg[][] = [P,R]^T * [P,R,rt] (Matmul with grids with ghost zones but only one MPI_AllReduce)
     level->CAKrylov_formations_of_G++;                                                         //   Record the number of times CABiCGStab formed G[][]
-    matmul_grids(level,Gg,PRrt,PRrt,4*ca_krylov_s+1,4*ca_krylov_s+2,1);
+    matmul(level,Gg,PRrt,PRrt,4*ca_krylov_s+1,4*ca_krylov_s+2,1);
     for(i=0,k=0;i<4*ca_krylov_s+1;i++){                                                       // extract G[][] and g[] from Gg[]
     for(j=0    ;j<4*ca_krylov_s+1;j++){G[i][j] = Gg[k++];}                                    // first 4*ca_krylov_s+1 elements in each row go to G[][].
                                          g[i]    = Gg[k++];                                     // last element in row goes to g[].
@@ -498,18 +498,18 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
     }                                                                                           // inner n (j) loop
 
     // update iterates...
-    for(i=0;i<4*ca_krylov_s+1;i++){add_grids(level,e_id,1.0,e_id,ej[i],PRrt[i]);}             // e_id[] = [P,R]ej + e_id[]
+    for(i=0;i<4*ca_krylov_s+1;i++){add_vectors(level,e_id,1.0,e_id,ej[i],PRrt[i]);}             // e_id[] = [P,R]ej + e_id[]
     if(!BiCGStabFailed && !BiCGStabConverged){                                                  // if we're done, then there is no point in updating these
-                                   add_grids(level,  p_id,0.0,  p_id,aj[0],PRrt[0]);              //    p[] = [P,R]aj
-    for(i=1;i<4*ca_krylov_s+1;i++){add_grids(level,  p_id,1.0,  p_id,aj[i],PRrt[i]);}             //          ...
-                                   add_grids(level, r_id,0.0, r_id,cj[0],PRrt[0]);              //    r[] = [P,R]cj
-    for(i=1;i<4*ca_krylov_s+1;i++){add_grids(level, r_id,1.0, r_id,cj[i],PRrt[i]);}             //          ...
+                                   add_vectors(level,  p_id,0.0,  p_id,aj[0],PRrt[0]);              //    p[] = [P,R]aj
+    for(i=1;i<4*ca_krylov_s+1;i++){add_vectors(level,  p_id,1.0,  p_id,aj[i],PRrt[i]);}             //          ...
+                                   add_vectors(level, r_id,0.0, r_id,cj[0],PRrt[0]);              //    r[] = [P,R]cj
+    for(i=1;i<4*ca_krylov_s+1;i++){add_vectors(level, r_id,1.0, r_id,cj[i],PRrt[i]);}             //          ...
     }                                                                                           //
     m+=ca_krylov_s;                                                                           //   m+=ca_krylov_s;
   }                                                                                             // } // outer m loop
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   #ifdef KRYLOV_DIAGONAL_PRECONDITION
-  mul_grids(level,e_id,1.0, VECTOR_DINV,e_id);                                                        //   e_id[] = Dinv[]*e_id[] // i.e. e = D^{-1}e'
+  mul_vectors(level,e_id,1.0, VECTOR_DINV,e_id);                                                        //   e_id[] = Dinv[]*e_id[] // i.e. e = D^{-1}e'
   #endif
 }
 #endif // CA_KRYLOV_TELESCOPING

@@ -26,17 +26,17 @@ double                       dot(level_type * level, int id_a, int id_b);
 double                      norm(level_type * level, int id_a);
 double                      mean(level_type * level, int id_a);
 double                     error(level_type * level, int id_a, int id_b);
-  void                 add_grids(level_type * level, int id_c, double scale_a, int id_a, double scale_b, int id_b);
-  void                scale_grid(level_type * level, int id_c, double scale_a, int id_a);
-  void                 zero_grid(level_type * level, int id_a);
-  void                shift_grid(level_type * level, int id_c, int id_a, double shift_a);
-  void                 mul_grids(level_type * level, int id_c, double scale, int id_a, int id_b);
-  void               invert_grid(level_type * level, int id_c, double scale_a, int id_a);
+  void               add_vectors(level_type * level, int id_c, double scale_a, int id_a, double scale_b, int id_b);
+  void             scale_vectors(level_type * level, int id_c, double scale_a, int id_a);
+  void              zero_vector( level_type * level, int id_a);
+  void             shift_vectors(level_type * level, int id_c, int id_a, double shift_a);
+  void               mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b);
+  void             invert_vector(level_type * level, int id_c, double scale_a, int id_a);
   void initialize_grid_to_scalar(level_type * level, int id_a, double scalar);
 //------------------------------------------------------------------------------------------------------------------------------
   void      project_cell_to_face(level_type * level, int id_cell, int id_face, int dir);
 //------------------------------------------------------------------------------------------------------------------------------
-  void              matmul_grids(level_type * level, double *C, int *id_A, int *id_B, int rows, int cols, int A_equals_B_transpose);
+  void                    matmul(level_type * level, double *C, int *id_A, int *id_B, int rows, int cols, int A_equals_B_transpose);
 //------------------------------------------------------------------------------------------------------------------------------
   void        initialize_problem(level_type * level, double hLevel, double a, double b);
   void   initialize_valid_region(level_type * level);

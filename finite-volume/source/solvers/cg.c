@@ -21,8 +21,8 @@ void CG(level_type * level, int x_id, int R_id, double a, double b, double desir
   int CGFailed    = 0;
   int CGConverged = 0;
   residual(level,r0_id,x_id,R_id,a,b);                                          // r0[] = R_id[] - A(x_id)
-  scale_grid(level,r_id,1.0,r0_id);                                              // r[] = r0[]
-  scale_grid(level,p_id,1.0,r0_id);                                              // p[] = r0[]
+  scale_vector(level,r_id,1.0,r0_id);                                              // r[] = r0[]
+  scale_vector(level,p_id,1.0,r0_id);                                              // p[] = r0[]
   double norm_of_r0 = norm(level,r_id);                                         // the norm of the initial residual...
   if(norm_of_r0 == 0.0){CGConverged=1;}                                        // entered CG with exact solution
   double r_dot_r = dot(level,r_id,r_id);                                         // r_dot_r = dot(r,r)
@@ -33,8 +33,8 @@ void CG(level_type * level, int x_id, int R_id, double a, double b, double desir
     if(Ap_dot_p == 0.0){CGFailed=1;break;}                                     //   pivot breakdown ???
     double alpha = r_dot_r / Ap_dot_p;                                         //   alpha = r_dot_r / Ap_dot_p
     if(isinf(alpha)){CGFailed=1;break;}                                        //   ???
-    add_grids(level,x_id,1.0,x_id, alpha,p_id );                                //   x_id[] = x_id[] + alpha*p[]
-    add_grids(level,r_id,1.0,r_id,-alpha,Ap_id);                                //   r[]    = r[]    - alpha*Ap[]   (intermediate residual?)
+    add_vectors(level,x_id,1.0,x_id, alpha,p_id );                                //   x_id[] = x_id[] + alpha*p[]
+    add_vectors(level,r_id,1.0,r_id,-alpha,Ap_id);                                //   r[]    = r[]    - alpha*Ap[]   (intermediate residual?)
     double norm_of_r = norm(level,r_id);                                        //   norm of intermediate residual
     if(norm_of_r == 0.0){CGConverged=1;break;}                                 //
     if(norm_of_r < desired_reduction_in_norm*norm_of_r0){CGConverged=1;break;} //
@@ -42,7 +42,7 @@ void CG(level_type * level, int x_id, int R_id, double a, double b, double desir
     if(r_dot_r_new == 0.0){CGFailed=1;break;}                                  //   Lanczos breakdown ???
     double beta = (r_dot_r_new/r_dot_r);                                       //   beta = (r_dot_r_new/r_dot_r)
     if(isinf(beta)){CGFailed=1;break;}                                         //   ???
-    add_grids(level,p_id,1.0,r_id,beta,p_id );                                    //   p[] = r[] + beta*p[]
+    add_vectors(level,p_id,1.0,r_id,beta,p_id );                                    //   p[] = r[] + beta*p[]
     r_dot_r = r_dot_r_new;                                                     //   r_dot_r = r_dot_r_new   (save old r_dot_r)
   }                                                                            // }
 }

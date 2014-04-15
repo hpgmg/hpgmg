@@ -3,9 +3,9 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-void matmul_grids(level_type * level, double *C, int * id_A, int * id_B, int rows, int cols, int A_equals_B_transpose){
-  // *id_A = m grid_id's (conceptually pointers to the rows    of a m x level->num_my_boxes*volume matrix)
-  // *id_B = n grid_id's (conceptually pointers to the columns of a level->num_my_boxes*volume matrix x n)
+void matmul(level_type * level, double *C, int * id_A, int * id_B, int rows, int cols, int A_equals_B_transpose){
+  // *id_A = m vector_id's (conceptually pointers to the rows    of a m x level->num_my_boxes*volume matrix)
+  // *id_B = n vector_id's (conceptually pointers to the columns of a level->num_my_boxes*volume matrix x n)
   // *C is a mxn matrix where C[rows][cols] = dot(id_A[rows],id_B[cols])
 
   // FIX, id_A and id_B are likely the same and thus C[][] will be symmetric (modulo missing row?)

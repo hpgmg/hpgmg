@@ -37,15 +37,15 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
     if( (meanF!=0.0) && ((a==0.0) || (level->alpha_is_zero==1)) ){
       // Poisson with Periodic Boundary Conditions, but the RHS didn't sum to zero
       //if(level->my_rank==0)printf("coarse grid Poisson solve with periodic BC's and a RHS that doesn't sum to zero!!!\n");
-      shift_grid(level,f_id,f_id,-meanF); // FIX  !!!
+      shift_vector(level,f_id,f_id,-meanF); // FIX  !!!
     }
     //if( (meanF!=0.0) && (a!=0.0) && (level->alpha_is_zero==0) ){  // FIX !!! change from alpha_is_zero to no element of alpha is zero
     //  // Helmholtz with Periodic Boundary Conditions, but the RHS didn't sum to zero
     //  // let u' = u - (meanF/a)(1/alpha)
     //  // solve a alpha u' - b div beta grad u' = f' = f - meanF + b div beta grad (meanF/a)(1/alpha)
-    //  invert_grid(level,VECTOR_TEMP,meanF/a,VECTOR_ALPHA);  // FIX !!!  no element of alpha must ever be zero !!!
+    //  invert_vector(level,VECTOR_TEMP,meanF/a,VECTOR_ALPHA);  // FIX !!!  no element of alpha must ever be zero !!!
     //  residual(level,f_id,VECTOR_TEMP,f_id,0.0,b); // f' = f - (0*VECTOR_TEMP - b div beta grad VECTOR_TEMP) = f + b div beta grad VECTOR_TEMP
-    //  shift_grid(level,f_id,f_id,-meanF);
+    //  shift_vector(level,f_id,f_id,-meanF);
     //}
   }
   #endif
@@ -61,7 +61,7 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
   #else // just point relaxation via multiple smooth()'s
     #if 1 
                      residual(level,VECTOR_TEMP,u_id,f_id,a,b);
-                    mul_grids(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+                  mul_vectors(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
      double norm_of_r0 = norm(level,VECTOR_TEMP);
     int s=0,maxSmoothsBottom=10,converged=0;
     while( (s<maxSmoothsBottom) && !converged){
@@ -69,7 +69,7 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
       level->Krylov_iterations++;
                        smooth(level,u_id,f_id,a,b);
                      residual(level,VECTOR_TEMP,u_id,f_id,a,b);
-                    mul_grids(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+                  mul_vectors(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
       double norm_of_r = norm(level,VECTOR_TEMP);
       if(norm_of_r == 0.0){converged=1;break;}
       if(norm_of_r < desired_reduction_in_norm*norm_of_r0){converged=1;break;}
@@ -88,13 +88,13 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
     if( (meanF!=0.0) && ((a==0.0) || (level->alpha_is_zero==1)) ){
       // Poisson with Periodic Boundary Conditions, but the RHS didn't sum to zero
       // by convention, we shift the correction to sum to zero (eliminate any constants)
-      double average_value_of_e = mean(level,u_id);shift_grid(level,u_id,u_id,-average_value_of_e);
+      double average_value_of_e = mean(level,u_id);shift_vector(level,u_id,u_id,-average_value_of_e);
     }
     //if( (meanF!=0.0) && (a!=0.0) && (level->alpha_is_zero==0) ){
     //  // Helmholtz with Periodic Boundary Conditions, but the RHS didn't sum to zero...
     //  // u = u' + (meanF/a)(1/alpha)
-    //  invert_grid(level,VECTOR_TEMP,meanF/a,VECTOR_ALPHA);  // FIX !!!  no element of alpha must ever be zero !!!
-    //  add_grids(level,u_id,1.0,u_id,1.0,VECTOR_TEMP);
+    //  invert_vector(level,VECTOR_TEMP,meanF/a,VECTOR_ALPHA);  // FIX !!!  no element of alpha must ever be zero !!!
+    //  add_vectors(level,u_id,1.0,u_id,1.0,VECTOR_TEMP);
     //}
   } 
   #endif

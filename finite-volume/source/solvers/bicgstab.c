@@ -26,8 +26,8 @@ void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double
   int BiCGStabFailed    = 0;
   int BiCGStabConverged = 0;
   residual(level,r0_id,x_id,R_id,a,b);                                          // r0[] = R_id[] - A(x_id)
-  scale_grid(level,r_id,1.0,r0_id);                                             // r[] = r0[]
-  scale_grid(level,p_id,1.0,r0_id);                                             // p[] = r0[]
+  scale_vector(level,r_id,1.0,r0_id);                                             // r[] = r0[]
+  scale_vector(level,p_id,1.0,r0_id);                                             // p[] = r0[]
   double r_dot_r0 = dot(level,r_id,r0_id);                                      // r_dot_r0 = dot(r,r0)
   double norm_of_r0 = norm(level,r_id);                                         // the norm of the initial residual...
   if(r_dot_r0   == 0.0){BiCGStabConverged=1;}                                   // entered BiCGStab with exact solution
@@ -35,7 +35,7 @@ void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double
   while( (j<jMax) && (!BiCGStabFailed) && (!BiCGStabConverged) ){               // while(not done){
     j++;level->Krylov_iterations++;                                             //
     #ifdef KRYLOV_DIAGONAL_PRECONDITION                                         //
-    mul_grids(level,VECTOR_TEMP,1.0,VECTOR_DINV,p_id);                              //   temp[] = Dinv[]*p[]
+    mul_vectors(level,VECTOR_TEMP,1.0,VECTOR_DINV,p_id);                              //   temp[] = Dinv[]*p[]
     apply_op(level,Ap_id,VECTOR_TEMP,a,b);                                           //   Ap = AD^{-1}(p)
     #else                                                                       //
     apply_op(level,Ap_id,p_id,a,b);                                            //   Ap = A(p)
@@ -44,14 +44,14 @@ void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double
     if(Ap_dot_r0 == 0.0){BiCGStabFailed=1;break;}                               //   pivot breakdown ???
     double alpha = r_dot_r0 / Ap_dot_r0;                                        //   alpha = r_dot_r0 / Ap_dot_r0
     if(isinf(alpha)){BiCGStabFailed=2;break;}                                   //   pivot breakdown ???
-    add_grids(level,x_id,1.0,x_id, alpha, p_id);                                //   x_id[] = x_id[] + alpha*p[]
-    add_grids(level,s_id,1.0,r_id,-alpha,Ap_id);                                //   s[]    = r[]    - alpha*Ap[]   (intermediate residual?)
+    add_vectors(level,x_id,1.0,x_id, alpha, p_id);                                //   x_id[] = x_id[] + alpha*p[]
+    add_vectors(level,s_id,1.0,r_id,-alpha,Ap_id);                                //   s[]    = r[]    - alpha*Ap[]   (intermediate residual?)
     double norm_of_s = norm(level,s_id);                                        //   FIX - redundant??  norm of intermediate residual
   //if(level->my_rank==0)printf("norm(s)/norm(r0) = %e\n",norm_of_s/norm_of_r0);
     if(norm_of_s == 0.0){BiCGStabConverged=1;break;}                            //   FIX - redundant??  if As_dot_As==0, then As must be 0 which implies s==0
     if(norm_of_s < desired_reduction_in_norm*norm_of_r0){BiCGStabConverged=1;break;}
     #ifdef KRYLOV_DIAGONAL_PRECONDITION                                         //
-    mul_grids(level,VECTOR_TEMP,1.0,VECTOR_DINV,s_id);                              //   temp[] = Dinv[]*s[]
+    mul_vectors(level,VECTOR_TEMP,1.0,VECTOR_DINV,s_id);                              //   temp[] = Dinv[]*s[]
     apply_op(level,As_id,VECTOR_TEMP,a,b);                                           //   As = AD^{-1}(s)
     #else                                                                       //
     apply_op(level,As_id,s_id,a,b);                                             //   As = A(s)
@@ -62,8 +62,8 @@ void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double
     double omega = As_dot_s / As_dot_As;                                        //   omega = As_dot_s / As_dot_As
     if(omega == 0.0){BiCGStabFailed=3;break;}                                   //   stabilization breakdown ???
     if(isinf(omega)){BiCGStabFailed=4;break;}                                   //   stabilization breakdown ???
-    add_grids(level,x_id,1.0,x_id, omega, s_id);                                //   x_id[] = x_id[] + omega*s[]
-    add_grids(level,r_id,1.0,s_id,-omega,As_id);                                //   r[]    = s[]    - omega*As[]  (recursively computed / updated residual)
+    add_vectors(level,x_id,1.0,x_id, omega, s_id);                                //   x_id[] = x_id[] + omega*s[]
+    add_vectors(level,r_id,1.0,s_id,-omega,As_id);                                //   r[]    = s[]    - omega*As[]  (recursively computed / updated residual)
     double norm_of_r = norm(level,r_id);                                        //   norm of recursively computed residual (good enough??)
   //if(level->my_rank==0)printf("norm(r)/norm(r0) = %e\n",norm_of_r/norm_of_r0);
     if(norm_of_r == 0.0){BiCGStabConverged=1;break;}                            //
@@ -77,12 +77,12 @@ void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double
     if(r_dot_r0_new == 0.0){BiCGStabFailed=5;break;}                            //   Lanczos breakdown ???
     double beta = (r_dot_r0_new/r_dot_r0) * (alpha/omega);                      //   beta = (r_dot_r0_new/r_dot_r0) * (alpha/omega)
     if(isinf(beta)){BiCGStabFailed=6;break;}                                    //   ???
-    add_grids(level,VECTOR_TEMP,1.0,p_id,-omega, Ap_id);                             //   VECTOR_TEMP =         (p[]-omega*Ap[])
-    add_grids(level,        p_id,1.0,r_id,  beta,VECTOR_TEMP);                             //   p[] = r[] + beta*(p[]-omega*Ap[])
+    add_vectors(level,VECTOR_TEMP,1.0,p_id,-omega, Ap_id);                             //   VECTOR_TEMP =         (p[]-omega*Ap[])
+    add_vectors(level,        p_id,1.0,r_id,  beta,VECTOR_TEMP);                             //   p[] = r[] + beta*(p[]-omega*Ap[])
     r_dot_r0 = r_dot_r0_new;                                                    //   r_dot_r0 = r_dot_r0_new   (save old r_dot_r0)
   }                                                                             // }
     #ifdef KRYLOV_DIAGONAL_PRECONDITION                                         //
-    mul_grids(level,x_id,1.0,VECTOR_DINV,x_id);                                //   x_id[] = Dinv[]*x_id[] // i.e. x = D^{-1}x'
+    mul_vectors(level,x_id,1.0,VECTOR_DINV,x_id);                                //   x_id[] = Dinv[]*x_id[] // i.e. x = D^{-1}x'
     #endif                                                                      //
   #ifdef __DEBUG
   if(BiCGStabFailed)if(level->my_rank==0)printf("BiCGStab Failed... error = %d\n",BiCGStabFailed);

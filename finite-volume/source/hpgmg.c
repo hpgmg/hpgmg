@@ -159,9 +159,9 @@ int main(int argc, char **argv){
   HPM_Start("FMGSolve()");
   #endif
   #ifdef USE_FCYCLES
-  int trial;for(trial=0;trial<20;trial++){zero_grid(all_grids.levels[0],VECTOR_U);FMGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
+  int trial;for(trial=0;trial<20;trial++){zero_vector(all_grids.levels[0],VECTOR_U);FMGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
   #else
-  int trial;for(trial=0;trial< 5;trial++){zero_grid(all_grids.levels[0],VECTOR_U); MGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
+  int trial;for(trial=0;trial< 5;trial++){zero_vector(all_grids.levels[0],VECTOR_U); MGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
   #endif
   #ifdef USE_HPM // IBM performance counters for BGQ...
   HPM_Stop("FMGSolve()");

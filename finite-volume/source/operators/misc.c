@@ -3,7 +3,7 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-void zero_grid(level_type * level, int component_id){
+void zero_vector(level_type * level, int component_id){
   // zero's the entire grid INCLUDING ghost zones...
   uint64_t _timeStart = CycleTime();
   int box;
@@ -89,7 +89,7 @@ void initialize_grid_to_scalar(level_type * level, int component_id, double scal
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void add_grids(level_type * level, int id_c, double scale_a, int id_a, double scale_b, int id_b){ // c=scale_a*id_a + scale_b*id_b
+void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double scale_b, int id_b){ // c=scale_a*id_a + scale_b*id_b
   uint64_t _timeStart = CycleTime();
 
   int box;
@@ -117,7 +117,7 @@ void add_grids(level_type * level, int id_c, double scale_a, int id_a, double sc
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void mul_grids(level_type * level, int id_c, double scale, int id_a, int id_b){ // id_c=scale*id_a*id_b
+void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b){ // id_c=scale*id_a*id_b
   uint64_t _timeStart = CycleTime();
 
   int box;
@@ -145,7 +145,7 @@ void mul_grids(level_type * level, int id_c, double scale, int id_a, int id_b){ 
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void invert_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]=scale_a/a[]
+void invert_vector(level_type * level, int id_c, double scale_a, int id_a){ // c[]=scale_a/a[]
   uint64_t _timeStart = CycleTime();
 
   int box;
@@ -172,7 +172,7 @@ void invert_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void scale_grid(level_type * level, int id_c, double scale_a, int id_a){ // c[]=scale_a*a[]
+void scale_vector(level_type * level, int id_c, double scale_a, int id_a){ // c[]=scale_a*a[]
   uint64_t _timeStart = CycleTime();
 
   int box;
@@ -318,7 +318,7 @@ double mean(level_type * level, int id_a){
 }
 
 
-void shift_grid(level_type * level, int id_c, int id_a, double shift_a){
+void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
   uint64_t _timeStart = CycleTime();
 
 
@@ -380,7 +380,7 @@ void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir)
 //------------------------------------------------------------------------------------------------------------------------------
 double error(level_type * level, int id_a, int id_b){
   double h3 = level->h * level->h * level->h;
-                 add_grids(level,VECTOR_TEMP,1.0,id_a,-1.0,id_b);       // VECTOR_TEMP = id_a - id_b
+                 add_vectors(level,VECTOR_TEMP,1.0,id_a,-1.0,id_b);       // VECTOR_TEMP = id_a - id_b
   double   max =      norm(level,VECTOR_TEMP);                 return(max);   // max norm of error function
   double    L2 = sqrt( dot(level,VECTOR_TEMP,VECTOR_TEMP)*h3);return( L2);   // normalized L2 error ?
 }

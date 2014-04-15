@@ -773,7 +773,7 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
        smooth(all_grids->levels[level  ],e_id,R_id,a,b);
      residual(all_grids->levels[level  ],VECTOR_TEMP,e_id,R_id,a,b);
   restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],VECTOR_TEMP,RESTRICT_CELL);
-    zero_grid(all_grids->levels[level+1],e_id);
+    zero_vector(all_grids->levels[level+1],e_id);
   all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
 
   // recursion...
@@ -804,11 +804,11 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // make initial guess for e (=0) and setup the RHS
   #if 0
-   zero_grid(all_grids->levels[0],e_id);                  // ee = 0
-  scale_grid(all_grids->levels[0],R_id,1.0,F_id);         // R_id = F_id
+   zero_vector(all_grids->levels[0],e_id);                  // ee = 0
+  scale_vector(all_grids->levels[0],R_id,1.0,F_id);         // R_id = F_id
   #else
-   mul_grids(all_grids->levels[0],e_id,1.0,VECTOR_DINV,F_id);  // e_id = Dinv*F_id
-  scale_grid(all_grids->levels[0],R_id,1.0,F_id);               // R_id = F_id
+   mul_vectors(all_grids->levels[0],e_id,1.0,VECTOR_DINV,F_id);  // e_id = Dinv*F_id
+  scale_vector(all_grids->levels[0],R_id,1.0,F_id);               // R_id = F_id
   #endif
 
 
@@ -826,10 +826,10 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
     if( (all_grids->levels[level]->domain_boundary_condition==BC_PERIODIC) && ((a==0) || (all_grids->levels[level]->alpha_is_zero==1)) ){
       // Poisson with Periodic Boundary Conditions... by convention, we assume the solution sums to zero... so eliminate any constants from the solution...
       double average_value_of_e = mean(all_grids->levels[level],e_id);
-      shift_grid(all_grids->levels[level],e_id,e_id,-average_value_of_e);
+      shift_vector(all_grids->levels[level],e_id,e_id,-average_value_of_e);
     }
     residual(all_grids->levels[level],VECTOR_TEMP,e_id,F_id,a,b);
-    mul_grids(all_grids->levels[level],VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+    mul_vectors(all_grids->levels[level],VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
     double norm_of_residual = norm(all_grids->levels[level],VECTOR_TEMP);
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
@@ -862,8 +862,8 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   // initialize the RHS for the f-cycle to f...
     uint64_t _LevelStart = CycleTime();
     level=0;
-   //zero_grid(all_grids->levels[level],e_id);                       // ee  = 0
-    scale_grid(all_grids->levels[level],R_id,1.0,F_id);              // R_id = F_id
+   //zero_vector(all_grids->levels[level],e_id);                       // ee  = 0
+    scale_vector(all_grids->levels[level],R_id,1.0,F_id);              // R_id = F_id
     all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
@@ -879,7 +879,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   // solve coarsest grid...
     uint64_t _timeBottomStart = CycleTime();
     level = all_grids->num_levels-1;
-    if(level>0)zero_grid(all_grids->levels[level],e_id);//else use whatever was the initial guess
+    if(level>0)zero_vector(all_grids->levels[level],e_id);//else use whatever was the initial guess
     IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,DEFAULT_BOTTOM_NORM);  // -1 == exact solution
     all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_timeBottomStart);
 
@@ -911,10 +911,10 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
     if( (all_grids->levels[level]->domain_boundary_condition==BC_PERIODIC) && ((a==0) || (all_grids->levels[level]->alpha_is_zero==1)) ){
       // Poisson with Periodic Boundary Conditions... by convention, we assume the solution sums to zero... so eliminate any constants from the solution...
       double average_value_of_e = mean(all_grids->levels[level],e_id);
-      shift_grid(all_grids->levels[level],e_id,e_id,-average_value_of_e);
+      shift_vector(all_grids->levels[level],e_id,e_id,-average_value_of_e);
     }
     residual(all_grids->levels[level],VECTOR_TEMP,e_id,F_id,a,b);
-    mul_grids(all_grids->levels[level],VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+    mul_vectors(all_grids->levels[level],VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
     double norm_of_residual = norm(all_grids->levels[level],VECTOR_TEMP);
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);

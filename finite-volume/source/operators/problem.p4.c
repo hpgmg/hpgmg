@@ -137,8 +137,8 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
     if((a==0.0) || (level->alpha_is_zero==1) ){ // poisson... by convention, we assume u sums to zero...
       double average_value_of_u = mean(level,VECTOR_UTRUE);
       if(level->my_rank==0){printf("\n  average value of u = %20.12e... shifting u to ensure it sums to zero...\n",average_value_of_u);fflush(stdout);}
-      shift_grid(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_u);
-      shift_grid(level,VECTOR_F,VECTOR_F,-average_value_of_f);
+      shift_vector(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_u);
+      shift_vector(level,VECTOR_F,VECTOR_F,-average_value_of_f);
     }
     //}else{ // helmholtz...
     // FIX... for helmoltz, does the fine grid RHS have to sum to zero ???
@@ -146,8 +146,8 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
     //if(level->my_rank==0){printf("\n");}
     //if(level->my_rank==0){printf("  average value of f = %20.12e... shifting to ensure f sums to zero...\n",average_value_of_f);fflush(stdout);}
     //if(a!=0){
-    //  shift_grid(level,VECTOR_F      ,VECTOR_F      ,-average_value_of_f);
-    //  shift_grid(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_f/a);
+    //  shift_vector(level,VECTOR_F      ,VECTOR_F      ,-average_value_of_f);
+    //  shift_vector(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_f/a);
     //}
     //average_value_of_f = mean(level,VECTOR_F);
     //if(level->my_rank==0){printf("  average value of f = %20.12e after shifting\n",average_value_of_f);fflush(stdout);}

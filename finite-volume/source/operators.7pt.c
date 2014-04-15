@@ -26,8 +26,8 @@
 #define OMP_THREAD_ACROSS_BOXES(thread_teams    ) if(thread_teams    >1) num_threads(thread_teams    )
 #define OMP_THREAD_WITHIN_A_BOX(threads_per_team) if(threads_per_team>1) num_threads(threads_per_team) collapse(2)
 //#define OMP_THREAD_ACROSS_BOXES(thread_teams    ) if(0)
-//#define OMP_THREAD_WITHIN_A_BOX(threads_per_team) collapse(2)
-//#define OMP_THREAD_ACROSS_BOXES(thread_teams    )
+//#define OMP_THREAD_WITHIN_A_BOX(threads_per_team) if(1) collapse(2)
+//#define OMP_THREAD_ACROSS_BOXES(thread_teams    ) if(1)
 //#define OMP_THREAD_WITHIN_A_BOX(threads_per_team) if(0)
 //------------------------------------------------------------------------------------------------------------------------------
 // fix... make #define...

@@ -56,9 +56,9 @@ void CACG(level_type * level, int e_id, int R_id, double a, double b, double des
   double     Tp[2*CA_KRYLOV_S+1][2*CA_KRYLOV_S+1];                                          // T'  indexed as [row][col]
   double      G[2*CA_KRYLOV_S+1][2*CA_KRYLOV_S+1];                                          // extracted from first 2*CA_KRYLOV_S+1 columns of Gg[][].  indexed as [row][col]
   double   Gbuf[(2*CA_KRYLOV_S+1)*(2*CA_KRYLOV_S+1)];                                       // buffer to hold the Gram-like matrix produced by matmul().  indexed as [row*(2*CA_KRYLOV_S+1) + col]
-  int      PR[2*CA_KRYLOV_S+1];                                                               // grid_id's of the concatenation of the S+1 matrix powers of P, and the S matrix powers of R
-  int *P = PR+              0;                                                                  // grid_id's of the S+1 Matrix Powers of P.  P[i] is the grid_id of A^i(p)
-  int *R = PR+CA_KRYLOV_S+1;                                                                  // grid_id's of the S   Matrix Powers of R.  R[i] is the grid_id of A^i(r)
+  int      PR[2*CA_KRYLOV_S+1];                                                               // vector_id's of the concatenation of the S+1 matrix powers of P, and the S matrix powers of R
+  int *P = PR+              0;                                                                  // vector_id's of the S+1 Matrix Powers of P.  P[i] is the vector_id of A^i(p)
+  int *R = PR+CA_KRYLOV_S+1;                                                                  // vector_id's of the S   Matrix Powers of R.  R[i] is the vector_id of A^i(r)
 
   int mMax=200;
   int m=0,n;
@@ -69,8 +69,8 @@ void CACG(level_type * level, int e_id, int R_id, double a, double b, double des
   double aj_dot_GTpaj,cj_dot_Gcj,alpha,cj_dot_Gcj_new,beta,L2_norm_of_r0,L2_norm_of_residual,delta;
 
   residual(level,r0_id,e_id,R_id,a,b);                                                            // r0[] = R_id[] - A(e_id)
-  scale_grid(level,r_id,1.0,r0_id);                                                                // r[] = r0[]
-  scale_grid(level, p_id,1.0,r0_id);                                                                // p[] = r0[]
+  scale_vector(level,r_id,1.0,r0_id);                                                                // r[] = r0[]
+  scale_vector(level, p_id,1.0,r0_id);                                                                // p[] = r0[]
   double norm_of_r0 = norm(level,r0_id);                                                          // the norm of the initial residual...
   if(norm_of_r0 == 0.0){CGConverged=1;}                                                          // entered CG with exact solution
 
@@ -99,11 +99,11 @@ void CACG(level_type * level, int e_id, int R_id, double a, double b, double des
 
     // Using the monomial basis, compute s+1 matrix powers on p[] and s matrix powers on r[] one power at a time
     //  (conventional approach applicable to CHOMBO and BoxLib)
-    scale_grid(level,P[0],1.0, p_id);                                                             // P[0] = A^0p =  p_id
+    scale_vector(level,P[0],1.0, p_id);                                                             // P[0] = A^0p =  p_id
     for(n=1;n<CA_KRYLOV_S+1;n++){                                                             // naive way of calculating the monomial basis.
       apply_op(level,P[n],P[n-1],a,b);                                                          // P[n] = A(P[n-1]) = A^(n)p
     }
-    scale_grid(level,R[0],1.0,r_id);                                                             // R[0] = A^0r = r_id
+    scale_vector(level,R[0],1.0,r_id);                                                             // R[0] = A^0r = r_id
     for(n=1;n<CA_KRYLOV_S;n++){                                                               // naive way of calculating the monomial basis.
       apply_op(level,R[n],R[n-1],a,b);                                                          // R[n] = A(R[n-1]) = A^(n)r
     }
@@ -111,7 +111,7 @@ void CACG(level_type * level, int e_id, int R_id, double a, double b, double des
 
     // form G[][] and g[]
     level->CAKrylov_formations_of_G++;                                                         //   Record the number of times CACG formed G[][]
-    matmul_grids(level,Gbuf,PR,PR,2*CA_KRYLOV_S+1,2*CA_KRYLOV_S+1,1);                       // Compute Gbuf[][] = [P,R]^T * [P,R] (Matmul with grids but only one MPI_AllReduce)
+    matmul(level,Gbuf,PR,PR,2*CA_KRYLOV_S+1,2*CA_KRYLOV_S+1,1);                       // Compute Gbuf[][] = [P,R]^T * [P,R] (Matmul with grids but only one MPI_AllReduce)
     for(i=0,k=0;i<2*CA_KRYLOV_S+1;i++){                                                       // extract G[][] from Gbuf[]
     for(j=0    ;j<2*CA_KRYLOV_S+1;j++){G[i][j] = Gbuf[k++];}                                  // first 2*CA_KRYLOV_S+1 elements in each row go to G[][].
     }
@@ -154,12 +154,12 @@ void CACG(level_type * level, int e_id, int R_id, double a, double b, double des
     }                                                                                           // inner n (j) loop
 
     // update iterates...
-    for(i=0;i<2*CA_KRYLOV_S+1;i++){add_grids(level,e_id,1.0,e_id,ej[i],PR[i]);}               // e_id[] = [P,R]ej + e_id[]
+    for(i=0;i<2*CA_KRYLOV_S+1;i++){add_vectors(level,e_id,1.0,e_id,ej[i],PR[i]);}               // e_id[] = [P,R]ej + e_id[]
     if(!CGFailed && !CGConverged){                                                              // if we're done, then there is no point in updating these
-                                     add_grids(level,  p_id,0.0,  p_id,aj[0],PR[0]);                //    p[] = [P,R]aj
-    for(i=1;i<2*CA_KRYLOV_S+1;i++){add_grids(level,  p_id,1.0,  p_id,aj[i],PR[i]);}               //          ...
-                                     add_grids(level, r_id,0.0, r_id,cj[0],PR[0]);                //    r[] = [P,R]cj
-    for(i=1;i<2*CA_KRYLOV_S+1;i++){add_grids(level, r_id,1.0, r_id,cj[i],PR[i]);}               //          ...
+                                   add_vectors(level,  p_id,0.0,  p_id,aj[0],PR[0]);                //    p[] = [P,R]aj
+    for(i=1;i<2*CA_KRYLOV_S+1;i++){add_vectors(level,  p_id,1.0,  p_id,aj[i],PR[i]);}               //          ...
+                                   add_vectors(level, r_id,0.0, r_id,cj[0],PR[0]);                //    r[] = [P,R]cj
+    for(i=1;i<2*CA_KRYLOV_S+1;i++){add_vectors(level, r_id,1.0, r_id,cj[i],PR[i]);}               //          ...
     }
                               m+=CA_KRYLOV_S;                                                 //   m+=CA_KRYLOV_S;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

@@ -320,6 +320,36 @@ void print_decomposition(level_type *level){
 }
 
 
+//------------------------------------------------------------------------------------------------------------------------------
+void append_block_to_list(blockCopy_type * blocks, int *tail, int doWrite,
+                          int dim_i, int dim_j, int dim_k,
+                          int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride,
+                          int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride
+                         ){
+  // FIX... partition into smaller blocks to increas TLP...
+  if(doWrite){
+    blocks[*tail].dim.i         = dim_i;
+    blocks[*tail].dim.j         = dim_j;
+    blocks[*tail].dim.k         = dim_k;
+    blocks[*tail].read.box      = read_box;
+    blocks[*tail].read.ptr      = read_ptr;
+    blocks[*tail].read.i        = read_i;
+    blocks[*tail].read.j        = read_j;
+    blocks[*tail].read.k        = read_k;
+    blocks[*tail].read.jStride  = read_jStride;
+    blocks[*tail].read.kStride  = read_kStride;
+    blocks[*tail].write.box     = write_box;
+    blocks[*tail].write.ptr     = write_ptr;
+    blocks[*tail].write.i       = write_i;
+    blocks[*tail].write.j       = write_j;
+    blocks[*tail].write.k       = write_k;
+    blocks[*tail].write.jStride = write_jStride;
+    blocks[*tail].write.kStride = write_kStride;
+  }       (*tail)++;
+  //}}
+
+}
+
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 // create a mini program that packs data into MPI recv buffers, exchanges local data, and unpacks the MPI send buffers
 //   broadly speaking... 
@@ -447,46 +477,89 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       }
  
       // determine if this ghost requires a pack or local exchange 
-      int PackOrLocal; // 0 = pack list, 1 = local exchange list
+      int LocalExchange; // 0 = pack list, 1 = local exchange list
       if(ghostsToSend[ghost].recvRank != level->my_rank){
-        PackOrLocal=0; // pack
+        LocalExchange=0; // pack
         neighbor=0;while(level->exchange_ghosts[justFaces].send_ranks[neighbor] != ghostsToSend[ghost].recvRank)neighbor++;
       }else{
-        PackOrLocal=1; // local
+        LocalExchange=1; // local
         neighbor=-1;
       }
-     
+    
+      #if 0 
       if(stage==1){ // lists have been allocated... populate them...
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].dim.i         = dim_i;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].dim.j         = dim_j;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].dim.k         = dim_k;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].read.box      = ghostsToSend[ghost].sendBox;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].read.ptr      = NULL;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].read.i        = send_i;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].read.j        = send_j;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].read.k        = send_k;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].read.jStride  = level->my_boxes[ghostsToSend[ghost].sendBox].jStride;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].read.kStride  = level->my_boxes[ghostsToSend[ghost].sendBox].kStride;
-        if(PackOrLocal==0){
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.box     = -1;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.ptr     = level->exchange_ghosts[justFaces].send_buffers[neighbor];
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.i       = level->exchange_ghosts[justFaces].send_sizes[neighbor]; // current offset in the MPI send buffer
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.j       = 0;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.k       = 0;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.jStride = dim_i;       // contiguous block
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.kStride = dim_i*dim_j; // contiguous block
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].dim.i         = dim_i;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].dim.j         = dim_j;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].dim.k         = dim_k;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.box      = ghostsToSend[ghost].sendBox;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.ptr      = NULL;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.i        = send_i;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.j        = send_j;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.k        = send_k;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.jStride  = level->my_boxes[ghostsToSend[ghost].sendBox].jStride;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.kStride  = level->my_boxes[ghostsToSend[ghost].sendBox].kStride;
+        if(LocalExchange==0){
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.box     = -1;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.ptr     = level->exchange_ghosts[justFaces].send_buffers[neighbor];
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.i       = level->exchange_ghosts[justFaces].send_sizes[neighbor]; // current offset in the MPI send buffer
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.j       = 0;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.k       = 0;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.jStride = dim_i;       // contiguous block
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.kStride = dim_i*dim_j; // contiguous block
         }else{
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.box     = ghostsToSend[ghost].recvBox;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.ptr     = NULL;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.i       = recv_i;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.j       = recv_j;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.k       = recv_k;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.jStride = level->my_boxes[ghostsToSend[ghost].recvBox].jStride;
-        level->exchange_ghosts[justFaces].blocks[PackOrLocal][level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]].write.kStride = level->my_boxes[ghostsToSend[ghost].recvBox].kStride;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.box     = ghostsToSend[ghost].recvBox;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.ptr     = NULL;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.i       = recv_i;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.j       = recv_j;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.k       = recv_k;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.jStride = level->my_boxes[ghostsToSend[ghost].recvBox].jStride;
+        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.kStride = level->my_boxes[ghostsToSend[ghost].recvBox].kStride;
         }
       } 
-                     level->exchange_ghosts[justFaces].num_blocks[PackOrLocal]++;
+                     level->exchange_ghosts[justFaces].num_blocks[LocalExchange]++;
       if(neighbor>=0)level->exchange_ghosts[justFaces].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
+      #else
+      if(LocalExchange) // append to the local exchange list...
+      append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[1][0]),&(level->exchange_ghosts[justFaces].num_blocks[1]),(stage==1),
+        /* dim.i         = */ dim_i,
+        /* dim.j         = */ dim_j,
+        /* dim.k         = */ dim_k,
+        /* read.box      = */ ghostsToSend[ghost].sendBox,
+        /* read.ptr      = */ NULL,
+        /* read.i        = */ send_i,
+        /* read.j        = */ send_j,
+        /* read.k        = */ send_k,
+        /* read.jStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].jStride,
+        /* read.kStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].kStride,
+        /* write.box     = */ ghostsToSend[ghost].recvBox,
+        /* write.ptr     = */ NULL,
+        /* write.i       = */ recv_i,
+        /* write.j       = */ recv_j,
+        /* write.k       = */ recv_k,
+        /* write.jStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].jStride,
+        /* write.kStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].kStride
+      );else // append to the MPI pack list...
+      append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[0][0]),&(level->exchange_ghosts[justFaces].num_blocks[0]),(stage==1),
+        /* dim.i         = */ dim_i,
+        /* dim.j         = */ dim_j,
+        /* dim.k         = */ dim_k,
+        /* read.box      = */ ghostsToSend[ghost].sendBox,
+        /* read.ptr      = */ NULL,
+        /* read.i        = */ send_i,
+        /* read.j        = */ send_j,
+        /* read.k        = */ send_k,
+        /* read.jStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].jStride,
+        /* read.kStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].kStride,
+        /* write.box     = */ -1,
+        /* write.ptr     = */ level->exchange_ghosts[justFaces].send_buffers[neighbor],
+        /* write.i       = */ level->exchange_ghosts[justFaces].send_sizes[neighbor], // current offset in the MPI send buffer
+        /* write.j       = */ 0,
+        /* write.k       = */ 0,
+        /* write.jStride = */ dim_i,       // contiguous block
+        /* write.kStride = */ dim_i*dim_j  // contiguous block
+      );
+      if(neighbor>=0)level->exchange_ghosts[justFaces].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
+      #endif
     } // ghost for-loop
   } // stage for-loop
 
@@ -586,7 +659,8 @@ void build_exchange_ghosts(level_type *level, int justFaces){
  
       // determine if this ghost requires a pack or local exchange 
       neighbor=0;while(level->exchange_ghosts[justFaces].recv_ranks[neighbor] != ghostsToRecv[ghost].sendRank)neighbor++;
-     
+    
+      #if 0 
       if(stage==1){ // lists have been allocated... populate them...
         level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].dim.i         = dim_i;
         level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].dim.j         = dim_j;
@@ -609,6 +683,28 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       } 
                      level->exchange_ghosts[justFaces].num_blocks[2]++;
       if(neighbor>=0)level->exchange_ghosts[justFaces].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
+      #else
+      append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[2][0]),&(level->exchange_ghosts[justFaces].num_blocks[2]),(stage==1),
+      /*dim.i         = */ dim_i,
+      /*dim.j         = */ dim_j,
+      /*dim.k         = */ dim_k,
+      /*read.box      = */ -1,
+      /*read.ptr      = */ level->exchange_ghosts[justFaces].recv_buffers[neighbor],
+      /*read.i        = */ level->exchange_ghosts[justFaces].recv_sizes[neighbor], // current offset in the MPI recv buffer
+      /*read.j        = */ 0,
+      /*read.k        = */ 0,
+      /*read.jStride  = */ dim_i,       // contiguous block
+      /*read.kStride  = */ dim_i*dim_j, // contiguous block
+      /*write.box     = */ ghostsToRecv[ghost].recvBox,
+      /*write.ptr     = */ NULL,
+      /*write.i       = */ recv_i,
+      /*write.j       = */ recv_j,
+      /*write.k       = */ recv_k,
+      /*write.jStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].jStride,
+      /*write.kStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].kStride
+      );
+      if(neighbor>=0)level->exchange_ghosts[justFaces].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
+      #endif
     } // ghost for-loop
   } // stage for-loop
 
