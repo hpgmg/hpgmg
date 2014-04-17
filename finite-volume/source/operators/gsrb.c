@@ -25,6 +25,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
     #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
     for(box=0;box<level->num_my_boxes;box++){
       int i,j,k,ss;
+      int color000 = (level->my_boxes[box].low.i^level->my_boxes[box].low.j^level->my_boxes[box].low.k)&1;  // is element 000 red or black ???  (should only be an issue if box dimension is odd)
       const int jStride = level->my_boxes[box].jStride;
       const int kStride = level->my_boxes[box].kStride;
       const int     dim = level->my_boxes[box].dim;
@@ -40,7 +41,6 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
       const double * __restrict__ valid    = level->my_boxes[box].vectors[VECTOR_VALID ] + ghosts*(1+jStride+kStride); // cell is inside the domain
       const double * __restrict__ RedBlack[2] = {level->RedBlack_FP[0] + ghosts*(1+jStride), 
                                                  level->RedBlack_FP[1] + ghosts*(1+jStride)};
-      //FIX... int color000 = (level->my_boxes[box].low.i^level->my_boxes[box].low.j^level->my_boxes[box].low.k)&1;  // is element 000 red or black ???  depends on its global coordinate
           
 
       int ghostsToOperateOn=ghosts-1;
@@ -51,7 +51,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
         for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
         for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
         for(i=0-ghostsToOperateOn;i<dim+ghostsToOperateOn;i++){
-              int EvenOdd = (k^ss)&1;
+              int EvenOdd = (k^ss^color000)&1;
               int ij  = i + j*jStride;
               int ijk = i + j*jStride + k*kStride;
               double Ax     = apply_op_ijk(phi);
@@ -63,7 +63,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
         #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
         for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
         for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
-        for(i=((j^k^ss)&1)+1-ghosts;i<dim+ghostsToOperateOn;i+=2){ // stride-2 GSRB
+        for(i=((j^k^ss^color000)&1)+1-ghosts;i<dim+ghostsToOperateOn;i+=2){ // stride-2 GSRB
               int ijk = i + j*jStride + k*kStride; 
               double Ax     = apply_op_ijk(phi);
               double lambda =     Dinv_ijk();
@@ -75,7 +75,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
         for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
         for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
         for(i=0-ghostsToOperateOn;i<dim+ghostsToOperateOn;i++){
-        if((i^j^k^ss^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
+        if((i^j^k^ss^color000^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
               int ijk = i + j*jStride + k*kStride;
               double Ax     = apply_op_ijk(phi);
               double lambda =     Dinv_ijk();
