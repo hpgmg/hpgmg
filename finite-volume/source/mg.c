@@ -23,11 +23,11 @@
 #include "solvers.h"
 #include "mg.h"
 //------------------------------------------------------------------------------------------------------------------------------
-#ifndef BOX_DIM_THRESHOLD
-#define BOX_DIM_THRESHOLD     4
+#ifndef MG_BOX_DIM_THRESHOLD
+#define MG_BOX_DIM_THRESHOLD     4
 #endif
-#ifndef DOMAIN_DIM_THRESHOLD
-#define DOMAIN_DIM_THRESHOLD 13
+#ifndef MG_DOMAIN_DIM_THRESHOLD
+#define MG_DOMAIN_DIM_THRESHOLD 13
 #endif
 #ifndef DEFAULT_BOTTOM_NORM
 #define DEFAULT_BOTTOM_NORM  1e-3
@@ -680,17 +680,17 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     int boxes_in_i = -1;
     int box_ghosts      = all_grids->levels[level-1]->box_ghosts;
     int box_vectors     = all_grids->levels[level-1]->box_vectors;
-//  if( (fine_domain_dim % 2 == 0) && (fine_domain_dim/2 <= DOMAIN_DIM_THRESHOLD) ){box_dim=fine_domain_dim/2;boxes_in_i=1;                doRestrict=1;}else // FIX... agglomerate everything !!!
-    if( (fine_box_dim    % 2 == 0) && (fine_box_dim > BOX_DIM_THRESHOLD)          ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;   doRestrict=1;}else
+//  if( (fine_domain_dim % 2 == 0) && (fine_domain_dim/2 <= MG_DOMAIN_DIM_THRESHOLD) ){box_dim=fine_domain_dim/2;boxes_in_i=1;                doRestrict=1;}else // FIX... agglomerate everything !!!
+    if( (fine_box_dim    % 2 == 0) && (fine_box_dim > MG_BOX_DIM_THRESHOLD)          ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;   doRestrict=1;}else
     #ifndef USE_UCYCLES
-    if(                               (fine_boxes_in_i %  2 == 0)                   ){box_dim=   fine_box_dim;  boxes_in_i=fine_boxes_in_i/2; doRestrict=1;}else //    8-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  3 == 0)                   ){box_dim= 3*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/3; doRestrict=1;}else //   27-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  5 == 0)                   ){box_dim= 5*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/5; doRestrict=1;}else //  125-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  7 == 0)                   ){box_dim= 7*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/7; doRestrict=1;}else //  343-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i % 11 == 0)                   ){box_dim=11*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/11;doRestrict=1;}else // 1331-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i % 13 == 0)                   ){box_dim=13*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/13;doRestrict=1;}else // 2197-way gather
+    if(                               (fine_boxes_in_i %  2 == 0)                    ){box_dim=   fine_box_dim;  boxes_in_i=fine_boxes_in_i/2; doRestrict=1;}else //    8-way gather
+    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  3 == 0)                    ){box_dim= 3*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/3; doRestrict=1;}else //   27-way gather
+    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  5 == 0)                    ){box_dim= 5*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/5; doRestrict=1;}else //  125-way gather
+    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  7 == 0)                    ){box_dim= 7*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/7; doRestrict=1;}else //  343-way gather
+    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i % 11 == 0)                    ){box_dim=11*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/11;doRestrict=1;}else // 1331-way gather
+    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i % 13 == 0)                    ){box_dim=13*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/13;doRestrict=1;}else // 2197-way gather
     #endif
-    if( (fine_box_dim    % 2 == 0)                                                  ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;  doRestrict=1;}
+    if( (fine_box_dim    % 2 == 0)                                                   ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;  doRestrict=1;}
 
     if( level >= maxLevels)doRestrict=0;
     if( box_dim < box_ghosts)doRestrict=0; // wont't be able to gather all ghost zone data from immediate neighbors

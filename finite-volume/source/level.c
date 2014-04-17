@@ -62,63 +62,6 @@ print_communicator(int printSendRecv, int rank, int level, communicator_type *co
   fflush(stdout);
 }
 //------------------------------------------------------------------------------------------------------------------------------
-void ZeroFace(int *buf, int face){
-  if(!faces[face])return; // not on a face
-  int b;
-  switch(face){
-    case  4:for(b= 0;b< 9;b+=1){buf[b]=0;}break;
-    case 10:for(b= 0;b<27;b+=9){buf[b]=0;buf[b+1]=0;buf[b+2]=0;}break;
-    case 12:for(b= 0;b<27;b+=3){buf[b]=0;}break;
-    case 14:for(b= 2;b<27;b+=3){buf[b]=0;}break;
-    case 16:for(b= 6;b<27;b+=9){buf[b]=0;buf[b+1]=0;buf[b+2]=0;}break;
-    case 22:for(b=18;b<27;b+=1){buf[b]=0;}break;
-  }
-}
-
-void ZeroEdge(int *buf, int edge){
-  if(!edges[edge])return; // not on a edge
-  int b;
-  switch(edge){
-    case  1:buf[ 0]=0;buf[ 1]=0;buf[ 2]=0;break;
-    case  3:buf[ 0]=0;buf[ 3]=0;buf[ 6]=0;break;
-    case  5:buf[ 2]=0;buf[ 5]=0;buf[ 8]=0;break;
-    case  7:buf[ 6]=0;buf[ 7]=0;buf[ 8]=0;break;
-    case  9:buf[ 0]=0;buf[ 9]=0;buf[18]=0;break;
-    case 11:buf[ 2]=0;buf[11]=0;buf[20]=0;break;
-    case 15:buf[ 6]=0;buf[15]=0;buf[24]=0;break;
-    case 17:buf[ 8]=0;buf[17]=0;buf[26]=0;break;
-    case 19:buf[18]=0;buf[19]=0;buf[20]=0;break;
-    case 21:buf[18]=0;buf[21]=0;buf[24]=0;break;
-    case 23:buf[20]=0;buf[23]=0;buf[26]=0;break;
-    case 25:buf[24]=0;buf[25]=0;buf[26]=0;break;
-  }
-}
-
-
-//------------------------------------------------------------------------------------------------------------------------------
-typedef struct {
-  int  rank;
-  int boxID;
-  int   dir;
-  int offset;
-} _GZ_type;
-
-int _qsortGZ(const void *a, const void*b){
-  _GZ_type *gza = (_GZ_type*)a;
-  _GZ_type *gzb = (_GZ_type*)b;
-  // sort first by rank
-  if(gza->rank < gzb->rank)return(-1);
-  if(gza->rank > gzb->rank)return( 1);
-  // then by destination box
-  if(gza->boxID < gzb->boxID)return(-1);
-  if(gza->boxID > gzb->boxID)return( 1);
-  // and finally by direction
-  if(gza->dir < gzb->dir)return(-1);
-  if(gza->dir > gzb->dir)return( 1);
-  return(0);
-}
-
-//------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
   int sendRank;
   int sendBoxID;
@@ -128,6 +71,7 @@ typedef struct {
   int recvBoxID;
   int recvBox;
 } GZ_type;
+
 
 int qsortGZ(const void *a, const void*b){
   GZ_type *gza = (GZ_type*)a;
@@ -143,6 +87,8 @@ int qsortGZ(const void *a, const void*b){
   if(gza->sendDir > gzb->sendDir)return( 1);
   return(0);
 }
+
+
 int qsortInt(const void *a, const void *b){
   int *ia = (int*)a;
   int *ib = (int*)b;
@@ -321,11 +267,11 @@ void print_decomposition(level_type *level){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-#ifndef GHOSTS_BLOCK_J
-#define GHOSTS_BLOCK_J 8
+#ifndef BLOCKCOPY_TILE_J
+#define BLOCKCOPY_TILE_J 8
 #endif
-#ifndef GHOSTS_BLOCK_K
-#define GHOSTS_BLOCK_K 8
+#ifndef BLOCKCOPY_TILE_K
+#define BLOCKCOPY_TILE_K 8
 #endif
 void append_block_to_list(blockCopy_type * blocks, int *tail, int doWrite,
                           int dim_i, int dim_j, int dim_k,
@@ -333,12 +279,12 @@ void append_block_to_list(blockCopy_type * blocks, int *tail, int doWrite,
                           int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride
                          ){
   int jj,kk;
-  // Take a dim_j x dim_k iteration space and block it into smaller faces of size GHOSTS_BLOCK_J x GHOSTS_BLOCK_K
+  // Take a dim_j x dim_k iteration space and tile it into smaller faces of size BLOCKCOPY_TILE_J x BLOCKCOPY_TILE_K
   // This increases the number of blockCopies in the ghost zone exchange and thereby increases the thread-level parallelism
-  for(kk=0;kk<dim_k;kk+=GHOSTS_BLOCK_K){
-  for(jj=0;jj<dim_j;jj+=GHOSTS_BLOCK_J){
-    int dim_k_mod = dim_k-kk;if(dim_k_mod>GHOSTS_BLOCK_K)dim_k_mod=GHOSTS_BLOCK_K;
-    int dim_j_mod = dim_j-jj;if(dim_j_mod>GHOSTS_BLOCK_J)dim_j_mod=GHOSTS_BLOCK_J;
+  for(kk=0;kk<dim_k;kk+=BLOCKCOPY_TILE_K){
+  for(jj=0;jj<dim_j;jj+=BLOCKCOPY_TILE_J){
+    int dim_k_mod = dim_k-kk;if(dim_k_mod>BLOCKCOPY_TILE_K)dim_k_mod=BLOCKCOPY_TILE_K;
+    int dim_j_mod = dim_j-jj;if(dim_j_mod>BLOCKCOPY_TILE_J)dim_j_mod=BLOCKCOPY_TILE_J;
     if(doWrite){
       blocks[*tail].dim.i         = dim_i;
       blocks[*tail].dim.j         = dim_j_mod;

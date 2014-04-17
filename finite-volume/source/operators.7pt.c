@@ -229,8 +229,12 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
       if( (printedError==0) && (Aii==0)       ){printf("Error(%5d,%5d,%5d)... zero on the diagonal\n",lowi+i,lowj+j,lowk+k);printedError=1}
       if( (printedError==0) && isinf(1.0/Aii) ){printf("Error(%5d,%5d,%5d)... D^{-1} == inf       \n",lowi+i,lowj+j,lowk+k);printedError=1}
       #endif
-       Dinv[ijk] = 1.0/Aii;							// inverse of the diagonal Aii
-      L1inv[ijk] = 1.0/(fabs(Aii)+sumAbsAij);					// inverse of the L1 row norm
+                             Dinv[ijk] = 1.0/Aii;				// inverse of the diagonal Aii
+                          //L1inv[ijk] = 1.0/(Aii+sumAbsAij);			// inverse of the L1 row norm
+      // L1inv = ( D+D^{L1} )^{-1}
+      // as suggested by eq 6.5 in Baker et al, "Multigrid smoothers for ultra-parallel computing: additional theory and discussion"...
+      if(Aii>=1.5*sumAbsAij)L1inv[ijk] = 1.0/(Aii              ); 		//
+                       else L1inv[ijk] = 1.0/(Aii+0.5*sumAbsAij);		// 
       double Di = (Aii + sumAbsAij)/Aii;if(Di>box_eigenvalue)box_eigenvalue=Di;	// upper limit to Gershgorin disc == bound on dominant eigenvalue
     }}}
     if(box_eigenvalue>dominant_eigenvalue){dominant_eigenvalue = box_eigenvalue;}
@@ -271,13 +275,13 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #define NUM_SMOOTHS      6
 #include "operators/jacobi.c"
 #elif   USE_L1JACOBI
-#define NUM_SMOOTHS      8
+#define NUM_SMOOTHS      6
 #include "operators/jacobi.c"
 #elif   USE_SYMGS
 #define NUM_SMOOTHS      2
 #include "operators/symgs.c"
 #else
-#error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, or -DUSE_JACOBI
+#error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, -DUSE_JACOBI, -DUSE_L1JACOBI, or -DUSE_SYMGS
 #endif
 #include "operators/residual.c"
 #include "operators/apply_op.c"

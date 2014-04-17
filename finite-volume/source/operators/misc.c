@@ -380,7 +380,7 @@ void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir)
 //------------------------------------------------------------------------------------------------------------------------------
 double error(level_type * level, int id_a, int id_b){
   double h3 = level->h * level->h * level->h;
-                 add_vectors(level,VECTOR_TEMP,1.0,id_a,-1.0,id_b);       // VECTOR_TEMP = id_a - id_b
-  double   max =      norm(level,VECTOR_TEMP);                 return(max);   // max norm of error function
+               add_vectors(level,VECTOR_TEMP,1.0,id_a,-1.0,id_b);            // VECTOR_TEMP = id_a - id_b
+  double   max =      norm(level,VECTOR_TEMP);                return(max);   // max norm of error function
   double    L2 = sqrt( dot(level,VECTOR_TEMP,VECTOR_TEMP)*h3);return( L2);   // normalized L2 error ?
 }

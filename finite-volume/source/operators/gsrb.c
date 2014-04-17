@@ -40,12 +40,13 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
       const double * __restrict__ valid    = level->my_boxes[box].vectors[VECTOR_VALID ] + ghosts*(1+jStride+kStride); // cell is inside the domain
       const double * __restrict__ RedBlack[2] = {level->RedBlack_FP[0] + ghosts*(1+jStride), 
                                                  level->RedBlack_FP[1] + ghosts*(1+jStride)};
+      //FIX... int color000 = (level->my_boxes[box].low.i^level->my_boxes[box].low.j^level->my_boxes[box].low.k)&1;  // is element 000 red or black ???  depends on its global coordinate
           
 
       int ghostsToOperateOn=ghosts-1;
       for(ss=s;ss<s+ghosts;ss++,ghostsToOperateOn--){
         #if defined(GSRB_FP)
-        #warning GSRB using pre-computed 1.0/0.0 FP array for Red-Black
+        #warning GSRB using pre-computed 1.0/0.0 FP array for Red-Black to facilitate vectorization...
         #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
         for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
         for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
@@ -58,7 +59,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
               phi_new[ijk] = phi[ijk] + RedBlack[EvenOdd][ij]*lambda*(rhs[ijk]-Ax); // compiler seems to get confused unless there are disjoint read/write pointers
         }}}
         #elif defined(GSRB_STRIDE2)
-        #warning GSRB using stride-2 accesses
+        #warning GSRB using stride-2 accesses to minimie the number of flop's
         #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
         for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
         for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
@@ -69,7 +70,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
               phi_new[ijk] = phi[ijk] + lambda*(rhs[ijk]-Ax);
         }}}
         #else
-        #warning GSRB using if-then-else on loop indices for Red-Black
+        #warning GSRB using if-then-else on loop indices for Red-Black because its easy to read...
         #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
         for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
         for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
