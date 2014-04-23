@@ -46,16 +46,23 @@
 
 \title{HPGMG: A Benchmark for Ranking High Performance Computing Systems}
 
+%\author{ Mark F. Adams \thanks{Columbia University, Department of Applied Physics and Applied Mathematics  (ma2325@columbia.edu).} and Ravi Samtaney  \thanks{Princeton Plasma Physics Laboratory} and Achi Brandt \thanks {Weizmann Institute of Science}}
+\author{Mark F. Adams$^1$, Jed Brown$^2$, John Shalf$^1$}
+\author{Brian Van Straalen$^1$, Erich Strohmaier$^1$, and Sam Williams$^1$}
+\address{$^1$Computational Research Division, Lawrence Berkeley National Laboratory \\
+$^2$Mathematics and Computer Science Division, Argonne National Laboratory, Department of Computer Science, University of Colorado Boulder} 
+%$^3$Department of Computer Science \& Applied Mathematics, The Weizmann Institute of Science, Rehovot, Israel}
+
 \begin{abstract}
-This document provides an introduction to a benchmark HPGMG for ranking large scale general purpose computers for use on the Top500 list ~\cite{top500}.
+This document provides an overview of the benchmark -- {\it HPGMG} -- for ranking large scale general purpose computers for use on the Top500 list ~\cite{top500}.
 We provide a rational for the need for a replacement for the current metric HPL, some background of the Top500 list and the challenges of developing such a metric; we discuss our design philosophy and methodology, and an overview of the specification of the benchmark.
-More details on the specification on the repository Wiki (https://bitbucket.org/hpgmg/hpgmg/wiki) and the benchmark code itself can be found in the repository (https://bitbucket.org/hpgmg/hpgmg).
+The primary documentation with maintained details on the specification can be found at hpgmg.org and the Wiki and benchmark code itself can be found in the repository https://bitbucket.org/hpgmg/hpgmg.
 \end{abstract}
 \end{frontmatter}
 
 %\pagebreak
 
-\tableofcontents 
+%\tableofcontents 
 
 %\pagebreak
 
@@ -119,7 +126,7 @@ These algorithms generally have lower or equal complexity in nearly every concei
 than their predecessors. For instance multigrid has improved time to solution 
 by reducing the total number of steps to solution (including requirements for nearly all hardware performance metrics) 
 in addition to reducing the total number of FLOPs.
-In fact, the SCALES report of ~\cite{SCALES} observed that the history of performance improvements in algorithms
+In fact, the SCALES report of ~\cite{SCALES_2003} observed that the history of performance improvements in algorithms
 has achieved 9 orders of magnitude improvement in delivered application performance during the
 same period that hardware improvements delivered a mere 3 orders of magnitude improvement.
 Today, algorithms with arithmetic intensity (AI) of 2-4 flops/byte, and lower, are common.
@@ -262,27 +269,6 @@ Geometric multigrid with matrix free operators provides several free parameters 
 
 The equations and discretizations are a free parameter that can be clearly defined and understood, and easily verified.
 Matrix free methods offer a wide range of arithmetic intensity (a proxy for flop rates), demands for both streaming and cache memory, and complex process cooperation where natural units of computation like elements or flux surfaces update multiple variables.
-%Table \ref{tab:ai} shows a list of equations and discretizations with their modeled arithmetic intensity (AI) and measured flop rates.
-%\begin{table}[h!]
-%\begin{center}
-%\begin{tabular}{|c|c|c|c|}
-%\multicolumn{3}{c}{}{}{} \\
-%\hline
-%Equation/discretization         & $AI_p$ & $AI_c$ & flop rate \% \\
-%\hline
-      %\midrule
-%       Q1/FE            &  & &    \\
-%       Q2/FE            &  & &  \\
- %      27-point/FV    &  & &  \\
- %      19-point/FV    &  & &  \\
-%\hline  
-%\end{tabular}
-%\caption{Arithmetic intensity for discretized Laplacian (FE: finite element; FV: finite volume): perfect cache $AI_p$, finite cache $AI_c$, flop rates as \% of theoretical peak }
-%\label{tab:ai}
-%\end{center}
-%\end{table}
-%This data is used in our selection of an equation and discretization that possesses an AI that is shown to be desirable in a metric.
-%Thus, we can tune the AI to match applications, encourage machines and hence future application optimizations to use higher AI, and to satisfy other criteria for ranking machines.
 
 Multigrid also allows for the the smoother scheduling, the number of pre and post smoothing steps at each level, to be specified.
 Large numbers of smoothing steps uses more flops in the high intensity operator or smoother kernels and allows for more loop fusion.
@@ -301,32 +287,6 @@ For instance, loop fusion techniques might require that more of the FMG algorith
 We will work with users to provide desired flexibility.
 If users would like to not use MPI in the harness, for instance, thus requiring a rewrite of the harness, we will work with you in certifying new harnesses to add to the benchmark repository, again to be publicly available after its publication on the top500 list \cite{HPGMG}.
 Further details of the specification can be found on the repository Wiki (https://bitbucket.org/hpgmg/hpgmg/wiki).
-
-\section{Management}
-
-HPGMG is managed with a core group of developers, an executive committee, and mailing lists (users@hpgmg.org) and periodic public meetings and teleconferences.
-A web site at hpgmg.org will contain information on meeting, teleconferences, etc.
-The codes and documentation are located in a publicly readable {\it Git} repository at bitbucket.org \cite{HPGMG}.
-Users can develop submission codes on branches in the bitbucket.org repository with the stipulation that these branches must be made public or merged with the master branch when the top500 list is published.
-The public and post pull requests to modify the the HPGMG codes and documentation.
-
-HPGMG is designed, developed, and maintained by a core group of developers:
-\begin{description}
-\item[Secretary] {\it Mark F. Adams} Lawrence Berkeley National Laboratory
-\item[Developer]  {\it Samuel Williams} Lawrence Berkeley National Laboratory
-\item[Developer]  {\it Jed Brown} Argonne National Laboratory
-\item[Consultant] {\it Brian Van Straalen} Lawrence Berkeley National Laboratory
-\end{description}
-
-An executive committee composed of industry, academic and DOE personnel will approve allocation of resources, approve developer personnel, and provide advice on the content and structure of the benchmark.
-%\begin{itemize}
-%\item  {\it Erich Strohmaier}
-%\item {\it Barry Smith}
-%\item 
-%\item 
-%\end{itemize}
-%{John  Shalf} Lawrence Berkeley National Laboratory, Berkeley, CA
-
 
 \section*{Acknowledgments}
 
