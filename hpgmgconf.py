@@ -90,7 +90,7 @@ def makefile(args):
 def hpgmg_fv_cflags(args):
     defines = []
     if args.fv_mpi:
-        defines.append('MPI')
+        defines.append('USE_MPI')
     defines.append('USE_%s' % args.fv_coarse_solver.upper())
     if args.fv_subcomm:
         defines.append('USE_SUBCOMM')
