@@ -1,4 +1,4 @@
-HPGMG: High-performance Geometric Multigrid
+ HPGMG: High-performance Geometric Multigrid
 ===========================================
 
 HPGMG implements full multigrid (FMG) algorithms using finite-volume and
@@ -9,16 +9,15 @@ thus may be considered direct solvers.  An F-cycle visits the finest
 level a total of two times, the first coarsening (8x smaller) 4 times,
 the second coarsening 6 times, etc.
 
-# HPGMG-FV: Finite Volume solver
+#General installation
 
-The finite-volume solver uses cell-centered methods with constant or
-variable coefficients.  This implementation requires OpenMP and cannot
-be configured at run-time.  See `./configure --help` for configuration
-options.  Be sure to pass suitable OpenMP flags, e.g.,
+Run configure, and then make as instructed:
 
-    $ ./configure --CC=/path/to/mpicc --CFLAGS=-fopenmp
+    $ ./configure --CC=/path/to/mpicc
 
+This will create both the finite elelement and finite volume solvers.
 The finite volume solver can be disabled by configuring with `--no-fv`.
+The finite element solver can be disabled by configuring with `--no-fe`.
 
 # HPGMG-FE: Finite Element FAS solver
 
@@ -117,3 +116,185 @@ F(2,3)  0: |e|_2/|u|_2 2.97e-05  |r|_2/|f|_2 4.37e-04
 V(2,3)  1: |e|_2/|u|_2 1.93e-05  |r|_2/|f|_2 4.06e-06
 V(2,3)  2: |e|_2/|u|_2 1.95e-05  |r|_2/|f|_2 1.88e-07
 ```
+
+# HPGMG-FV: Finite Volume solver
+
+The finite-volume solver uses cell-centered methods with constant or
+variable coefficients.  This implementation requires OpenMP and cannot
+be configured at run-time.  See `./configure --help` for configuration
+options.  Be sure to pass suitable OpenMP flags, e.g.,
+
+    $ ./configure --CC=/path/to/mpicc --CFLAGS=-fopenmp
+
+## Running
+
+Using the Cray XC-30 at NERSC, Edison, with 96 core in an interactive shell, HPGMG-FV
+generates the following output:
+
+$ export OMP_NUM_THREADS=8                                                                             
+$ aprun -n 8 -d 12  -N  2  -S 1  -ss  -cc numa_node ./arch-xc30-opt64/bin/hpgmg-fv      7  8           
+Requested MPI_THREAD_FUNNELED, got MPI_THREAD_FUNNELED                                                                              
+8 MPI Tasks of 8 threads (OMP_NESTED=FALSE)                                                                                         
+
+attempting to create a   512^3 level using a   4^3 grid of 128^3 boxes...
+  OMP_NESTED=FALSE OMP_NUM_THREADS=8 ... 1 teams of 8 threads            
+  calculating boxes per process... target=8.000, max=8                   
+  rebuilding operator for level...  h=1.953125e-03  eigenvalue_max<2.000000e+00
+
+attempting to create a   256^3 level using a   4^3 grid of  64^3 boxes...
+  OMP_NESTED=FALSE OMP_NUM_THREADS=8 ... 1 teams of 8 threads            
+  calculating boxes per process... target=8.000, max=8                   
+
+attempting to create a   128^3 level using a   4^3 grid of  32^3 boxes...
+  OMP_NESTED=FALSE OMP_NUM_THREADS=8 ... 1 teams of 8 threads            
+  calculating boxes per process... target=8.000, max=8                   
+
+attempting to create a    64^3 level using a   4^3 grid of  16^3 boxes...
+  OMP_NESTED=FALSE OMP_NUM_THREADS=8 ... 1 teams of 8 threads            
+  calculating boxes per process... target=8.000, max=8                   
+
+attempting to create a    32^3 level using a   4^3 grid of   8^3 boxes...
+  OMP_NESTED=FALSE OMP_NUM_THREADS=8 ... 1 teams of 8 threads            
+  calculating boxes per process... target=8.000, max=8                   
+
+attempting to create a    16^3 level using a   4^3 grid of   4^3 boxes...
+  OMP_NESTED=FALSE OMP_NUM_THREADS=8 ... 1 teams of 8 threads            
+  calculating boxes per process... target=8.000, max=8                   
+
+attempting to create a     8^3 level using a   2^3 grid of   4^3 boxes...
+  OMP_NESTED=FALSE OMP_NUM_THREADS=8 ... 1 teams of 8 threads            
+  calculating boxes per process... target=1.000, max=1                   
+
+attempting to create a     4^3 level using a   1^3 grid of   4^3 boxes...
+  OMP_NESTED=FALSE OMP_NUM_THREADS=8 ... 1 teams of 8 threads            
+  calculating boxes per process... target=0.125, max=1                   
+
+attempting to create a     2^3 level using a   1^3 grid of   2^3 boxes...
+  OMP_NESTED=FALSE OMP_NUM_THREADS=8 ... 1 teams of 8 threads            
+  calculating boxes per process... target=0.125, max=1                   
+
+attempting to create a     1^3 level using a   1^3 grid of   1^3 boxes...
+  OMP_NESTED=FALSE OMP_NUM_THREADS=8 ... 1 teams of 8 threads            
+  calculating boxes per process... target=0.125, max=1                   
+ Building MPI subcommunicator for level 1...done                        
+  Building MPI subcommunicator for level 2...done                        
+  Building MPI subcommunicator for level 3...done                        
+  Building MPI subcommunicator for level 4...done                        
+  Building MPI subcommunicator for level 5...done                        
+  Building MPI subcommunicator for level 6...done                        
+  Building MPI subcommunicator for level 7...done                        
+  Building MPI subcommunicator for level 8...done                        
+  Building MPI subcommunicator for level 9...done                        
+  rebuilding operator for level...  h=3.906250e-03  eigenvalue_max<2.000000e+00
+  rebuilding operator for level...  h=7.812500e-03  eigenvalue_max<2.000000e+00
+  rebuilding operator for level...  h=1.562500e-02  eigenvalue_max<2.000000e+00
+  rebuilding operator for level...  h=3.125000e-02  eigenvalue_max<2.000000e+00
+  rebuilding operator for level...  h=6.250000e-02  eigenvalue_max<2.000000e+00
+  rebuilding operator for level...  h=1.250000e-01  eigenvalue_max<2.000000e+00
+  rebuilding operator for level...  h=2.500000e-01  eigenvalue_max<2.000000e+00
+  rebuilding operator for level...  h=5.000000e-01  eigenvalue_max<1.286089e+00
+  rebuilding operator for level...  h=1.000000e+00  eigenvalue_max<1.000000e+00
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...                                                                    
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)                
+done                                                                           
+FMGSolve...
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)
+done
+FMGSolve...
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)
+done
+FMGSolve...
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)
+done
+FMGSolve...
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)
+done
+FMGSolve...
+f-cycle,    norm=0.00000000000457238665 (4.572386651768147e-12)
+done
+h = 1.953125e-03, error = 3.696307577501308e-09
+                                     0            1            2            3            4            5            6            7            8            9
+box dimension                    128^3         64^3         32^3         16^3          8^3          4^3          4^3          4^3          2^3          1^3        total
+------------------        ------------ ------------ ------------ ------------ ------------ ------------ ------------ ------------ ------------ ------------ ------------
+smooth                        0.233412     0.064273     0.005881     0.001720     0.001034     0.000923     0.000162     0.000178     0.000162     0.000000     0.307743
+residual                      0.052603     0.006971     0.000547     0.000169     0.000111     0.000105     0.000019     0.000022     0.000019     0.000021     0.060587
+applyOp                       0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000023     0.000023
+BLAS1                         0.030815     0.000512     0.000169     0.000084     0.000065     0.000075     0.000012     0.000015     0.000016     0.000275     0.032039
+BLAS3                         0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000
+Boundary Conditions           0.006946     0.004180     0.001653     0.000625     0.000238     0.000111     0.000036     0.000068     0.000048     0.000034     0.013938
+Restriction                   0.008624     0.001549     0.000156     0.000108     0.000109     0.000117     0.000537     0.000027     0.000029     0.000000     0.011256
+  local restriction           0.008594     0.001539     0.000151     0.000103     0.000104     0.000110     0.000018     0.000020     0.000022     0.000000     0.010662
+  pack MPI buffers            0.000016     0.000005     0.000001     0.000002     0.000002     0.000002     0.000002     0.000002     0.000002     0.000000     0.000034
+  unpack MPI buffers          0.000011     0.000001     0.000001     0.000001     0.000001     0.000001     0.000113     0.000001     0.000001     0.000000     0.000132
+  MPI_Isend                   0.000001     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000003
+  MPI_Irecv                   0.000001     0.000001     0.000001     0.000001     0.000000     0.000001     0.000013     0.000001     0.000001     0.000000     0.000019
+  MPI_Waitall                 0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000389     0.000000     0.000000     0.000000     0.000390
+Interpolation                 0.016691     0.002704     0.000414     0.000158     0.000124     0.000124     0.000247     0.000027     0.000033     0.000000     0.020523
+  local interpolation         0.016674     0.002696     0.000409     0.000154     0.000120     0.000120     0.000020     0.000021     0.000025     0.000000     0.020238
+  pack MPI buffers            0.000005     0.000002     0.000002     0.000001     0.000001     0.000001     0.000121     0.000001     0.000002     0.000000     0.000137
+  unpack MPI buffers          0.000010     0.000003     0.000001     0.000001     0.000001     0.000001     0.000002     0.000002     0.000002     0.000000     0.000023
+  MPI_Isend                   0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000056     0.000000     0.000000     0.000000     0.000057
+  MPI_Irecv                   0.000000     0.000000     0.000000     0.000000     0.000001     0.000000     0.000000     0.000001     0.000001     0.000000     0.000004
+  MPI_Waitall                 0.000000     0.000001     0.000000     0.000000     0.000000     0.000000     0.000045     0.000000     0.000000     0.000000     0.000048
+Ghost Zone Exchange           0.024454     0.009990     0.003605     0.001738     0.001092     0.000874     0.000682     0.000200     0.000222     0.000057     0.042915
+  local exchange              0.004445     0.001670     0.000481     0.000287     0.000172     0.000138     0.000016     0.000146     0.000159     0.000039     0.007552
+  pack MPI buffers            0.006175     0.002598     0.000722     0.000252     0.000150     0.000125     0.000122     0.000011     0.000013     0.000004     0.010172
+  unpack MPI buffers          0.002692     0.001118     0.000496     0.000276     0.000166     0.000129     0.000130     0.000013     0.000018     0.000005     0.005044
+  MPI_Isend                   0.000259     0.000360     0.000176     0.000185     0.000294     0.000176     0.000146     0.000003     0.000003     0.000001     0.001603
+  MPI_Irecv                   0.000072     0.000070     0.000028     0.000027     0.000028     0.000025     0.000035     0.000002     0.000004     0.000001     0.000293
+  MPI_Waitall                 0.010801     0.004161     0.001691     0.000698     0.000265     0.000264     0.000213     0.000004     0.000003     0.000001     0.018100
+MPI_collectives               0.000657     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000000     0.000037     0.000694
+------------------        ------------ ------------ ------------ ------------ ------------ ------------ ------------ ------------ ------------ ------------ ------------
+Total by level                0.368311     0.089306     0.012201     0.004555     0.002779     0.002270     0.001697     0.000551     0.000548     0.000436     0.482656
+
+   Total time in MGBuild      0.171733 seconds
+   Total time in MGSolve      0.482693 seconds
+      number of v-cycles             1
+Bottom solver iterations            10
+
+            Performance      2.781e+08 DOF/s
+
+
+
