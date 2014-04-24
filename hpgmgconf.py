@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--arch', help='Name of this configuration', default=None)
     parser.add_argument('--petsc-dir', help='PETSC_DIR', default=os.environ.get('PETSC_DIR',''))
     parser.add_argument('--petsc-arch', help='PETSC_ARCH', default=os.environ.get('PETSC_ARCH',''))
-    parser.add_argument('--with-hbm', help='Use libHBM profiling library on Blue Gene')
+    parser.add_argument('--with-hpm', help='Use libHPM profiling library on Blue Gene')
     cf = parser.add_argument_group('Compilers and flags')
     cf.add_argument('--CC', help='Path to C compiler', default=os.environ.get('CC',''))
     cf.add_argument('--CFLAGS', help='Flags for C compiler', default=os.environ.get('CFLAGS',''))
@@ -67,15 +67,15 @@ def makefile(args):
         'SRCDIR = %s' % os.path.abspath(os.path.dirname(__name__)),]
     if args.petsc_dir:
         m.append('HPGMG_CFLAGS += $(PCC_FLAGS) $(CCPPFLAGS)')
-    if args.with_hbm:
-        m.append('CONFIG_HBM = y')
-        hbm_lib = args.with_hbm
-        if not isinstance(hbm_lib,str): # ALCF location
-            hbm_lib = '/soft/perftools/hpctw/lib/libmpihpm.a /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a'
-        for p in hbm_lib.split():
-            assert os.path.exists(p), "HBM path '%s' not found" % p
-        m.append('HPGMG_LDLIBS += ' + hbm_lib)
-        m.append('HPGMG_CPPFLAGS += -DCONFIG_HBM')
+    if args.with_hpm:
+        m.append('CONFIG_HPM = y')
+        hpm_lib = args.with_hpm
+        if not isinstance(hpm_lib,str): # ALCF location
+            hpm_lib = '/soft/perftools/hpctw/lib/libmpihpm.a /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a'
+        for p in hpm_lib.split():
+            assert os.path.exists(p), "HPM path '%s' not found" % p
+        m.append('HPGMG_LDLIBS += ' + hpm_lib)
+        m.append('HPGMG_CPPFLAGS += -DCONFIG_HPM')
     if args.fv:
         m.append('CONFIG_FV = y')
     if args.petsc_dir:
