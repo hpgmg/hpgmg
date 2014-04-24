@@ -16,7 +16,7 @@ variable coefficients.  This implementation requires OpenMP and cannot
 be configured at run-time.  See `./configure --help` for configuration
 options.  Be sure to pass suitable OpenMP flags, e.g.,
 
-    $ ./configure CC=/path/to/mpicc --CFLAGS=-fopenmp
+    $ ./configure --CC=/path/to/mpicc --CFLAGS=-fopenmp
 
 The finite volume solver can be disabled by configuring with `--no-fv`.
 
