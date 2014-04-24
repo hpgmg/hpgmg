@@ -10,14 +10,13 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
   int box,s;
   int ghosts = level->box_ghosts;
   int radius     = STENCIL_RADIUS;
-  int starShaped = STENCIL_STAR_SHAPED;
   int communicationAvoiding = ghosts > radius;  
 
   // if communication-avoiding, need updated RHS for stencils in ghost zones
   if(communicationAvoiding)exchange_boundary(level,rhs_id,0); 
 
   for(s=0;s<2*NUM_SMOOTHS;s+=ghosts){ // there are two sweeps per GSRB smooth
-    exchange_boundary(level,phi_id,starShaped && !communicationAvoiding);
+    exchange_boundary(level,phi_id,STENCIL_IS_STAR_SHAPED && !communicationAvoiding);
             apply_BCs(level,phi_id);
 
     // now do ghosts communication-avoiding smooths on each box...

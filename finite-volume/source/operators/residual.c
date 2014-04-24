@@ -6,10 +6,8 @@
 // calculate res_id = rhs_id - A(x_id)
 
 void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, double b){
-  int starShaped = STENCIL_STAR_SHAPED;
-
   // exchange the boundary for x in prep for Ax...
-  exchange_boundary(level,x_id,starShaped);
+  exchange_boundary(level,x_id,STENCIL_IS_STAR_SHAPED);
           apply_BCs(level,x_id);
 
   // now do residual/restriction proper...

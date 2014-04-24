@@ -7,11 +7,10 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
   int box,s;
   int ghosts = level->box_ghosts;
   int radius     = STENCIL_RADIUS;
-  int starShaped = STENCIL_STAR_SHAPED;
   int communicationAvoiding = ghosts > radius; 
 
   for(s=0;s<2*NUM_SMOOTHS;s++){ // there are two sweeps (forward/backward) per GS smooth
-    exchange_boundary(level,phi_id,starShaped);
+    exchange_boundary(level,phi_id,STENCIL_IS_STAR_SHAPED);
             apply_BCs(level,phi_id);
 
     // now do ghosts communication-avoiding smooths on each box...

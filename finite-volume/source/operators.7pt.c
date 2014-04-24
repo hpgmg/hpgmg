@@ -16,8 +16,8 @@
 #include "level.h"
 #include "operators.h"
 //------------------------------------------------------------------------------------------------------------------------------
-#define STENCIL_STAR_SHAPED 1
-#define STENCIL_RADIUS      1
+#define STENCIL_IS_STAR_SHAPED 1
+#define STENCIL_RADIUS         1
 //------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_VARIABLE_COEFFICIENT
 //#define STENCIL_FUSE_BC
@@ -224,10 +224,6 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
                                        beta_k[ijk+kStride]*( valid[ijk+kStride]-2.0 ) 
                                      );
 
-      #endif
-      #if 0
-      if( (printedError==0) && (Aii==0)       ){printf("Error(%5d,%5d,%5d)... zero on the diagonal\n",lowi+i,lowj+j,lowk+k);printedError=1}
-      if( (printedError==0) && isinf(1.0/Aii) ){printf("Error(%5d,%5d,%5d)... D^{-1} == inf       \n",lowi+i,lowj+j,lowk+k);printedError=1}
       #endif
                              Dinv[ijk] = 1.0/Aii;				// inverse of the diagonal Aii
                           //L1inv[ijk] = 1.0/(Aii+sumAbsAij);			// inverse of the L1 row norm

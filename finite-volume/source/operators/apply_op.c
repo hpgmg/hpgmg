@@ -4,10 +4,8 @@
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
 void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // y=Ax
-  int starShaped = STENCIL_STAR_SHAPED;
-
   // exchange the boundary of x in preparation for Ax
-  exchange_boundary(level,x_id,starShaped);
+  exchange_boundary(level,x_id,STENCIL_IS_STAR_SHAPED);
           apply_BCs(level,x_id);
 
   // now do Ax proper...

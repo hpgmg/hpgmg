@@ -15,7 +15,6 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   int box,s;
   int ghosts = level->box_ghosts;
   int radius     = STENCIL_RADIUS;
-  int starShaped = STENCIL_STAR_SHAPED;
   int communicationAvoiding = ghosts > radius; 
 
 
@@ -46,8 +45,8 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
 
   for(s=0;s<CHEBYSHEV_DEGREE*NUM_SMOOTHS;s+=ghosts){
     // Chebyshev ping pongs between x_id and VECTOR_TEMP
-    if((s&1)==0){exchange_boundary(level,       x_id,starShaped && !communicationAvoiding);apply_BCs(level,       x_id);}
-            else{exchange_boundary(level,VECTOR_TEMP,starShaped && !communicationAvoiding);apply_BCs(level,VECTOR_TEMP);}
+    if((s&1)==0){exchange_boundary(level,       x_id,STENCIL_IS_STAR_SHAPED && !communicationAvoiding);apply_BCs(level,       x_id);}
+            else{exchange_boundary(level,VECTOR_TEMP,STENCIL_IS_STAR_SHAPED && !communicationAvoiding);apply_BCs(level,VECTOR_TEMP);}
     
     // now do ghosts communication-avoiding smooths on each box...
     uint64_t _timeStart = CycleTime();

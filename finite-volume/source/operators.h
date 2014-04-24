@@ -14,8 +14,8 @@
   void          rebuild_operator(level_type * level, level_type *fromLevel, double a, double b);
 //------------------------------------------------------------------------------------------------------------------------------
   void               restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, int restrictionType);
-  void      interpolation_vcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c);
-  void      interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c);
+  void      interpolation_vcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c); // interpolation used inside a v-cycle
+  void      interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c); // interpolation used in the f-cycle to create a new initial guess for the next finner v-cycle
 //------------------------------------------------------------------------------------------------------------------------------
   void         exchange_boundary(level_type * level, int id_a, int justFaces);
   void        apply_BCs_linear(  level_type * level, int x_id);

@@ -79,7 +79,7 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 -DUSE_L1JACOBI		// use a L1 Jacobi smoother (each row's weight is the L1 norm of that row)
 
 -DSTENCIL_FUSE_DINV	// recompute the inverse of the diagonal on the fly (more flops including a divide, but eliminates an array)
--DSTENCIL_FUSE_BC  	// recompute the inverse of the diagonal on the fly (more flops including a divide, but eliminates an array)
+-DSTENCIL_FUSE_BC  	// fuse the boundary conditions on the fly (more flops, but eliminates a difficult to efficiently thread traversal over the surface)
 
 
 

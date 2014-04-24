@@ -803,7 +803,8 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // make initial guess for e (=0) and setup the RHS
-  #if 0
+  //double norm_of_r0 = norm(all_grids->levels[0],F_id);
+  #if 1
    zero_vector(all_grids->levels[0],e_id);                  // ee = 0
   scale_vector(all_grids->levels[0],R_id,1.0,F_id);         // R_id = F_id
   #else
@@ -831,6 +832,7 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
     residual(all_grids->levels[level],VECTOR_TEMP,e_id,F_id,a,b);
     mul_vectors(all_grids->levels[level],VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
     double norm_of_residual = norm(all_grids->levels[level],VECTOR_TEMP);
+    //norm_of_residual = norm_of_residual / norm_of_r0;
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
     if(all_grids->levels[level]->my_rank==0){printf("v-cycle=%2d, norm=%22.20f (%1.15e)\n",v+1,norm_of_residual,norm_of_residual);fflush(stdout);}
@@ -857,6 +859,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   if(all_grids->levels[0]->my_rank==0){printf("FMGSolve...\n");fflush(stdout);}
   uint64_t _timeStartMGSolve = CycleTime();
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  //double norm_of_r0 = norm(all_grids->levels[0],F_id);
 
 
   // initialize the RHS for the f-cycle to f...
@@ -916,6 +919,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
     residual(all_grids->levels[level],VECTOR_TEMP,e_id,F_id,a,b);
     mul_vectors(all_grids->levels[level],VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
     double norm_of_residual = norm(all_grids->levels[level],VECTOR_TEMP);
+    //norm_of_residual = norm_of_residual / norm_of_r0;
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
     if(all_grids->levels[level]->my_rank==0){if(v>=0)printf("v-cycle=%2d, norm=%22.20f (%1.15e)\n",v+1,norm_of_residual,norm_of_residual);else
