@@ -3,6 +3,9 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef MG_H
+#define MG_H
+//------------------------------------------------------------------------------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -30,3 +33,4 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
 void MGPrintTiming(mg_type *all_grids);
 void MGResetTimers(mg_type *all_grids);
 //------------------------------------------------------------------------------------------------------------------------------
+#endif

@@ -3,6 +3,9 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef LEVEL_H
+#define LEVEL_H
+//------------------------------------------------------------------------------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -141,3 +144,4 @@ void destroy_level(level_type *level);
 void reset_level_timers(level_type *level);
 int qsortInt(const void *a, const void *b);
 //------------------------------------------------------------------------------------------------------------------------------
+#endif

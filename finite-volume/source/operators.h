@@ -3,6 +3,9 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef OPERATORS_H
+#define OPERATORS_H
+//------------------------------------------------------------------------------------------------------------------------------
 #define RESTRICT_CELL   0
 #define RESTRICT_FACE_I 1
 #define RESTRICT_FACE_J 2
@@ -27,9 +30,9 @@ double                      norm(level_type * level, int id_a);
 double                      mean(level_type * level, int id_a);
 double                     error(level_type * level, int id_a, int id_b);
   void               add_vectors(level_type * level, int id_c, double scale_a, int id_a, double scale_b, int id_b);
-  void             scale_vectors(level_type * level, int id_c, double scale_a, int id_a);
+  void             scale_vector( level_type * level, int id_c, double scale_a, int id_a);
   void              zero_vector( level_type * level, int id_a);
-  void             shift_vectors(level_type * level, int id_c, int id_a, double shift_a);
+  void             shift_vector( level_type * level, int id_c, int id_a, double shift_a);
   void               mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b);
   void             invert_vector(level_type * level, int id_c, double scale_a, int id_a);
   void initialize_grid_to_scalar(level_type * level, int id_a, double scalar);
@@ -41,3 +44,4 @@ double                     error(level_type * level, int id_a, int id_b);
   void        initialize_problem(level_type * level, double hLevel, double a, double b);
   void   initialize_valid_region(level_type * level);
 //------------------------------------------------------------------------------------------------------------------------------
+#endif

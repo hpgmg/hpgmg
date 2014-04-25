@@ -3,8 +3,8 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
@@ -15,7 +15,7 @@
 #include <omp.h>
 //------------------------------------------------------------------------------------------------------------------------------
 #include "level.h"
-//#include "operators.h"
+#include "operators.h"
 //------------------------------------------------------------------------------------------------------------------------------
 //
 //    / 24 25 26 /
@@ -789,12 +789,14 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
     int kStride = level->my_boxes[0].kStride;
     int jStride = level->my_boxes[0].jStride;
 
-    posix_memalign((void**)&(level->RedBlack_FP[0]  ),64,kStride*sizeof(double  )); // even planes
-    posix_memalign((void**)&(level->RedBlack_FP[1]  ),64,kStride*sizeof(double  ));
-                      memset(level->RedBlack_FP[0]  ,  0,kStride*sizeof(double  ));
-                      memset(level->RedBlack_FP[1]  ,  0,kStride*sizeof(double  ));
-                              level->memory_allocated += kStride*sizeof(double  );
-                              level->memory_allocated += kStride*sizeof(double  );
+    //posix_memalign((void**)&(level->RedBlack_FP[0]  ),64,kStride*sizeof(double  )); // even planes
+    //posix_memalign((void**)&(level->RedBlack_FP[1]  ),64,kStride*sizeof(double  ));
+           level->RedBlack_FP[0] = (double*)malloc(kStride*sizeof(double));
+           level->RedBlack_FP[1] = (double*)malloc(kStride*sizeof(double));
+    memset(level->RedBlack_FP[0],0,kStride*sizeof(double));
+    memset(level->RedBlack_FP[1],0,kStride*sizeof(double));
+            level->memory_allocated += kStride*sizeof(double);
+            level->memory_allocated += kStride*sizeof(double);
   
     for(j=0-level->box_ghosts;j<level->box_dim+level->box_ghosts;j++){
     for(i=0-level->box_ghosts;i<level->box_dim+level->box_ghosts;i++){
