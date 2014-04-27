@@ -81,7 +81,7 @@ def makefile(args):
         for p in hpm_lib.split():
             assert os.path.exists(p), "HPM path '%s' not found" % p
         m.append('HPGMG_LDLIBS += ' + hpm_lib)
-        m.append('HPGMG_CPPFLAGS += -DCONFIG_HPM')
+        m.append('HPGMG_CPPFLAGS += -DUSE_HPM')
     if args.fv:
         m.append('CONFIG_FV = y')
     if args.fe and args.petsc_dir:
