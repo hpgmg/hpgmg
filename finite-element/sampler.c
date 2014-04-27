@@ -114,7 +114,21 @@ PetscErrorCode SampleGridRangeCreate(PetscMPIInt nranks,PetscInt minlocal,PetscI
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const PetscInt smooth[2],PetscInt nrepeat,PetscLogDouble *memory,PetscBool monitor) {
+static PetscErrorCode ReportMemoryUsage(MPI_Comm comm,PetscLogDouble memused,PetscLogDouble memavail) {
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  ierr = MPI_Allreduce(MPI_IN_PLACE,&memused,1,MPI_DOUBLE,MPI_MAX,comm);CHKERRQ(ierr);
+  ierr = MPI_Allreduce(MPI_IN_PLACE,&memavail,1,MPI_DOUBLE,MPI_MAX,comm);CHKERRQ(ierr);
+  if (memavail >= 0) {
+    ierr = PetscPrintf(comm,"Max memory per MPI rank: %f GB, %f GB available\n",memused*1e-9,memavail*1e-9);CHKERRQ(ierr);
+  } else {
+    ierr = PetscPrintf(comm,"Max memory per MPI rank: %f GB\n",memused*1e-9);CHKERRQ(ierr);
+  }
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const PetscInt smooth[2],PetscInt nrepeat,PetscLogDouble *memused,PetscLogDouble *memavail,PetscBool monitor) {
   PetscErrorCode ierr;
   PetscInt pgrid[3],cmax,fedegree,dof,nlevels,M_max;
   PetscMPIInt nranks;
@@ -124,7 +138,7 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   MG mg;
   PetscReal L[3];
   PetscBool affine;
-#ifdef CONFIG_HPM
+#ifdef USE_HPM
   char eventname[256];
 #endif
 
@@ -159,7 +173,7 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   ierr = MGMonitorSet(mg,monitor);CHKERRQ(ierr);
   ierr = MGSetUpPC(mg);CHKERRQ(ierr);
 
-#ifdef CONFIG_HPM
+#ifdef USE_HPM
   ierr = PetscSNPrintf(eventname,sizeof eventname,"Solve G[%D %D %D]",M[0],M[1],M[2]);CHKERRQ(ierr);
   HPM_Start(eventname);
 #endif
@@ -176,13 +190,13 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
     ierr = MPI_Allreduce(MPI_IN_PLACE,&elapsed,1,MPI_DOUBLE,MPI_MAX,comm);CHKERRQ(ierr);
     ierr = MPI_Allreduce(MPI_IN_PLACE,&flops,1,MPI_DOUBLE,MPI_SUM,comm);CHKERRQ(ierr);
     eqs = (double)(M[0]*fedegree+1)*(M[1]*fedegree+1)*(M[2]*fedegree+1)*dof;
-    ierr = PetscPrintf(comm,"Q%D G[%4D%4D%4D] P[%3D%3D%3D] %10.3e s  %10f GF  %10f MEq/s\n",fedegree,M[0],M[1],M[2],pgrid[0],pgrid[1],pgrid[2],t1-t0,flops/elapsed*1e-9,eqs/elapsed*1e-6);CHKERRQ(ierr);
+    ierr = PetscPrintf(comm,"Q%D G[%5D%5D%5D] P[%3D%3D%3D] %10.3e s  %10f GF  %10f MEq/s\n",fedegree,M[0],M[1],M[2],pgrid[0],pgrid[1],pgrid[2],t1-t0,flops/elapsed*1e-9,eqs/elapsed*1e-6);CHKERRQ(ierr);
   }
-#ifdef CONFIG_HPM
+#ifdef USE_HPM
   HPM_Stop(eventname);
 #endif
 
-  if (memory) {ierr = PetscMemoryGetCurrentUsage(memory);CHKERRQ(ierr);}
+  if (memused) {ierr = MemoryGetUsage(memused,memavail);CHKERRQ(ierr);}
   ierr = MGDestroy(&mg);CHKERRQ(ierr);
   ierr = VecDestroy(&U);CHKERRQ(ierr);
   ierr = VecDestroy(&F);CHKERRQ(ierr);
@@ -196,7 +210,7 @@ PetscErrorCode RunSample() {
   Op op;
   PetscInt pgrid[3],smooth[2] = {3,1},two = 2,maxsamples = 6,repeat = 5,nsamples,(*gridsize)[3];
   PetscReal local[2] = {100,10000};
-  PetscLogDouble memory;
+  PetscLogDouble memused,memavail;
   PetscMPIInt nranks;
   MPI_Comm comm = PETSC_COMM_WORLD;
 
@@ -217,21 +231,19 @@ PetscErrorCode RunSample() {
 
   ierr = SampleGridRangeCreate(nranks,(PetscReal)local[0],(PetscReal)local[1],maxsamples,&nsamples,(PetscInt**)&gridsize);CHKERRQ(ierr);
 
-  ierr = PetscMemoryGetCurrentUsage(&memory);CHKERRQ(ierr);
-  ierr = MPI_Allreduce(MPI_IN_PLACE,&memory,1,MPI_DOUBLE,MPI_MAX,comm);CHKERRQ(ierr);
-  ierr = PetscPrintf(comm,"Max memory per MPI rank: %f GB\n",memory*1e-9);CHKERRQ(ierr);
+  ierr = MemoryGetUsage(&memused,&memavail);CHKERRQ(ierr);
+  ierr = ReportMemoryUsage(comm,memused,memavail);CHKERRQ(ierr);
 
-  ierr = PetscPrintf(comm,"Small Test G[]\n");CHKERRQ(ierr);
-  ierr = SampleOnGrid(comm,op,gridsize[nsamples-1],smooth,1,NULL,PETSC_FALSE);CHKERRQ(ierr);
-  ierr = PetscPrintf(comm,"Large Test\n");CHKERRQ(ierr);
-  ierr = SampleOnGrid(comm,op,gridsize[0],smooth,1,&memory,PETSC_TRUE);CHKERRQ(ierr);
+  ierr = PetscPrintf(comm,"Small Test G[%5D%5D%5D]\n",gridsize[nsamples-1][0],gridsize[nsamples-1][1],gridsize[nsamples-1][2]);CHKERRQ(ierr);
+  ierr = SampleOnGrid(comm,op,gridsize[nsamples-1],smooth,1,NULL,NULL,PETSC_FALSE);CHKERRQ(ierr);
+  ierr = PetscPrintf(comm,"Large Test G[%5D%5D%5D]\n",gridsize[0][0],gridsize[0][1],gridsize[0][2]);CHKERRQ(ierr);
+  ierr = SampleOnGrid(comm,op,gridsize[0],smooth,1,&memused,&memavail,PETSC_TRUE);CHKERRQ(ierr);
 
-  ierr = MPI_Allreduce(MPI_IN_PLACE,&memory,1,MPI_DOUBLE,MPI_MAX,comm);CHKERRQ(ierr);
-  ierr = PetscPrintf(comm,"Max memory per MPI rank: %f GB\n",memory*1e-9);CHKERRQ(ierr);
+  ierr = ReportMemoryUsage(comm,memused,memavail);CHKERRQ(ierr);
 
   ierr = PetscPrintf(comm,"Starting performance sampling\n");CHKERRQ(ierr);
   for (PetscInt i=nsamples-1; i>=0; i--) {
-    ierr = SampleOnGrid(comm,op,gridsize[i],smooth,repeat,NULL,PETSC_FALSE);CHKERRQ(ierr);
+    ierr = SampleOnGrid(comm,op,gridsize[i],smooth,repeat,NULL,NULL,PETSC_FALSE);CHKERRQ(ierr);
   }
 
   ierr = PetscFree(gridsize);CHKERRQ(ierr);

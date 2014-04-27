@@ -42,4 +42,6 @@ int64_t SampleGridNumElements(const PetscInt p[]);
 PetscErrorCode SampleGridRangeCreate(PetscMPIInt nranks,PetscInt minlocal,PetscInt maxlocal,PetscInt maxsamples,PetscInt *nsamples,PetscInt **gridsizes);
 PetscErrorCode ProcessGridFindSquarest(PetscMPIInt nranks,PetscInt squarest[3]);
 
+PetscErrorCode MemoryGetUsage(double *heapused,double *heapavail);
+
 #endif

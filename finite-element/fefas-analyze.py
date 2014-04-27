@@ -1,7 +1,9 @@
 def parse_logfile(fname):
     import re
     FP = r'([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)'
-    PERFLINE = re.compile(r'Q2 G''\[([\d ]{4})([\d ]{4})([\d ]{4})\] P\[ *(\d+) +(\d+) +(\d+)\]  '+FP+r' s +'+FP+r' GF +'+FP+r' MEq/s')
+    PERFLINE = []
+    PERFLINE.append(re.compile(r'Q2 G''\[([\d ]{4})([\d ]{4})([\d ]{4})\] P\[ *(\d+) +(\d+) +(\d+)\]  '+FP+r' s +'+FP+r' GF +'+FP+r' MEq/s'))
+    PERFLINE.append(re.compile(r'Q2 G''\[([\d ]{5})([\d ]{5})([\d ]{5})\] P\[ *(\d+) +(\d+) +(\d+)\]  '+FP+r' s +'+FP+r' GF +'+FP+r' MEq/s'))
     HOSTLINE = re.compile(r'.*on a ([a-z\-_0-9]+) named [^ ]+ with (\d+) processors')
     Dofs = []
     GFlops = []
@@ -13,9 +15,10 @@ def parse_logfile(fname):
             pass
         while True:
             line = next(f)
-            m = re.match(PERFLINE,line)
-            if not m:
-                break
+            for perfline in PERFLINE:
+                m = re.match(perfline,line)
+                if m: break
+            if not m: break
             g0,g1,g2, p0,p1,p2, time, gflops, meqs = m.groups()
             g = (float(g0)*2+1)*(float(g1)*2+1)*(float(g2)*2+1)
             p = int(p0)*int(p1)*int(p2)
