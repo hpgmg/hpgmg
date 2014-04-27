@@ -7,9 +7,9 @@ static inline PetscErrorCode TensorContract_Inline(PetscInt ne,PetscInt dof,Pets
   if (tmode == TENSOR_TRANSPOSE) {PetscInt tmp = Q; Q = P; P = tmp;}
   {
     PetscReal R[Q][P],S[Q][P],T[Q][P];
-    const PetscScalar (*x)[P*P*P][ne] = (const PetscScalar(*)[P*P*P][ne])xx;
-    PetscScalar       (*y)[P*P*P][ne] =       (PetscScalar(*)[Q*Q*Q][ne])yy;
-    PetscScalar u[dof][Q*P*P][ne],v[dof][Q*Q*P][ne];
+    const PetscScalar (*restrict x)[P*P*P][ne]_align = (const PetscScalar(*)[P*P*P][ne])xx;
+    PetscScalar       (*restrict y)[P*P*P][ne]_align =       (PetscScalar(*)[Q*Q*Q][ne])yy;
+    PetscScalar u[dof][Q*P*P][ne]_align,v[dof][Q*Q*P][ne]_align;
 
     for (PetscInt i=0; i<Q; i++) {
       for (PetscInt j=0; j<P; j++) {
