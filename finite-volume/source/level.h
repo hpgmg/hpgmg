@@ -39,8 +39,9 @@ typedef struct {
     int     * __restrict__       send_sizes;	//   size of each MPI send buffer...       send_sizes[neighbor]
     double ** __restrict__     recv_buffers;	//   MPI recv buffer for each neighbor...  recv_buffers[neighbor][ recv_sizes[neighbor] ]
     double ** __restrict__     send_buffers;	//   MPI send buffer for each neighbor...  send_buffers[neighbor][ send_sizes[neighbor] ]
-    int                       num_blocks[3];	//   number of blocks in each list...  num_blocks[pack,local,unpack]
-    blockCopy_type *              blocks[3];	//   list of block copies...               blocks[pack,local,unpack]
+    int                 allocated_blocks[3];	//   number of blocks allocated (not necessarily used) each list...
+    int                       num_blocks[3];	//   number of blocks in each list...        num_blocks[pack,local,unpack]
+    blockCopy_type *              blocks[3];	//   list of block copies...                     blocks[pack,local,unpack]
     #ifdef USE_MPI
     MPI_Request * __restrict__     requests;
     MPI_Status  * __restrict__       status;
@@ -143,5 +144,10 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 void destroy_level(level_type *level);
 void reset_level_timers(level_type *level);
 int qsortInt(const void *a, const void *b);
+void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *num_blocks,
+                          int dim_i, int dim_j, int dim_k,
+                          int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride,
+                          int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride
+                         );
 //------------------------------------------------------------------------------------------------------------------------------
 #endif

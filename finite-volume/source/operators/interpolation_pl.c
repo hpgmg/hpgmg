@@ -114,8 +114,6 @@ static inline void InterpolateBlock_PL(level_type *level_f, int id_f, double pre
 void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){
   exchange_boundary(level_c,id_c,0);
   apply_BCs_linear(level_c,id_c);
-  //apply_BCs_2ndOrder(level_c,id_c);
-  //apply_BCs_4thOrder(level_c,id_c);
 
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;

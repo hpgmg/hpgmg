@@ -17,6 +17,8 @@
 #include "level.h"
 #include "operators.h"
 //------------------------------------------------------------------------------------------------------------------------------
+#define BOX_ALIGN_1ST_CELL 4096 // Align to TLB page...
+//------------------------------------------------------------------------------------------------------------------------------
 //
 //    / 24 25 26 /
 //   / 21 22 23 /
@@ -135,11 +137,11 @@ int create_box(box_type *box, int numVectors, int dim, int ghosts){
   box->vectors = (double **)malloc(box->numVectors*sizeof(double*));
                memory_allocated += box->numVectors*sizeof(double*);
   // allocate one aligned, double-precision array and divide it among vectors...
-  uint64_t malloc_size = box->volume*box->numVectors*sizeof(double) + 4096; // shift pointer by up to 1 TLB page...
+  uint64_t malloc_size = box->volume*box->numVectors*sizeof(double) + BOX_ALIGN_1ST_CELL; // shift pointer by up to 1 TLB page...
   box->vectors_base = (double*)malloc(malloc_size);
                   memory_allocated += malloc_size;
   double * tmpbuf = box->vectors_base;
-  while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (4096-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
+  while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (BOX_ALIGN_1ST_CELL-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
   memset(tmpbuf,0,box->volume*box->numVectors*sizeof(double)); // zero to avoid 0.0*NaN or 0.0*Inf
   int c;for(c=0;c<box->numVectors;c++){box->vectors[c] = tmpbuf + c*box->volume;}
 
@@ -158,10 +160,10 @@ void add_vectors_to_box(box_type *box, int numAdditionalVectors){
   box->numVectors+=numAdditionalVectors;								//
   box->vectors = (double **)malloc(box->numVectors*sizeof(double*));				// new array of pointers vectors
   // NOTE !!! realloc() cannot guarantee the same alignment... malloc, allign, copy...
-  uint64_t malloc_size = box->volume*box->numVectors*sizeof(double) + 4096; // shift pointer by up to 1 TLB page...
+  uint64_t malloc_size = box->volume*box->numVectors*sizeof(double) + BOX_ALIGN_1ST_CELL; // shift pointer by up to 1 TLB page...
   box->vectors_base = (double*)malloc(malloc_size);
   double * tmpbuf = box->vectors_base;
-  while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (4096-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
+  while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (BOX_ALIGN_1ST_CELL-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
   memset(tmpbuf,0,box->volume*box->numVectors*sizeof(double));	// zero to avoid 0.0*NaN or 0.0*Inf
   memcpy(tmpbuf,old_v0,box->volume*(box->numVectors-numAdditionalVectors)*sizeof(double));	// copy any existant data over...
   int c;for(c=0;c<box->numVectors;c++){box->vectors[c] = tmpbuf + c*box->volume;}			// pointer arithmetic...
@@ -273,7 +275,7 @@ void print_decomposition(level_type *level){
 #ifndef BLOCKCOPY_TILE_K
 #define BLOCKCOPY_TILE_K 8
 #endif
-void append_block_to_list(blockCopy_type * blocks, int *tail, int doWrite,
+void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *num_blocks,
                           int dim_i, int dim_j, int dim_k,
                           int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride,
                           int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride
@@ -285,27 +287,31 @@ void append_block_to_list(blockCopy_type * blocks, int *tail, int doWrite,
   for(jj=0;jj<dim_j;jj+=BLOCKCOPY_TILE_J){
     int dim_k_mod = dim_k-kk;if(dim_k_mod>BLOCKCOPY_TILE_K)dim_k_mod=BLOCKCOPY_TILE_K;
     int dim_j_mod = dim_j-jj;if(dim_j_mod>BLOCKCOPY_TILE_J)dim_j_mod=BLOCKCOPY_TILE_J;
-    if(doWrite){
-      blocks[*tail].dim.i         = dim_i;
-      blocks[*tail].dim.j         = dim_j_mod;
-      blocks[*tail].dim.k         = dim_k_mod;
-      blocks[*tail].read.box      = read_box;
-      blocks[*tail].read.ptr      = read_ptr;
-      blocks[*tail].read.i        = read_i;
-      blocks[*tail].read.j        = read_j + jj;
-      blocks[*tail].read.k        = read_k + kk;
-      blocks[*tail].read.jStride  = read_jStride;
-      blocks[*tail].read.kStride  = read_kStride;
-      blocks[*tail].write.box     = write_box;
-      blocks[*tail].write.ptr     = write_ptr;
-      blocks[*tail].write.i       = write_i;
-      blocks[*tail].write.j       = write_j + jj;
-      blocks[*tail].write.k       = write_k + kk;
-      blocks[*tail].write.jStride = write_jStride;
-      blocks[*tail].write.kStride = write_kStride;
-    }       (*tail)++;
+    if(*num_blocks >= *allocated_blocks){
+      *allocated_blocks = *allocated_blocks + 100;
+      *blocks = (blockCopy_type *)realloc((void*)(*blocks),(*allocated_blocks)*sizeof(blockCopy_type));
+    }
+    (*blocks)[*num_blocks].dim.i         = dim_i;
+    (*blocks)[*num_blocks].dim.j         = dim_j_mod;
+    (*blocks)[*num_blocks].dim.k         = dim_k_mod;
+    (*blocks)[*num_blocks].read.box      = read_box;
+    (*blocks)[*num_blocks].read.ptr      = read_ptr;
+    (*blocks)[*num_blocks].read.i        = read_i;
+    (*blocks)[*num_blocks].read.j        = read_j + jj;
+    (*blocks)[*num_blocks].read.k        = read_k + kk;
+    (*blocks)[*num_blocks].read.jStride  = read_jStride;
+    (*blocks)[*num_blocks].read.kStride  = read_kStride;
+    (*blocks)[*num_blocks].write.box     = write_box;
+    (*blocks)[*num_blocks].write.ptr     = write_ptr;
+    (*blocks)[*num_blocks].write.i       = write_i;
+    (*blocks)[*num_blocks].write.j       = write_j + jj;
+    (*blocks)[*num_blocks].write.k       = write_k + kk;
+    (*blocks)[*num_blocks].write.jStride = write_jStride;
+    (*blocks)[*num_blocks].write.kStride = write_kStride;
+             (*num_blocks)++;
   }}
 }
+
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 // create a mini program that packs data into MPI recv buffers, exchanges local data, and unpacks the MPI send buffers
@@ -390,24 +396,24 @@ void build_exchange_ghosts(level_type *level, int justFaces){
   level->exchange_ghosts[justFaces].send_ranks    =     (int*)malloc(numSendRanks*sizeof(int));
   level->exchange_ghosts[justFaces].send_sizes    =     (int*)malloc(numSendRanks*sizeof(int));
   level->exchange_ghosts[justFaces].send_buffers  = (double**)malloc(numSendRanks*sizeof(double*));
+  level->exchange_ghosts[justFaces].blocks[0] = NULL;
+  level->exchange_ghosts[justFaces].blocks[1] = NULL;
+  level->exchange_ghosts[justFaces].num_blocks[0] = 0;
+  level->exchange_ghosts[justFaces].num_blocks[1] = 0;
+  level->exchange_ghosts[justFaces].allocated_blocks[0] = 0;
+  level->exchange_ghosts[justFaces].allocated_blocks[1] = 0;
   for(stage=0;stage<=1;stage++){
-    // stage=0... traverse the list and calculate the buffer sizes and number of pack/local blockCopies
-    // stage=1... allocate structures, traverse the list, and populate the unpack/local lists...
+    // stage=0... traverse the list and calculate the buffer sizes
+    // stage=1... allocate MPI send buffers, traverse the list, and populate the unpack/local lists...
     int neighbor;
-    if(stage==1){
-      for(neighbor=0;neighbor<numSendRanks;neighbor++){
+    for(neighbor=0;neighbor<numSendRanks;neighbor++){
+      if(stage==1){
              level->exchange_ghosts[justFaces].send_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[justFaces].send_sizes[neighbor]*sizeof(double));
       memset(level->exchange_ghosts[justFaces].send_buffers[neighbor],                0,level->exchange_ghosts[justFaces].send_sizes[neighbor]*sizeof(double));
       }
-      level->exchange_ghosts[justFaces].blocks[0]      = (blockCopy_type*)malloc(level->exchange_ghosts[justFaces].num_blocks[0]*sizeof(blockCopy_type));;
-      level->exchange_ghosts[justFaces].blocks[1]      = (blockCopy_type*)malloc(level->exchange_ghosts[justFaces].num_blocks[1]*sizeof(blockCopy_type));;
-    }
-    for(neighbor=0;neighbor<numSendRanks;neighbor++){
       level->exchange_ghosts[justFaces].send_ranks[neighbor]=sendRanks[neighbor];
       level->exchange_ghosts[justFaces].send_sizes[neighbor]=0;
     }
-    level->exchange_ghosts[justFaces].num_blocks[0] = 0;
-    level->exchange_ghosts[justFaces].num_blocks[1] = 0;
     for(ghost=0;ghost<numGhosts;ghost++){
       int dim_i,dim_j,dim_k;
       int send_i,send_j,send_k;
@@ -442,42 +448,10 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         LocalExchange=1; // local
         neighbor=-1;
       }
-    
-      #if 0 
-      if(stage==1){ // lists have been allocated... populate them...
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].dim.i         = dim_i;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].dim.j         = dim_j;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].dim.k         = dim_k;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.box      = ghostsToSend[ghost].sendBox;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.ptr      = NULL;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.i        = send_i;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.j        = send_j;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.k        = send_k;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.jStride  = level->my_boxes[ghostsToSend[ghost].sendBox].jStride;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].read.kStride  = level->my_boxes[ghostsToSend[ghost].sendBox].kStride;
-        if(LocalExchange==0){
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.box     = -1;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.ptr     = level->exchange_ghosts[justFaces].send_buffers[neighbor];
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.i       = level->exchange_ghosts[justFaces].send_sizes[neighbor]; // current offset in the MPI send buffer
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.j       = 0;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.k       = 0;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.jStride = dim_i;       // contiguous block
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.kStride = dim_i*dim_j; // contiguous block
-        }else{
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.box     = ghostsToSend[ghost].recvBox;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.ptr     = NULL;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.i       = recv_i;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.j       = recv_j;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.k       = recv_k;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.jStride = level->my_boxes[ghostsToSend[ghost].recvBox].jStride;
-        level->exchange_ghosts[justFaces].blocks[LocalExchange][level->exchange_ghosts[justFaces].num_blocks[LocalExchange]].write.kStride = level->my_boxes[ghostsToSend[ghost].recvBox].kStride;
-        }
-      } 
-                     level->exchange_ghosts[justFaces].num_blocks[LocalExchange]++;
-      if(neighbor>=0)level->exchange_ghosts[justFaces].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
-      #else
+   
+      if(stage==1){ 
       if(LocalExchange) // append to the local exchange list...
-      append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[1][0]),&(level->exchange_ghosts[justFaces].num_blocks[1]),(stage==1),
+      append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[1]),&(level->exchange_ghosts[justFaces].allocated_blocks[1]),&(level->exchange_ghosts[justFaces].num_blocks[1]),
         /* dim.i         = */ dim_i,
         /* dim.j         = */ dim_j,
         /* dim.k         = */ dim_k,
@@ -495,8 +469,9 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* write.k       = */ recv_k,
         /* write.jStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].jStride,
         /* write.kStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].kStride
-      );else // append to the MPI pack list...
-      append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[0][0]),&(level->exchange_ghosts[justFaces].num_blocks[0]),(stage==1),
+      );
+      else // append to the MPI pack list...
+      append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[0]),&(level->exchange_ghosts[justFaces].allocated_blocks[0]),&(level->exchange_ghosts[justFaces].num_blocks[0]),
         /* dim.i         = */ dim_i,
         /* dim.j         = */ dim_j,
         /* dim.k         = */ dim_k,
@@ -508,15 +483,14 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* read.jStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].jStride,
         /* read.kStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].kStride,
         /* write.box     = */ -1,
-        /* write.ptr     = */ level->exchange_ghosts[justFaces].send_buffers[neighbor],
+        /* write.ptr     = */ level->exchange_ghosts[justFaces].send_buffers[neighbor], // NOTE, 1. count _sizes, 2. allocate _buffers, 3. populate blocks
         /* write.i       = */ level->exchange_ghosts[justFaces].send_sizes[neighbor], // current offset in the MPI send buffer
         /* write.j       = */ 0,
         /* write.k       = */ 0,
         /* write.jStride = */ dim_i,       // contiguous block
         /* write.kStride = */ dim_i*dim_j  // contiguous block
-      );
+      );}
       if(neighbor>=0)level->exchange_ghosts[justFaces].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
-      #endif
     } // ghost for-loop
   } // stage for-loop
 
@@ -573,22 +547,21 @@ void build_exchange_ghosts(level_type *level, int justFaces){
   level->exchange_ghosts[justFaces].recv_ranks    =     (int*)malloc(numRecvRanks*sizeof(int));
   level->exchange_ghosts[justFaces].recv_sizes    =     (int*)malloc(numRecvRanks*sizeof(int));
   level->exchange_ghosts[justFaces].recv_buffers  = (double**)malloc(numRecvRanks*sizeof(double*));
+  level->exchange_ghosts[justFaces].blocks[2] = NULL;
+  level->exchange_ghosts[justFaces].num_blocks[2] = 0;
+  level->exchange_ghosts[justFaces].allocated_blocks[2] = 0;
   for(stage=0;stage<=1;stage++){
-    // stage=0... traverse the list and calculate the buffer sizes and number of pack/local blockCopies
-    // stage=1... allocate structures, traverse the list, and populate the unpack/local lists...
+    // stage=0... traverse the list and calculate the buffer sizes
+    // stage=1... allocate MPI recv buffers, traverse the list, and populate the unpack/local lists...
     int neighbor;
-    if(stage==1){
-      for(neighbor=0;neighbor<numRecvRanks;neighbor++){
+    for(neighbor=0;neighbor<numRecvRanks;neighbor++){
+      if(stage==1){
              level->exchange_ghosts[justFaces].recv_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[justFaces].recv_sizes[neighbor]*sizeof(double));
       memset(level->exchange_ghosts[justFaces].recv_buffers[neighbor],                0,level->exchange_ghosts[justFaces].recv_sizes[neighbor]*sizeof(double));
       }
-      level->exchange_ghosts[justFaces].blocks[2]      = (blockCopy_type*)malloc(level->exchange_ghosts[justFaces].num_blocks[2]*sizeof(blockCopy_type));;
-    }
-    for(neighbor=0;neighbor<numRecvRanks;neighbor++){
       level->exchange_ghosts[justFaces].recv_ranks[neighbor]=recvRanks[neighbor];
       level->exchange_ghosts[justFaces].recv_sizes[neighbor]=0;
     }
-    level->exchange_ghosts[justFaces].num_blocks[2] = 0;
     for(ghost=0;ghost<numGhosts;ghost++){
       int dim_i,dim_j,dim_k;
       int send_i,send_j,send_k;
@@ -616,37 +589,12 @@ void build_exchange_ghosts(level_type *level, int justFaces){
  
       // determine if this ghost requires a pack or local exchange 
       neighbor=0;while(level->exchange_ghosts[justFaces].recv_ranks[neighbor] != ghostsToRecv[ghost].sendRank)neighbor++;
-    
-      #if 0 
-      if(stage==1){ // lists have been allocated... populate them...
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].dim.i         = dim_i;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].dim.j         = dim_j;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].dim.k         = dim_k;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].read.box      = -1;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].read.ptr      = level->exchange_ghosts[justFaces].recv_buffers[neighbor];
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].read.i        = level->exchange_ghosts[justFaces].recv_sizes[neighbor]; // current offset in the MPI recv buffer
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].read.j        = 0;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].read.k        = 0;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].read.jStride  = dim_i;       // contiguous block
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].read.kStride  = dim_i*dim_j; // contiguous block
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].write.box     = ghostsToRecv[ghost].recvBox;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].write.ptr     = NULL;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].write.i       = recv_i;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].write.j       = recv_j;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].write.k       = recv_k;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].write.jStride = level->my_boxes[ghostsToRecv[ghost].recvBox].jStride;
-        level->exchange_ghosts[justFaces].blocks[2][level->exchange_ghosts[justFaces].num_blocks[2]].write.kStride = level->my_boxes[ghostsToRecv[ghost].recvBox].kStride;
-
-      } 
-                     level->exchange_ghosts[justFaces].num_blocks[2]++;
-      if(neighbor>=0)level->exchange_ghosts[justFaces].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
-      #else
-      append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[2][0]),&(level->exchange_ghosts[justFaces].num_blocks[2]),(stage==1),
+      if(stage==1)append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[2]),&(level->exchange_ghosts[justFaces].allocated_blocks[2]),&(level->exchange_ghosts[justFaces].num_blocks[2]),
       /*dim.i         = */ dim_i,
       /*dim.j         = */ dim_j,
       /*dim.k         = */ dim_k,
       /*read.box      = */ -1,
-      /*read.ptr      = */ level->exchange_ghosts[justFaces].recv_buffers[neighbor],
+      /*read.ptr      = */ level->exchange_ghosts[justFaces].recv_buffers[neighbor], // NOTE, 1. count _sizes, 2. allocate _buffers, 3. populate blocks
       /*read.i        = */ level->exchange_ghosts[justFaces].recv_sizes[neighbor], // current offset in the MPI recv buffer
       /*read.j        = */ 0,
       /*read.k        = */ 0,
@@ -661,7 +609,6 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       /*write.kStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].kStride
       );
       if(neighbor>=0)level->exchange_ghosts[justFaces].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
-      #endif
     } // ghost for-loop
   } // stage for-loop
 
@@ -791,6 +738,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
     //posix_memalign((void**)&(level->RedBlack_FP[0]  ),64,kStride*sizeof(double  )); // even planes
     //posix_memalign((void**)&(level->RedBlack_FP[1]  ),64,kStride*sizeof(double  ));
+    // FIX... align RedBlack_FP the same as elements within a plane (i.e. BOX_SIMD_ALIGNMENT)
            level->RedBlack_FP[0] = (double*)malloc(kStride*sizeof(double));
            level->RedBlack_FP[1] = (double*)malloc(kStride*sizeof(double));
     memset(level->RedBlack_FP[0],0,kStride*sizeof(double));
