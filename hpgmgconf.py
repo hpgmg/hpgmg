@@ -20,6 +20,8 @@ def main():
     cf.add_argument('--CFLAGS', help='Flags for C compiler', default=os.environ.get('CFLAGS',''))
     cf.add_argument('--LDFLAGS', help='Flags to pass to linker', default=os.environ.get('LDFLAGS',''))
     cf.add_argument('--LDLIBS', help='Libraries to pass to linker', default=os.environ.get('LDLIBS',''))
+    fe = parser.add_argument_group('Finite Element options')
+    fe.add_argument('--no-fe', action='store_false', dest='fe', help='Do not build the Finite-Element solver')
     fv = parser.add_argument_group('Finite Volume options')
     fv.add_argument('--no-fv', action='store_false', dest='fv', help='Do not build the Finite-Volume solver')
     fv.add_argument('--no-fv-mpi', action='store_false', dest='fv_mpi', help='Use MPI')
@@ -82,7 +84,7 @@ def makefile(args):
         m.append('HPGMG_CPPFLAGS += -DCONFIG_HPM')
     if args.fv:
         m.append('CONFIG_FV = y')
-    if args.petsc_dir:
+    if args.fe and args.petsc_dir:
         m.append('CONFIG_FE = y')
     m.append('CONFIG_TIMER_%s = y' % args.fv_timer.upper())
     m.append('CONFIG_FV_CFLAGS = ' + hpgmg_fv_cflags(args))
