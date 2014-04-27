@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--arch', help='Name of this configuration', default=None)
     parser.add_argument('--petsc-dir', help='PETSC_DIR', default=os.environ.get('PETSC_DIR',''))
     parser.add_argument('--petsc-arch', help='PETSC_ARCH', default=os.environ.get('PETSC_ARCH',''))
-    parser.add_argument('--with-hpm', help='Use libHPM profiling library on Blue Gene')
+    parser.add_argument('--with-hpm', help='libHPM profiling library on Blue Gene ("1" or "/path/to/libmpihpm.a /path/to/libbgpm.a")')
     cf = parser.add_argument_group('Compilers and flags')
     cf.add_argument('--CC', help='Path to C compiler', default=os.environ.get('CC',''))
     cf.add_argument('--CFLAGS', help='Flags for C compiler', default=os.environ.get('CFLAGS',''))
@@ -70,6 +70,10 @@ def makefile(args):
     if args.with_hpm:
         m.append('CONFIG_HPM = y')
         hpm_lib = args.with_hpm
+        try:
+            hpm_lib = int(hpm_lib)
+        except:
+            pass
         if not isinstance(hpm_lib,str): # ALCF location
             hpm_lib = '/soft/perftools/hpctw/lib/libmpihpm.a /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a'
         for p in hpm_lib.split():
