@@ -190,7 +190,7 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
     ierr = MPI_Allreduce(MPI_IN_PLACE,&elapsed,1,MPI_DOUBLE,MPI_MAX,comm);CHKERRQ(ierr);
     ierr = MPI_Allreduce(MPI_IN_PLACE,&flops,1,MPI_DOUBLE,MPI_SUM,comm);CHKERRQ(ierr);
     eqs = (double)(M[0]*fedegree+1)*(M[1]*fedegree+1)*(M[2]*fedegree+1)*dof;
-    ierr = PetscPrintf(comm,"Q%D G[%4D%4D%4D] P[%3D%3D%3D] %10.3e s  %10f GF  %10f MEq/s\n",fedegree,M[0],M[1],M[2],pgrid[0],pgrid[1],pgrid[2],t1-t0,flops/elapsed*1e-9,eqs/elapsed*1e-6);CHKERRQ(ierr);
+    ierr = PetscPrintf(comm,"Q%D G[%5D%5D%5D] P[%3D%3D%3D] %10.3e s  %10f GF  %10f MEq/s\n",fedegree,M[0],M[1],M[2],pgrid[0],pgrid[1],pgrid[2],t1-t0,flops/elapsed*1e-9,eqs/elapsed*1e-6);CHKERRQ(ierr);
   }
 #ifdef USE_HPM
   HPM_Stop(eventname);
@@ -234,9 +234,9 @@ PetscErrorCode RunSample() {
   ierr = MemoryGetUsage(&memused,&memavail);CHKERRQ(ierr);
   ierr = ReportMemoryUsage(comm,memused,memavail);CHKERRQ(ierr);
 
-  ierr = PetscPrintf(comm,"Small Test G[]\n");CHKERRQ(ierr);
+  ierr = PetscPrintf(comm,"Small Test G[%5D%5D%5D]\n",gridsize[nsamples-1][0],gridsize[nsamples-1][1],gridsize[nsamples-1][2]);CHKERRQ(ierr);
   ierr = SampleOnGrid(comm,op,gridsize[nsamples-1],smooth,1,NULL,NULL,PETSC_FALSE);CHKERRQ(ierr);
-  ierr = PetscPrintf(comm,"Large Test\n");CHKERRQ(ierr);
+  ierr = PetscPrintf(comm,"Large Test G[%5D%5D%5D]\n",gridsize[0][0],gridsize[0][1],gridsize[0][2]);CHKERRQ(ierr);
   ierr = SampleOnGrid(comm,op,gridsize[0],smooth,1,&memused,&memavail,PETSC_TRUE);CHKERRQ(ierr);
 
   ierr = ReportMemoryUsage(comm,memused,memavail);CHKERRQ(ierr);

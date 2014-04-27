@@ -216,7 +216,7 @@ static PetscErrorCode MGRecordDiagnostics(Op op,MG mg,Vec B,Vec U) {
       erateL2    = ConvergenceRate(mg->coarse->enormL2,mg->enormL2);
       rrate2     = ConvergenceRate(mg->coarse->rnorm2,mg->rnorm2);
     }
-    ierr = PetscPrintf(PetscObjectComm((PetscObject)mg->dm),"Q%D %2D e_max %8.2e(%3.1f) e_L2 %8.2e(%3.1f) r_2 %8.2e(%3.1f) G[%4D%4D%4D] L[%3D%3D%3D] P[%3D%3D%3D]\n",
+    ierr = PetscPrintf(PetscObjectComm((PetscObject)mg->dm),"Q%D %2D e_max %8.2e(%3.1f) e_L2 %8.2e(%3.1f) r_2 %8.2e(%3.1f) G[%5D%5D%5D] L[%4D%4D%4D] P[%3D%3D%3D]\n",
                        fedegree,level,
                        mg->enormInfty,erateInfty,    // normalized by exact solution
                        mg->enormL2,erateL2,          // normalized by exact solution
