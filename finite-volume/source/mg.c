@@ -207,9 +207,16 @@ void build_interpolation(mg_type *all_grids){
     all_grids->levels[level]->interpolation.send_ranks    =            (int*)malloc(numFineRanks*sizeof(int));
     all_grids->levels[level]->interpolation.send_sizes    =            (int*)malloc(numFineRanks*sizeof(int));
     all_grids->levels[level]->interpolation.send_buffers  =        (double**)malloc(numFineRanks*sizeof(double*));
+    if(numFineRanks>0){
+    if(all_grids->levels[level]->interpolation.send_ranks  ==NULL){printf("malloc failed - all_grids->levels[%d]->interpolation.send_ranks\n",level);fflush(stdout);exit(0);}
+    if(all_grids->levels[level]->interpolation.send_sizes  ==NULL){printf("malloc failed - all_grids->levels[%d]->interpolation.send_sizes\n",level);fflush(stdout);exit(0);}
+    if(all_grids->levels[level]->interpolation.send_buffers==NULL){printf("malloc failed - all_grids->levels[%d]->interpolation.send_buffers\n",level);fflush(stdout);exit(0);}
+    }
 
     int elementSize = all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim;
     double * all_send_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
+          if(numFineBoxesRemote*elementSize>0)
+          if(all_send_buffers==NULL){printf("malloc failed - interpolation/all_send_buffers\n");fflush(stdout);exit(0);}
                       memset(all_send_buffers,0,numFineBoxesRemote*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
     //printf("level=%d, rank=%2d, send_buffers=%6d\n",level,all_grids->my_rank,numFineBoxesRemote*elementSize*sizeof(double));
 
@@ -325,9 +332,16 @@ void build_interpolation(mg_type *all_grids){
     all_grids->levels[level]->interpolation.recv_ranks    =            (int*)malloc(numCoarseRanks*sizeof(int));
     all_grids->levels[level]->interpolation.recv_sizes    =            (int*)malloc(numCoarseRanks*sizeof(int));
     all_grids->levels[level]->interpolation.recv_buffers  =        (double**)malloc(numCoarseRanks*sizeof(double*));
+    if(numCoarseRanks>0){
+    if(all_grids->levels[level]->interpolation.recv_ranks  ==NULL){printf("malloc failed - all_grids->levels[%d]->interpolation.recv_ranks\n",level);fflush(stdout);exit(0);}
+    if(all_grids->levels[level]->interpolation.recv_sizes  ==NULL){printf("malloc failed - all_grids->levels[%d]->interpolation.recv_sizes\n",level);fflush(stdout);exit(0);}
+    if(all_grids->levels[level]->interpolation.recv_buffers==NULL){printf("malloc failed - all_grids->levels[%d]->interpolation.recv_buffers\n",level);fflush(stdout);exit(0);}
+    }
 
     int elementSize = all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim;
-    double * all_recv_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
+    double * all_recv_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double)); 
+          if(numCoarseBoxes*elementSize>0)
+          if(all_recv_buffers==NULL){printf("malloc failed - interpolation/all_recv_buffers\n");fflush(stdout);exit(0);}
                       memset(all_recv_buffers,0,numCoarseBoxes*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
     //printf("level=%d, rank=%2d, recv_buffers=%6d\n",level,all_grids->my_rank,numCoarseBoxes*elementSize*sizeof(double));
 
@@ -465,9 +479,16 @@ void build_restriction(mg_type *all_grids){
     all_grids->levels[level]->restriction.send_ranks    =            (int*)malloc(numCoarseRanks*sizeof(int));
     all_grids->levels[level]->restriction.send_sizes    =            (int*)malloc(numCoarseRanks*sizeof(int));
     all_grids->levels[level]->restriction.send_buffers  =        (double**)malloc(numCoarseRanks*sizeof(double*));
+    if(numCoarseRanks>0){
+    if(all_grids->levels[level]->restriction.send_ranks  ==NULL){printf("malloc failed - all_grids->levels[%d]->restriction.send_ranks\n",level);fflush(stdout);exit(0);}
+    if(all_grids->levels[level]->restriction.send_sizes  ==NULL){printf("malloc failed - all_grids->levels[%d]->restriction.send_sizes\n",level);fflush(stdout);exit(0);}
+    if(all_grids->levels[level]->restriction.send_buffers==NULL){printf("malloc failed - all_grids->levels[%d]->restriction.send_buffers\n",level);fflush(stdout);exit(0);}
+    }
 
     int elementSize = all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim/8;
     double * all_send_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
+          if(numCoarseBoxes*elementSize>0)
+          if(all_send_buffers==NULL){printf("malloc failed - restriction/all_send_buffers\n");fflush(stdout);exit(0);}
                       memset(all_send_buffers,0,numCoarseBoxes*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
 
     // for each neighbor, construct the pack list and allocate the MPI send buffer... 
@@ -594,9 +615,16 @@ void build_restriction(mg_type *all_grids){
     all_grids->levels[level]->restriction.recv_ranks    =            (int*)malloc(numFineRanks*sizeof(int));
     all_grids->levels[level]->restriction.recv_sizes    =            (int*)malloc(numFineRanks*sizeof(int));
     all_grids->levels[level]->restriction.recv_buffers  =        (double**)malloc(numFineRanks*sizeof(double*));
+    if(numFineRanks>0){
+    if(all_grids->levels[level]->restriction.recv_ranks  ==NULL){printf("malloc failed - all_grids->levels[%d]->restriction.recv_ranks  \n",level);fflush(stdout);exit(0);}
+    if(all_grids->levels[level]->restriction.recv_sizes  ==NULL){printf("malloc failed - all_grids->levels[%d]->restriction.recv_sizes  \n",level);fflush(stdout);exit(0);}
+    if(all_grids->levels[level]->restriction.recv_buffers==NULL){printf("malloc failed - all_grids->levels[%d]->restriction.recv_buffers\n",level);fflush(stdout);exit(0);}
+    }
 
     int elementSize = all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim/8;
     double * all_recv_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
+          if(numFineBoxesRemote*elementSize>0)
+          if(all_recv_buffers==NULL){printf("malloc failed - restriction/all_recv_buffers\n");fflush(stdout);exit(0);}
                       memset(all_recv_buffers,0,numFineBoxesRemote*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
     //printf("level=%d, rank=%2d, recv_buffers=%6d\n",level,all_grids->my_rank,numFineBoxesRemote*elementSize*sizeof(double));
 
