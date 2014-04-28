@@ -23,8 +23,6 @@
       for (PetscInt i=0; i<Q; i++) {					\
 	for (PetscInt j=0; j<P; j++) {					\
 	  R[i][j] = vec_splats(tmode == TENSOR_EVAL ? Rf[i*P+j] : Rf[j*Q+i]); \
-	  S[i][j] = vec_splats(tmode == TENSOR_EVAL ? Sf[i*P+j] : Sf[j*Q+i]); \
-	  T[i][j] = vec_splats(tmode == TENSOR_EVAL ? Tf[i*P+j] : Tf[j*Q+i]); \
 	}								\
       }									\
 									\
@@ -43,6 +41,11 @@
 	}								\
       }									\
 									\
+      for (PetscInt i=0; i<Q; i++) {					\
+	for (PetscInt j=0; j<P; j++) {					\
+	  S[i][j] = vec_splats(tmode == TENSOR_EVAL ? Sf[i*P+j] : Sf[j*Q+i]); \
+	}								\
+      }									\
       /* v[l,a,b,k] = S[b,j] u[l,a,j,k] */				\
       for (PetscInt l=0; l<dof; l++) {					\
 	for (PetscInt a=0; a<Q; a++) {					\
@@ -60,6 +63,11 @@
 	}								\
       }									\
 									\
+      for (PetscInt i=0; i<Q; i++) {					\
+	for (PetscInt j=0; j<P; j++) {					\
+	  T[i][j] = vec_splats(tmode == TENSOR_EVAL ? Tf[i*P+j] : Tf[j*Q+i]); \
+	}								\
+      }									\
       /* y[l,a,b,c] = T[c,k] v[l,a,b,k] */				\
       for (PetscInt l=0; l<dof; l++) {					\
         for (PetscInt ab=0; ab<Q*Q; ab++) {				\
