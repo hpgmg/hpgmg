@@ -269,20 +269,17 @@ void print_decomposition(level_type *level){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-#ifndef BLOCKCOPY_TILE_J
-#define BLOCKCOPY_TILE_J 8
-#endif
-#ifndef BLOCKCOPY_TILE_K
-#define BLOCKCOPY_TILE_K 8
-#endif
 void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *num_blocks,
                           int dim_i, int dim_j, int dim_k,
-                          int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride,
-                          int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride
+                          int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride, int  read_scale,
+                          int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride, int write_scale
                          ){
   int jj,kk;
   // Take a dim_j x dim_k iteration space and tile it into smaller faces of size BLOCKCOPY_TILE_J x BLOCKCOPY_TILE_K
   // This increases the number of blockCopies in the ghost zone exchange and thereby increases the thread-level parallelism
+  // ghostZone:     read_scale=1, write_scale=1
+  // interpolation: read_scale=1, write_scale=2
+  // restriction:   read_scale=2, write_scale=1
   for(kk=0;kk<dim_k;kk+=BLOCKCOPY_TILE_K){
   for(jj=0;jj<dim_j;jj+=BLOCKCOPY_TILE_J){
     int dim_k_mod = dim_k-kk;if(dim_k_mod>BLOCKCOPY_TILE_K)dim_k_mod=BLOCKCOPY_TILE_K;
@@ -297,15 +294,15 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
     (*blocks)[*num_blocks].read.box      = read_box;
     (*blocks)[*num_blocks].read.ptr      = read_ptr;
     (*blocks)[*num_blocks].read.i        = read_i;
-    (*blocks)[*num_blocks].read.j        = read_j + jj;
-    (*blocks)[*num_blocks].read.k        = read_k + kk;
+    (*blocks)[*num_blocks].read.j        = read_j + read_scale*jj;
+    (*blocks)[*num_blocks].read.k        = read_k + read_scale*kk;
     (*blocks)[*num_blocks].read.jStride  = read_jStride;
     (*blocks)[*num_blocks].read.kStride  = read_kStride;
     (*blocks)[*num_blocks].write.box     = write_box;
     (*blocks)[*num_blocks].write.ptr     = write_ptr;
     (*blocks)[*num_blocks].write.i       = write_i;
-    (*blocks)[*num_blocks].write.j       = write_j + jj;
-    (*blocks)[*num_blocks].write.k       = write_k + kk;
+    (*blocks)[*num_blocks].write.j       = write_j + write_scale*jj;
+    (*blocks)[*num_blocks].write.k       = write_k + write_scale*kk;
     (*blocks)[*num_blocks].write.jStride = write_jStride;
     (*blocks)[*num_blocks].write.kStride = write_kStride;
              (*num_blocks)++;
@@ -462,13 +459,15 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* read.k        = */ send_k,
         /* read.jStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].jStride,
         /* read.kStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].kStride,
+        /* read.scale    = */ 1,
         /* write.box     = */ ghostsToSend[ghost].recvBox,
         /* write.ptr     = */ NULL,
         /* write.i       = */ recv_i,
         /* write.j       = */ recv_j,
         /* write.k       = */ recv_k,
         /* write.jStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].jStride,
-        /* write.kStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].kStride
+        /* write.kStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].kStride,
+        /* write.scale   = */ 1
       );
       else // append to the MPI pack list...
       append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[0]),&(level->exchange_ghosts[justFaces].allocated_blocks[0]),&(level->exchange_ghosts[justFaces].num_blocks[0]),
@@ -482,13 +481,15 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* read.k        = */ send_k,
         /* read.jStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].jStride,
         /* read.kStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].kStride,
+        /* read.scale    = */ 1,
         /* write.box     = */ -1,
         /* write.ptr     = */ level->exchange_ghosts[justFaces].send_buffers[neighbor], // NOTE, 1. count _sizes, 2. allocate _buffers, 3. populate blocks
         /* write.i       = */ level->exchange_ghosts[justFaces].send_sizes[neighbor], // current offset in the MPI send buffer
         /* write.j       = */ 0,
         /* write.k       = */ 0,
         /* write.jStride = */ dim_i,       // contiguous block
-        /* write.kStride = */ dim_i*dim_j  // contiguous block
+        /* write.kStride = */ dim_i*dim_j, // contiguous block
+        /* write.scale   = */ 1
       );}
       if(neighbor>=0)level->exchange_ghosts[justFaces].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
     } // ghost for-loop
@@ -600,13 +601,15 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       /*read.k        = */ 0,
       /*read.jStride  = */ dim_i,       // contiguous block
       /*read.kStride  = */ dim_i*dim_j, // contiguous block
+      /*read.scale    = */ 1,
       /*write.box     = */ ghostsToRecv[ghost].recvBox,
       /*write.ptr     = */ NULL,
       /*write.i       = */ recv_i,
       /*write.j       = */ recv_j,
       /*write.k       = */ recv_k,
       /*write.jStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].jStride,
-      /*write.kStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].kStride
+      /*write.kStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].kStride,
+      /*write.scale   = */ 1
       );
       if(neighbor>=0)level->exchange_ghosts[justFaces].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
     } // ghost for-loop

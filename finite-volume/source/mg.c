@@ -138,11 +138,17 @@ void MGResetTimers(mg_type *all_grids){
 void build_interpolation(mg_type *all_grids){
   int level;
   for(level=0;level<all_grids->num_levels;level++){
-  all_grids->levels[level]->interpolation.num_recvs     = 0;
-  all_grids->levels[level]->interpolation.num_sends     = 0;
-  all_grids->levels[level]->interpolation.num_blocks[0] = 0;
-  all_grids->levels[level]->interpolation.num_blocks[1] = 0;
-  all_grids->levels[level]->interpolation.num_blocks[2] = 0;
+  all_grids->levels[level]->interpolation.num_recvs           = 0;
+  all_grids->levels[level]->interpolation.num_sends           = 0;
+  all_grids->levels[level]->interpolation.blocks[0]           = NULL;
+  all_grids->levels[level]->interpolation.blocks[1]           = NULL;
+  all_grids->levels[level]->interpolation.blocks[2]           = NULL;
+  all_grids->levels[level]->interpolation.num_blocks[0]       = 0;
+  all_grids->levels[level]->interpolation.num_blocks[1]       = 0;
+  all_grids->levels[level]->interpolation.num_blocks[2]       = 0;
+  all_grids->levels[level]->interpolation.allocated_blocks[0] = 0;
+  all_grids->levels[level]->interpolation.allocated_blocks[1] = 0;
+  all_grids->levels[level]->interpolation.allocated_blocks[2] = 0;
 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -201,10 +207,6 @@ void build_interpolation(mg_type *all_grids){
     all_grids->levels[level]->interpolation.send_ranks    =            (int*)malloc(numFineRanks*sizeof(int));
     all_grids->levels[level]->interpolation.send_sizes    =            (int*)malloc(numFineRanks*sizeof(int));
     all_grids->levels[level]->interpolation.send_buffers  =        (double**)malloc(numFineRanks*sizeof(double*));
-    all_grids->levels[level]->interpolation.blocks[0]     = (blockCopy_type*)malloc(numFineBoxesRemote*sizeof(blockCopy_type));;
-    all_grids->levels[level]->interpolation.blocks[1]     = (blockCopy_type*)malloc(numFineBoxesLocal *sizeof(blockCopy_type));;
-    all_grids->levels[level]->interpolation.num_blocks[0] = 0;
-    all_grids->levels[level]->interpolation.num_blocks[1] = 0;
 
     int elementSize = all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim;
     double * all_send_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
@@ -218,24 +220,27 @@ void build_interpolation(mg_type *all_grids){
       all_grids->levels[level]->interpolation.send_buffers[neighbor] = all_send_buffers;
       for(fineBox=0;fineBox<numFineBoxes;fineBox++)if(fineBoxes[fineBox].recvRank==fineRanks[neighbor]){
         // pack the MPI send buffer...
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].dim.i         = all_grids->levels[level-1]->box_dim/2;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].dim.j         = all_grids->levels[level-1]->box_dim/2;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].dim.k         = all_grids->levels[level-1]->box_dim/2;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].read.box      = fineBoxes[fineBox].sendBox;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].read.ptr      = NULL;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].read.i        = fineBoxes[fineBox].i;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].read.j        = fineBoxes[fineBox].j;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].read.k        = fineBoxes[fineBox].k;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].read.jStride  = all_grids->levels[level]->my_boxes[fineBoxes[fineBox].sendBox].jStride;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].read.kStride  = all_grids->levels[level]->my_boxes[fineBoxes[fineBox].sendBox].kStride;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].write.box     = -1;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].write.ptr     = all_grids->levels[level]->interpolation.send_buffers[neighbor];
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].write.i       = offset;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].write.j       = 0;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].write.k       = 0;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].write.jStride = all_grids->levels[level-1]->box_dim;
-        all_grids->levels[level]->interpolation.blocks[0][all_grids->levels[level]->interpolation.num_blocks[0]].write.kStride = all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim;
-                                                          all_grids->levels[level]->interpolation.num_blocks[0]++;
+        append_block_to_list(&(all_grids->levels[level]->interpolation.blocks[0]),&(all_grids->levels[level]->interpolation.allocated_blocks[0]),&(all_grids->levels[level]->interpolation.num_blocks[0]),
+          /* dim.i         = */ all_grids->levels[level-1]->box_dim/2,
+          /* dim.j         = */ all_grids->levels[level-1]->box_dim/2,
+          /* dim.k         = */ all_grids->levels[level-1]->box_dim/2,
+          /* read.box      = */ fineBoxes[fineBox].sendBox,
+          /* read.ptr      = */ NULL,
+          /* read.i        = */ fineBoxes[fineBox].i,
+          /* read.j        = */ fineBoxes[fineBox].j,
+          /* read.k        = */ fineBoxes[fineBox].k,
+          /* read.jStride  = */ all_grids->levels[level]->my_boxes[fineBoxes[fineBox].sendBox].jStride,
+          /* read.kStride  = */ all_grids->levels[level]->my_boxes[fineBoxes[fineBox].sendBox].kStride,
+          /* read.scale    = */ 1,
+          /* write.box     = */ -1,
+          /* write.ptr     = */ all_grids->levels[level]->interpolation.send_buffers[neighbor],
+          /* write.i       = */ offset,
+          /* write.j       = */ 0,
+          /* write.k       = */ 0,
+          /* write.jStride = */ all_grids->levels[level-1]->box_dim,
+          /* write.kStride = */ all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim,
+          /* write.scale   = */ 2
+        );
         offset+=elementSize;
       }
       all_grids->levels[level]->interpolation.send_ranks[neighbor] = fineRanks[neighbor];
@@ -245,25 +250,28 @@ void build_interpolation(mg_type *all_grids){
     {
       int fineBox;
       for(fineBox=0;fineBox<numFineBoxes;fineBox++)if(fineBoxes[fineBox].recvRank==all_grids->my_rank){
-        // pack the MPI send buffer...
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].dim.i         = all_grids->levels[level-1]->box_dim/2;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].dim.j         = all_grids->levels[level-1]->box_dim/2;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].dim.k         = all_grids->levels[level-1]->box_dim/2;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].read.box      = fineBoxes[fineBox].sendBox;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].read.ptr      = NULL;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].read.i        = fineBoxes[fineBox].i;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].read.j        = fineBoxes[fineBox].j;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].read.k        = fineBoxes[fineBox].k;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].read.jStride  = all_grids->levels[level]->my_boxes[fineBoxes[fineBox].sendBox].jStride;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].read.kStride  = all_grids->levels[level]->my_boxes[fineBoxes[fineBox].sendBox].kStride;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].write.box     = fineBoxes[fineBox].recvBox;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].write.ptr     = NULL;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].write.i       = 0;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].write.j       = 0;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].write.k       = 0;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].write.jStride = all_grids->levels[level-1]->my_boxes[fineBoxes[fineBox].recvBox].jStride;
-        all_grids->levels[level]->interpolation.blocks[1][all_grids->levels[level]->interpolation.num_blocks[1]].write.kStride = all_grids->levels[level-1]->my_boxes[fineBoxes[fineBox].recvBox].kStride;
-                                                          all_grids->levels[level]->interpolation.num_blocks[1]++;
+        // local interpolations...
+        append_block_to_list(&(all_grids->levels[level]->interpolation.blocks[1]),&(all_grids->levels[level]->interpolation.allocated_blocks[1]),&(all_grids->levels[level]->interpolation.num_blocks[1]),
+          /* dim.i         = */ all_grids->levels[level-1]->box_dim/2,
+          /* dim.j         = */ all_grids->levels[level-1]->box_dim/2,
+          /* dim.k         = */ all_grids->levels[level-1]->box_dim/2,
+          /* read.box      = */ fineBoxes[fineBox].sendBox,
+          /* read.ptr      = */ NULL,
+          /* read.i        = */ fineBoxes[fineBox].i,
+          /* read.j        = */ fineBoxes[fineBox].j,
+          /* read.k        = */ fineBoxes[fineBox].k,
+          /* read.jStride  = */ all_grids->levels[level]->my_boxes[fineBoxes[fineBox].sendBox].jStride,
+          /* read.kStride  = */ all_grids->levels[level]->my_boxes[fineBoxes[fineBox].sendBox].kStride,
+          /* read.scale    = */ 1,
+          /* write.box     = */ fineBoxes[fineBox].recvBox,
+          /* write.ptr     = */ NULL,
+          /* write.i       = */ 0,
+          /* write.j       = */ 0,
+          /* write.k       = */ 0,
+          /* write.jStride = */ all_grids->levels[level-1]->my_boxes[fineBoxes[fineBox].recvBox].jStride,
+          /* write.kStride = */ all_grids->levels[level-1]->my_boxes[fineBoxes[fineBox].recvBox].kStride,
+          /* write.scale   = */ 2
+        );
       }
     } // local to local interpolation
 
@@ -317,8 +325,6 @@ void build_interpolation(mg_type *all_grids){
     all_grids->levels[level]->interpolation.recv_ranks    =            (int*)malloc(numCoarseRanks*sizeof(int));
     all_grids->levels[level]->interpolation.recv_sizes    =            (int*)malloc(numCoarseRanks*sizeof(int));
     all_grids->levels[level]->interpolation.recv_buffers  =        (double**)malloc(numCoarseRanks*sizeof(double*));
-    all_grids->levels[level]->interpolation.blocks[2]     = (blockCopy_type*)malloc(numCoarseBoxes*sizeof(blockCopy_type));;
-    all_grids->levels[level]->interpolation.num_blocks[2] = 0;
 
     int elementSize = all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim;
     double * all_recv_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
@@ -332,24 +338,27 @@ void build_interpolation(mg_type *all_grids){
       all_grids->levels[level]->interpolation.recv_buffers[neighbor] = all_recv_buffers;
       for(coarseBox=0;coarseBox<numCoarseBoxes;coarseBox++)if(coarseBoxes[coarseBox].sendRank==coarseRanks[neighbor]){
         // unpack MPI recv buffer...
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].dim.i         = all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].dim.j         = all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].dim.k         = all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].read.box      = -1;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].read.ptr      = all_grids->levels[level]->interpolation.recv_buffers[neighbor];
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].read.i        = offset;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].read.j        = 0;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].read.k        = 0;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].read.jStride  = all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].read.kStride  = all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].write.box     = coarseBoxes[coarseBox].recvBox;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].write.ptr     = NULL;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].write.i       = 0;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].write.j       = 0;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].write.k       = 0;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].write.jStride = all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].recvBox].jStride;
-        all_grids->levels[level]->interpolation.blocks[2][all_grids->levels[level]->interpolation.num_blocks[2]].write.kStride = all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].recvBox].kStride;
-                                                          all_grids->levels[level]->interpolation.num_blocks[2]++;
+        append_block_to_list(&(all_grids->levels[level]->interpolation.blocks[2]),&(all_grids->levels[level]->interpolation.allocated_blocks[2]),&(all_grids->levels[level]->interpolation.num_blocks[2]),
+          /* dim.i         = */ all_grids->levels[level]->box_dim,
+          /* dim.j         = */ all_grids->levels[level]->box_dim,
+          /* dim.k         = */ all_grids->levels[level]->box_dim,
+          /* read.box      = */ -1,
+          /* read.ptr      = */ all_grids->levels[level]->interpolation.recv_buffers[neighbor],
+          /* read.i        = */ offset,
+          /* read.j        = */ 0,
+          /* read.k        = */ 0,
+          /* read.jStride  = */ all_grids->levels[level]->box_dim,
+          /* read.kStride  = */ all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim,
+          /* read.scale    = */ 1,
+          /* write.box     = */ coarseBoxes[coarseBox].recvBox,
+          /* write.ptr     = */ NULL,
+          /* write.i       = */ 0,
+          /* write.j       = */ 0,
+          /* write.k       = */ 0,
+          /* write.jStride = */ all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].recvBox].jStride,
+          /* write.kStride = */ all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].recvBox].kStride,
+          /* write.scale   = */ 1
+        );
         offset+=elementSize;
       }
       all_grids->levels[level]->interpolation.recv_ranks[neighbor] = coarseRanks[neighbor];
@@ -366,7 +375,7 @@ void build_interpolation(mg_type *all_grids){
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MPI_Barrier(MPI_COMM_WORLD);
   //if(all_grids->my_rank==0){printf("================================================================================\n");}
-  //if(                         (level==all_grids->num_levels-2))print_communicator(1,all_grids->my_rank,level,&all_grids->levels[level]->interpolation);
+  //print_communicator(0x7,all_grids->my_rank,level,&all_grids->levels[level]->interpolation);
   //if((all_grids->my_rank==0)&&(level==all_grids->num_levels-1))print_communicator(2,all_grids->my_rank,level,&all_grids->levels[level]->interpolation);
   //MPI_Barrier(MPI_COMM_WORLD);
   } // all levels
@@ -389,9 +398,15 @@ void build_restriction(mg_type *all_grids){
   for(level=0;level<all_grids->num_levels;level++){
   all_grids->levels[level]->restriction.num_recvs     = 0;
   all_grids->levels[level]->restriction.num_sends     = 0;
+  all_grids->levels[level]->restriction.blocks[0]     = NULL;
+  all_grids->levels[level]->restriction.blocks[1]     = NULL;
+  all_grids->levels[level]->restriction.blocks[2]     = NULL;
   all_grids->levels[level]->restriction.num_blocks[0] = 0;
   all_grids->levels[level]->restriction.num_blocks[1] = 0;
   all_grids->levels[level]->restriction.num_blocks[2] = 0;
+  all_grids->levels[level]->restriction.allocated_blocks[0] = 0;
+  all_grids->levels[level]->restriction.allocated_blocks[1] = 0;
+  all_grids->levels[level]->restriction.allocated_blocks[2] = 0;
   // all_grids->levels[level]->restriction.num_blocks[0] = number of unpack/insert operations  = number of boxes on level+1 that I don't own and restrict to 
   // all_grids->levels[level]->restriction.num_blocks[1] = number of unpack/insert operations  = number of boxes on level+1 that I own and restrict to
   // all_grids->levels[level]->restriction.num_blocks[2] = number of unpack/insert operations  = number of boxes on level-1 that I don't own that restrict to me
@@ -450,15 +465,10 @@ void build_restriction(mg_type *all_grids){
     all_grids->levels[level]->restriction.send_ranks    =            (int*)malloc(numCoarseRanks*sizeof(int));
     all_grids->levels[level]->restriction.send_sizes    =            (int*)malloc(numCoarseRanks*sizeof(int));
     all_grids->levels[level]->restriction.send_buffers  =        (double**)malloc(numCoarseRanks*sizeof(double*));
-    all_grids->levels[level]->restriction.blocks[0]     = (blockCopy_type*)malloc(numCoarseBoxesRemote*sizeof(blockCopy_type));;
-    all_grids->levels[level]->restriction.blocks[1]     = (blockCopy_type*)malloc(numCoarseBoxesLocal *sizeof(blockCopy_type));;
-    all_grids->levels[level]->restriction.num_blocks[0] = 0;
-    all_grids->levels[level]->restriction.num_blocks[1] = 0;
 
     int elementSize = all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim/8;
     double * all_send_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
                       memset(all_send_buffers,0,numCoarseBoxes*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
-    //printf("level=%d, rank=%2d, send_buffers=%6d\n",level,all_grids->my_rank,numCoarseBoxes*elementSize*sizeof(double));
 
     // for each neighbor, construct the pack list and allocate the MPI send buffer... 
     for(neighbor=0;neighbor<numCoarseRanks;neighbor++){
@@ -467,24 +477,27 @@ void build_restriction(mg_type *all_grids){
       all_grids->levels[level]->restriction.send_buffers[neighbor] = all_send_buffers;
       for(coarseBox=0;coarseBox<numCoarseBoxes;coarseBox++)if(coarseBoxes[coarseBox].recvRank==coarseRanks[neighbor]){
         // restrict to MPI send buffer...
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].dim.i         = all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].dim.j         = all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].dim.k         = all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].read.box      = coarseBoxes[coarseBox].sendBox;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].read.ptr      = NULL;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].read.i        = 0;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].read.j        = 0;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].read.k        = 0;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].read.jStride  = all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].sendBox].jStride;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].read.kStride  = all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].sendBox].kStride;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].write.box     = -1;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].write.ptr     = all_grids->levels[level]->restriction.send_buffers[neighbor];
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].write.i       = offset;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].write.j       = 0;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].write.k       = 0;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].write.jStride = all_grids->levels[level]->box_dim/2;
-        all_grids->levels[level]->restriction.blocks[0][all_grids->levels[level]->restriction.num_blocks[0]].write.kStride = all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim/4;
-                                                        all_grids->levels[level]->restriction.num_blocks[0]++;
+        append_block_to_list(&(all_grids->levels[level]->restriction.blocks[0]),&(all_grids->levels[level]->restriction.allocated_blocks[0]),&(all_grids->levels[level]->restriction.num_blocks[0]),
+          /* dim.i         = */ all_grids->levels[level]->box_dim/2,
+          /* dim.j         = */ all_grids->levels[level]->box_dim/2,
+          /* dim.k         = */ all_grids->levels[level]->box_dim/2,
+          /* read.box      = */ coarseBoxes[coarseBox].sendBox,
+          /* read.ptr      = */ NULL,
+          /* read.i        = */ 0,
+          /* read.j        = */ 0,
+          /* read.k        = */ 0,
+          /* read.jStride  = */ all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].sendBox].jStride,
+          /* read.kStride  = */ all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].sendBox].kStride,
+          /* read.scale    = */ 2,
+          /* write.box     = */ -1,
+          /* write.ptr     = */ all_grids->levels[level]->restriction.send_buffers[neighbor],
+          /* write.i       = */ offset,
+          /* write.j       = */ 0,
+          /* write.k       = */ 0,
+          /* write.jStride = */ all_grids->levels[level]->box_dim/2,
+          /* write.kStride = */ all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim/4,
+          /* write.scale   = */ 1
+        );
         offset+=elementSize;
       }
       all_grids->levels[level]->restriction.send_ranks[neighbor] = coarseRanks[neighbor];
@@ -496,24 +509,27 @@ void build_restriction(mg_type *all_grids){
       int coarseBox;
       for(coarseBox=0;coarseBox<numCoarseBoxes;coarseBox++)if(coarseBoxes[coarseBox].recvRank==all_grids->levels[level+1]->my_rank){
         // restrict to local...
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].dim.i         = all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].dim.j         = all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].dim.k         = all_grids->levels[level]->box_dim;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].read.box      = coarseBoxes[coarseBox].sendBox;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].read.ptr      = NULL;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].read.i        = 0; 
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].read.j        = 0;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].read.k        = 0;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].read.jStride  = all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].sendBox].jStride;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].read.kStride  = all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].sendBox].kStride;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].write.box     = coarseBoxes[coarseBox].recvBox;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].write.ptr     = NULL;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].write.i       = coarseBoxes[coarseBox].i;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].write.j       = coarseBoxes[coarseBox].j;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].write.k       = coarseBoxes[coarseBox].k;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].write.jStride = all_grids->levels[level+1]->my_boxes[coarseBoxes[coarseBox].recvBox].jStride;
-        all_grids->levels[level]->restriction.blocks[1][all_grids->levels[level]->restriction.num_blocks[1]].write.kStride = all_grids->levels[level+1]->my_boxes[coarseBoxes[coarseBox].recvBox].kStride;
-                                                        all_grids->levels[level]->restriction.num_blocks[1]++;
+        append_block_to_list(&(all_grids->levels[level]->restriction.blocks[1]),&(all_grids->levels[level]->restriction.allocated_blocks[1]),&(all_grids->levels[level]->restriction.num_blocks[1]),
+          /* dim.i         = */ all_grids->levels[level]->box_dim/2,
+          /* dim.j         = */ all_grids->levels[level]->box_dim/2,
+          /* dim.k         = */ all_grids->levels[level]->box_dim/2,
+          /* read.box      = */ coarseBoxes[coarseBox].sendBox,
+          /* read.ptr      = */ NULL,
+          /* read.i        = */ 0, 
+          /* read.j        = */ 0,
+          /* read.k        = */ 0,
+          /* read.jStride  = */ all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].sendBox].jStride,
+          /* read.kStride  = */ all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].sendBox].kStride,
+          /* read.scale    = */ 2,
+          /* write.box     = */ coarseBoxes[coarseBox].recvBox,
+          /* write.ptr     = */ NULL,
+          /* write.i       = */ coarseBoxes[coarseBox].i,
+          /* write.j       = */ coarseBoxes[coarseBox].j,
+          /* write.k       = */ coarseBoxes[coarseBox].k,
+          /* write.jStride = */ all_grids->levels[level+1]->my_boxes[coarseBoxes[coarseBox].recvBox].jStride,
+          /* write.kStride = */ all_grids->levels[level+1]->my_boxes[coarseBoxes[coarseBox].recvBox].kStride,
+          /* write.scale   = */ 1
+        );
       }
     } // local to local
 
@@ -578,8 +594,6 @@ void build_restriction(mg_type *all_grids){
     all_grids->levels[level]->restriction.recv_ranks    =            (int*)malloc(numFineRanks*sizeof(int));
     all_grids->levels[level]->restriction.recv_sizes    =            (int*)malloc(numFineRanks*sizeof(int));
     all_grids->levels[level]->restriction.recv_buffers  =        (double**)malloc(numFineRanks*sizeof(double*));
-    all_grids->levels[level]->restriction.blocks[2]     = (blockCopy_type*)malloc(numFineBoxesRemote*sizeof(blockCopy_type));;
-    all_grids->levels[level]->restriction.num_blocks[2] = 0;
 
     int elementSize = all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim/8;
     double * all_recv_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
@@ -593,24 +607,27 @@ void build_restriction(mg_type *all_grids){
       all_grids->levels[level]->restriction.recv_buffers[neighbor] = all_recv_buffers;
       for(fineBox=0;fineBox<numFineBoxesRemote;fineBox++)if(fineBoxes[fineBox].sendRank==fineRanks[neighbor]){
         // unpack MPI recv buffer...
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].dim.i         = all_grids->levels[level-1]->box_dim/2;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].dim.j         = all_grids->levels[level-1]->box_dim/2;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].dim.k         = all_grids->levels[level-1]->box_dim/2;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].read.box      = -1;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].read.ptr      = all_grids->levels[level]->restriction.recv_buffers[neighbor];
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].read.i        = offset;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].read.j        = 0;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].read.k        = 0;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].read.jStride  = all_grids->levels[level-1]->box_dim/2;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].read.kStride  = all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim/4;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].write.box     = fineBoxes[fineBox].recvBox;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].write.ptr     = NULL;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].write.i       = fineBoxes[fineBox].i;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].write.j       = fineBoxes[fineBox].j;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].write.k       = fineBoxes[fineBox].k;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].write.jStride = all_grids->levels[level]->my_boxes[fineBoxes[fineBox].recvBox].jStride;
-        all_grids->levels[level]->restriction.blocks[2][all_grids->levels[level]->restriction.num_blocks[2]].write.kStride = all_grids->levels[level]->my_boxes[fineBoxes[fineBox].recvBox].kStride;
-                                                        all_grids->levels[level]->restriction.num_blocks[2]++;
+        append_block_to_list(&(all_grids->levels[level]->restriction.blocks[2]),&(all_grids->levels[level]->restriction.allocated_blocks[2]),&(all_grids->levels[level]->restriction.num_blocks[2]),
+          /* dim.i         = */ all_grids->levels[level-1]->box_dim/2,
+          /* dim.j         = */ all_grids->levels[level-1]->box_dim/2,
+          /* dim.k         = */ all_grids->levels[level-1]->box_dim/2,
+          /* read.box      = */ -1,
+          /* read.ptr      = */ all_grids->levels[level]->restriction.recv_buffers[neighbor],
+          /* read.i        = */ offset,
+          /* read.j        = */ 0,
+          /* read.k        = */ 0,
+          /* read.jStride  = */ all_grids->levels[level-1]->box_dim/2,
+          /* read.kStride  = */ all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim/4,
+          /* read.scale    = */ 1,
+          /* write.box     = */ fineBoxes[fineBox].recvBox,
+          /* write.ptr     = */ NULL,
+          /* write.i       = */ fineBoxes[fineBox].i,
+          /* write.j       = */ fineBoxes[fineBox].j,
+          /* write.k       = */ fineBoxes[fineBox].k,
+          /* write.jStride = */ all_grids->levels[level]->my_boxes[fineBoxes[fineBox].recvBox].jStride,
+          /* write.kStride = */ all_grids->levels[level]->my_boxes[fineBoxes[fineBox].recvBox].kStride,
+          /* write.scale   = */ 1
+        );
         offset+=elementSize;
       }
       all_grids->levels[level]->restriction.recv_ranks[neighbor] = fineRanks[neighbor];
@@ -716,7 +733,6 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
       add_vectors_to_box(all_grids->levels[level]->my_boxes+box,numAdditionalVectors);
       all_grids->levels[level]->memory_allocated += numAdditionalVectors*all_grids->levels[level]->my_boxes[box].volume*sizeof(double);
     }
-    //initialize_valid_region(all_grids->levels[level]); // define which cells are within the domain
   }
 
 

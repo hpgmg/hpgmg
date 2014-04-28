@@ -3,7 +3,7 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-static inline void CopyBlock(level_type *level, int id, blockCopy_type *block, int threads_per_block){
+static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
   // copy 3D array from read_i,j,k of read[] to write_i,j,k in write[]
   int   dim_i       = block->dim.i;
   int   dim_j       = block->dim.j;
@@ -60,7 +60,6 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block, i
       write[write_ijk+3] = read[read_ijk+3];
     }}
   }else{
-    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(threads_per_block)
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
     for(i=0;i<dim_i;i++){
@@ -74,7 +73,7 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block, i
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-static inline void IncrementBlock(level_type *level, int id, double prescale, blockCopy_type *block, int threads_per_block){
+static inline void IncrementBlock(level_type *level, int id, double prescale, blockCopy_type *block){
   // copy 3D array from read_i,j,k of read[] to write_i,j,k in write[]
   int   dim_i       = block->dim.i;
   int   dim_j       = block->dim.j;
@@ -106,7 +105,6 @@ static inline void IncrementBlock(level_type *level, int id, double prescale, bl
   }
 
   int i,j,k;
-  #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(threads_per_block)
   for(k=0;k<dim_k;k++){
   for(j=0;j<dim_j;j++){
   for(i=0;i<dim_i;i++){

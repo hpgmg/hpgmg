@@ -19,6 +19,13 @@
 #define BC_PERIODIC  0
 #define BC_DIRICHLET 1
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef BLOCKCOPY_TILE_J
+#define BLOCKCOPY_TILE_J 8
+#endif
+#ifndef BLOCKCOPY_TILE_K
+#define BLOCKCOPY_TILE_K 8
+#endif
+//------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
   struct {int i, j, k;}dim;			// dimensions of the block to copy
   struct {int box, i, j, k, jStride, kStride;double * __restrict__ ptr;}read,write;
@@ -146,8 +153,8 @@ void reset_level_timers(level_type *level);
 int qsortInt(const void *a, const void *b);
 void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *num_blocks,
                           int dim_i, int dim_j, int dim_k,
-                          int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride,
-                          int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride
+                          int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride, int  read_scale,
+                          int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride, int write_scale
                          );
 //------------------------------------------------------------------------------------------------------------------------------
 #endif
