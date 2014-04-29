@@ -244,7 +244,7 @@ static PetscErrorCode OpDestroy_Poisson(Op op)
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode OpCreate__Poisson(Op op)
+PetscErrorCode OpCreate__Poisson(Op op)
 {
   PetscErrorCode ierr;
   Ctx ctx;
