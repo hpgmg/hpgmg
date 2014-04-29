@@ -60,7 +60,7 @@ $(BINDIR)/hpgmg-fe : $(hpgmg-fe-y.o) | $$(@D)/.DIR
 hpgmg-fv = $(BINDIR)/hpgmg-fv
 hpgmg-fv : $(hpgmg-fv)
 hpgmg-fv-y.o := $(call srctoobj,$(hpgmg-fv-y.c))
-$(hpgmg-fv-y.o) : CFLAGS += $(CONFIG_FV_CFLAGS)
+$(hpgmg-fv-y.o) : CPPFLAGS += $(CONFIG_FV_CPPFLAGS)
 $(BINDIR)/hpgmg-fv : $(hpgmg-fv-y.o) | $$(@D)/.DIR
 	$(HPGMG_LINK) $^ $(HPGMG_LDLIBS) $(LDLIBS) -lm
 

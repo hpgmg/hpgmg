@@ -18,6 +18,7 @@ def main():
     cf = parser.add_argument_group('Compilers and flags')
     cf.add_argument('--CC', help='Path to C compiler', default=os.environ.get('CC',''))
     cf.add_argument('--CFLAGS', help='Flags for C compiler', default=os.environ.get('CFLAGS',''))
+    cf.add_argument('--CPPFLAGS', help='Flags for C preprocessor', default=os.environ.get('CPPFLAGS',''))
     cf.add_argument('--LDFLAGS', help='Flags to pass to linker', default=os.environ.get('LDFLAGS',''))
     cf.add_argument('--LDLIBS', help='Libraries to pass to linker', default=os.environ.get('LDLIBS',''))
     fe = parser.add_argument_group('Finite Element options')
@@ -59,16 +60,15 @@ def makefile(args):
     else:
         CC = args.CC
     m = ['HPGMG_ARCH = %s' % args.arch,
-        'HPGMG_CC = %s' % CC,
-        'HPGMG_CFLAGS = %s' % args.CFLAGS,
-        'HPGMG_LDFLAGS = %s' % args.LDFLAGS,
-        'HPGMG_LDLIBS = %s' % args.LDLIBS,
-        'PETSC_DIR = %s' % args.petsc_dir,
-        'PETSC_ARCH = %s' % args.petsc_arch,
-        'PYTHON = %s' % sys.executable,
-        'SRCDIR = %s' % os.path.abspath(os.path.dirname(__name__)),]
-    if args.petsc_dir:
-        m.append('HPGMG_CFLAGS += $(PCC_FLAGS) $(CCPPFLAGS)')
+         'HPGMG_CC = %s' % CC,
+         'HPGMG_CFLAGS = %s' % (('$(PCC_FLAGS) ' if args.petsc_dir else '') + args.CFLAGS),
+         'HPGMG_CPPFLAGS = %s' % (('$(CCPPFLAGS) ' if args.petsc_dir else '') + args.CPPFLAGS),
+         'HPGMG_LDFLAGS = %s' % args.LDFLAGS,
+         'HPGMG_LDLIBS = %s' % args.LDLIBS,
+         'PETSC_DIR = %s' % args.petsc_dir,
+         'PETSC_ARCH = %s' % args.petsc_arch,
+         'PYTHON = %s' % sys.executable,
+         'SRCDIR = %s' % os.path.abspath(os.path.dirname(__name__)),]
     if args.with_hpm:
         m.append('CONFIG_HPM = y')
         hpm_lib = args.with_hpm
@@ -87,7 +87,7 @@ def makefile(args):
     if args.fe and args.petsc_dir:
         m.append('CONFIG_FE = y')
     m.append('CONFIG_TIMER_%s = y' % args.fv_timer.upper())
-    m.append('CONFIG_FV_CFLAGS = ' + hpgmg_fv_cflags(args))
+    m.append('CONFIG_FV_CPPFLAGS = ' + hpgmg_fv_cflags(args))
     if args.petsc_dir:
         m.append('include $(PETSC_DIR)/conf/variables')
     m.append('include $(SRCDIR)/base.mk\n')
