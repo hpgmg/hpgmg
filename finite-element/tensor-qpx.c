@@ -18,7 +18,7 @@
       vector4double R[Q][P],S[Q][P],T[Q][P];				\
       PetscScalar (*restrict x)[P*P*P][NE] = (PetscScalar(*)[P*P*P][NE])xx; /* should be const, but xlc vector intrinsics don't understand const */ \
       PetscScalar (*restrict y)[P*P*P][NE] = (PetscScalar(*)[Q*Q*Q][NE])yy; \
-      PetscScalar u[dof][Q*P*P][NE]_align,v[dof][Q*Q*P][NE]_align;	\
+      vector4double u[dof][Q*P*P]_align,v[dof][Q*Q*P]_align;		\
 									\
       for (PetscInt i=0; i<Q; i++) {					\
 	for (PetscInt j=0; j<P; j++) {					\
@@ -29,15 +29,14 @@
       /* u[l,a,j,k] = R[a,i] x[l,i,j,k] */				\
       for (PetscInt l=0; l<dof; l++) {					\
 	for (PetscInt jk=0; jk<P*P; jk++) {				\
-	  vector4double u_lAjk[Q],x_lIjk[P];				\
+	  vector4double x_lIjk[P];					\
 	  Pragma(loopid(ld_x_lIjk)) for (PetscInt i=0; i<P; i++) x_lIjk[i] = vec_lda(0,x[l][i*P*P+jk]); \
-	  Pragma(loopid(z_u_lAjk)) for (PetscInt a=0; a<Q; a++) u_lAjk[a] = vec_splats(0.); \
+	  Pragma(loopid(z_u_lAjk)) for (PetscInt a=0; a<Q; a++) u[l][a*P*P+jk] = vec_splats(0.); \
 	  Pragma(unroll(P_)) Pragma(loopid(R_aI)) for (PetscInt i=0; i<P; i++) { \
 	    Pragma(unroll(Q_)) Pragma(loopid(R_Ai)) for (PetscInt a=0; a<Q; a++) { \
-	      u_lAjk[a] = vec_madd(R[a][i],x_lIjk[i],u_lAjk[a]);	\
+	      u[l][a*P*P+jk] = vec_madd(R[a][i],x_lIjk[i],u[l][a*P*P+jk]);	\
 	    }								\
 	  }								\
-	  Pragma(loopid(st_u_lAjk)) for (PetscInt a=0; a<Q; a++) vec_sta(u_lAjk[a],0,u[l][a*P*P+jk]); \
 	}								\
       }									\
 									\
@@ -50,15 +49,12 @@
       for (PetscInt l=0; l<dof; l++) {					\
 	for (PetscInt a=0; a<Q; a++) {					\
 	  for (PetscInt k=0; k<P; k++) {				\
-	    vector4double v_laBk[Q],u_laJk[P];				\
-	    Pragma(loopid(ld_u_laJk)) for (PetscInt j=0; j<P; j++) u_laJk[j] = vec_lda(0,u[l][(a*P+j)*P+k]); \
-	    Pragma(loopid(z_v_laBk)) for (PetscInt b=0; b<Q; b++) v_laBk[b] = vec_splats(0.); \
+	    Pragma(loopid(z_v_laBk)) for (PetscInt b=0; b<Q; b++) v[l][(a*Q+b)*P+k] = vec_splats(0.); \
 	    Pragma(unroll(P_)) Pragma(loopid(S_bJ)) for (PetscInt j=0; j<P; j++) { \
 	      Pragma(unroll(Q_)) Pragma(loopid(S_Bj)) for (PetscInt b=0; b<Q; b++) { \
-		v_laBk[b] = vec_madd(S[b][j],u_laJk[j],v_laBk[b]);	\
+		v[l][(a*Q+b)*P+k] = vec_madd(S[b][j],u[l][(a*P+j)*P+k],v[l][(a*Q+b)*P+k]); \
 	      }								\
 	    }								\
-	    Pragma(loopid(st_v_laBk)) for (PetscInt b=0; b<Q; b++) vec_sta(v_laBk[b],0,v[l][(a*Q+b)*P+k]); \
 	  }								\
 	}								\
       }									\
@@ -71,12 +67,11 @@
       /* y[l,a,b,c] = T[c,k] v[l,a,b,k] */				\
       for (PetscInt l=0; l<dof; l++) {					\
         for (PetscInt ab=0; ab<Q*Q; ab++) {				\
-	  vector4double y_labC[Q],v_labK[P];				\
-	  Pragma(loopid(ld_v_labK)) for (PetscInt k=0; k<P; k++) v_labK[k] = vec_lda(0,v[l][ab*P+k]); \
+	  vector4double y_labC[Q];					\
 	  Pragma(loopid(ld_y_labC)) for (PetscInt c=0; c<Q; c++) y_labC[c] = vec_lda(0,y[l][ab*Q+c]); \
 	  Pragma(unroll(P_)) Pragma(loopid(T_cK)) for (PetscInt k=0; k<P; k++) { \
 	    Pragma(unroll(Q_)) Pragma(loopid(T_Ck)) for (PetscInt c=0; c<Q; c++) { \
-	      y_labC[c] = vec_madd(T[c][k],v_labK[k],y_labC[c]);	\
+	      y_labC[c] = vec_madd(T[c][k],v[l][ab*P+k],y_labC[c]);	\
 	    }								\
 	  }								\
 	  Pragma(loopid(st_y_labC)) for (PetscInt c=0; c<Q; c++) vec_sta(y_labC[c],0,y[l][ab*Q+c]); \
