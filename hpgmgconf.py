@@ -69,7 +69,7 @@ def makefile(args):
         CC = args.CC
     m = ['HPGMG_ARCH = %s' % args.arch,
          'HPGMG_CC = %s' % CC,
-         'HPGMG_CFLAGS = %s' % (('$(PCC_FLAGS) ' if args.petsc_dir else '') + args.CFLAGS),
+         'HPGMG_CFLAGS = %s' % (args.CFLAGS if args.CFLAGS else ('$(PCC_FLAGS) ' if args.petsc_dir else '')),
          'HPGMG_CPPFLAGS = %s' % (('$(CCPPFLAGS) ' if args.petsc_dir else '') + args.CPPFLAGS),
          'HPGMG_LDFLAGS = %s' % args.LDFLAGS,
          'HPGMG_LDLIBS = %s' % args.LDLIBS,
