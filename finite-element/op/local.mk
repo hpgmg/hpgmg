@@ -9,5 +9,5 @@ hpgmg-fe-y.c += $(call thisdir, \
 $(register.c) : $(genregister) $(op-impls.c) | $$(@D)/.DIR
 	$(PYTHON) $(genregister) $@ $(op-impls.c)
 
-HPGMG_FV_DIR := $(call thisdir,..)
-$(OBJDIR)/register.o : CFLAGS += -I$(HPGMG_FV_DIR)
+HPGMG_FE_DIR := $(call thisdir,..)
+$(OBJDIR)/register.o : HPGMG_CPPFLAGS += -I$(HPGMG_FE_DIR)
