@@ -1,5 +1,14 @@
 import sys,os
 
+try:
+    import argparse
+except ImportError:
+    print("""ERROR: Could not import argparse
+Either use python2.7 or later (perhaps in a strange location such as
+/bgsys/tools/python2.7.5-gnu-20130730/bin/hostpython) or install from
+PyPI (https://pypi.python.org/pypi/argparse/).""")
+    sys.exit(1)
+
 def mkdir_p(path):
     try:
         os.makedirs(path)
@@ -9,7 +18,6 @@ def mkdir_p(path):
         else: raise
 
 def main():
-    import argparse, os
     parser = argparse.ArgumentParser(description='Configure High-performance Geometric Multigrid (HPGMG)')
     parser.add_argument('--arch', help='Name of this configuration', default=None)
     parser.add_argument('--petsc-dir', help='PETSC_DIR', default=os.environ.get('PETSC_DIR',''))
