@@ -1,7 +1,6 @@
 #include "fefas-op.h"
 #include "../fefas.h"
 #include "../tensor.h"
-#include "../pointwise.h"
 #include <strings.h>
 
 PetscErrorCode OpCreate__Poisson(Op op);
@@ -12,6 +11,38 @@ PetscErrorCode OpCreate__Poisson(Op op);
 
 #define Pragma_(a) _Pragma(#a)
 #define Pragma(a) Pragma_(a)
+
+static PetscErrorCode PointwiseJacobianInvert_QPX(PetscInt ne,PetscInt Q,const PetscReal w[Q],PetscScalar dx[3][3][Q][ne],PetscScalar wdxdet[Q][ne])
+{
+  PetscInt i,j,k,e;
+
+  for (i=0; i<Q; i++) {
+    vector4double a[3][3]_align;
+    vector4double b0,b3,b6,det,idet;
+    for (j=0; j<3; j++) {
+      for (k=0; k<3; k++) {
+	a[j][k] = vec_lda(0,dx[j][k][i]);
+      }
+    }
+    b0 = vec_msub (a[1][1],a[2][2],vec_mul(a[2][1],a[1][2]));            // b0 =  (a[1][1][e]*a[2][2][e] - a[2][1][e]*a[1][2][e]);
+    b3 = vec_nmsub(a[1][0],a[2][2],vec_mul(a[2][0],a[1][2]));            // b3 = -(a[1][0][e]*a[2][2][e] - a[2][0][e]*a[1][2][e]);
+    b6 = vec_msub (a[1][0],a[2][1],vec_mul(a[2][0],a[1][1]));            // b6 =  (a[1][0][e]*a[2][1][e] - a[2][0][e]*a[1][1][e]);
+    det = vec_madd(a[0][0],b0,vec_madd(a[0][1],b3,vec_mul(a[0][2],b6))); // det = a[0][0][e]*b0 + a[0][1][e]*b3 + a[0][2][e]*b6;
+    idet = vec_swdiv_nochk(vec_splats(1.),det);                          // idet = 1.0 / det;
+    vec_sta(vec_mul(idet,b0),0,dx[0][0][i]);      // dx[0][0][i][e] =  idet*b0;
+    vec_sta(vec_mul(idet,vec_nmsub(a[0][1],a[2][2],vec_mul(a[2][1],a[0][2]))),0,dx[0][1][i]); // dx[0][1][i][e] = -idet*(a[0][1][e]*a[2][2][e] - a[2][1][e]*a[0][2][e]);
+    vec_sta(vec_mul(idet,vec_msub (a[0][1],a[1][2],vec_mul(a[1][1],a[0][2]))),0,dx[0][2][i]); // dx[0][2][i][e] =  idet*(a[0][1][e]*a[1][2][e] - a[1][1][e]*a[0][2][e]);
+    vec_sta(vec_mul(idet,b3),0,dx[1][0][i]);      // dx[1][0][i][e] =  idet*b3;
+    vec_sta(vec_mul(idet,vec_msub (a[0][0],a[2][2],vec_mul(a[2][0],a[0][2]))),0,dx[1][1][i]); // dx[1][1][i][e] =  idet*(a[0][0][e]*a[2][2][e] - a[2][0][e]*a[0][2][e]);
+    vec_sta(vec_mul(idet,vec_nmsub(a[0][0],a[1][2],vec_mul(a[1][0],a[0][2]))),0,dx[1][2][i]); // dx[1][2][i][e] = -idet*(a[0][0][e]*a[1][2][e] - a[1][0][e]*a[0][2][e]);
+    vec_sta(vec_mul(idet,b6),0,dx[2][0][i]);      // dx[2][0][i][e] =  idet*b6;
+    vec_sta(vec_mul(idet,vec_nmsub(a[0][0],a[2][1],vec_mul(a[2][0],a[0][1]))),0,dx[2][1][i]); // dx[2][1][i][e] = -idet*(a[0][0][e]*a[2][1][e] - a[2][0][e]*a[0][1][e]);
+    vec_sta(vec_mul(idet,vec_msub (a[0][0],a[1][1],vec_mul(a[1][0],a[0][1]))),0,dx[2][2][i]); // dx[2][2][i][e] =  idet*(a[0][0][e]*a[1][1][e] - a[1][0][e]*a[0][1][e]);
+    vec_sta(vec_mul(det,vec_splats(w[i])),0,wdxdet[i]); // wdxdet[i][e] =  det*w[i];
+  }
+  PetscLogFlops(Q*ne*(14 + 1/* division */ + 27 + 1));
+  return 0;
+}
 
 static inline PetscErrorCode OpPointwiseElement_PoissonN_QPX(Op op,PetscInt ne,PetscInt Q3,PetscScalar dx[3][3][Q3][NE],PetscReal wdxdet[Q3][NE],PetscScalar du[3][1][Q3][NE],PetscScalar dv[3][1][Q3][NE]) {
   Pragma(unroll(3))
@@ -77,7 +108,7 @@ static PetscErrorCode OpApply_Poisson(Op op,DM dm,Vec U,Vec V,
     ierr = TensorContract(Tensor3,D,B,B,TENSOR_EVAL,xe,dx[0][0][0]);CHKERRQ(ierr);
     ierr = TensorContract(Tensor3,B,D,B,TENSOR_EVAL,xe,dx[1][0][0]);CHKERRQ(ierr);
     ierr = TensorContract(Tensor3,B,B,D,TENSOR_EVAL,xe,dx[2][0][0]);CHKERRQ(ierr);
-    ierr = PointwiseJacobianInvert(NE,Q*Q*Q,w3,dx,wdxdet);CHKERRQ(ierr);
+    ierr = PointwiseJacobianInvert_QPX(NE,Q*Q*Q,w3,dx,wdxdet);CHKERRQ(ierr);
     ierr = DMFEExtractElements(dm,u,e,NE,ue);CHKERRQ(ierr);
     ierr = PetscMemzero(du,sizeof du);CHKERRQ(ierr);
     ierr = TensorContract(Tensor1,D,B,B,TENSOR_EVAL,ue,du[0][0][0]);CHKERRQ(ierr);
