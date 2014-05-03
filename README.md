@@ -131,6 +131,7 @@ options.  Be sure to pass suitable OpenMP flags, e.g.,
 Using the Cray XC-30 at NERSC, Edison, with 96 core in an interactive shell, HPGMG-FV
 generates the following output:
 
+```
 $ export OMP_NUM_THREADS=8                                                                             
 $ aprun -n 8 -d 12  -N  2  -S 1  -ss  -cc numa_node ./arch-xc30-opt64/bin/hpgmg-fv      7  8           
 Requested MPI_THREAD_FUNNELED, got MPI_THREAD_FUNNELED                                                                              
@@ -295,6 +296,5 @@ Total by level                0.368311     0.089306     0.012201     0.004555   
 Bottom solver iterations            10
 
             Performance      2.781e+08 DOF/s
-
-
+```
 

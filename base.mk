@@ -33,14 +33,14 @@ else				# Show the full command line
   quiet = $($1)
 endif
 
-CONFIG_XLCOMPILER := $(if $(findstring IBM XL,$(shell $(CC) -qversion 2>/dev/null || true)),y,)
+CONFIG_XLCOMPILER := $(if $(findstring IBM XL,$(shell $(HPGMG_CC) -qversion 2>/dev/null || true)),y,)
 
 %.$(AR_LIB_SUFFIX) : | $$(@D)/.DIR
 	$(call quiet,AR) $(AR_FLAGS) $@ $^
 	$(call quiet,RANLIB) $@
 
 # gcc/gfortran style dependency flags; these are set in petscvariables starting with petsc-3.5
-C_DEPFLAGS ?= -MMD -MP
+C_DEPFLAGS ?= $(if $(CONFIG_XLCOMPILER),-qmakedep=gcc,-MMD -MP)
 
 # GCC-style syntax for C99.  Use "make C99FLAGS=-qlanglvl=extc99" or similar
 # on systems that use different syntax to specify C99.
@@ -60,7 +60,7 @@ $(BINDIR)/hpgmg-fe : $(hpgmg-fe-y.o) | $$(@D)/.DIR
 hpgmg-fv = $(BINDIR)/hpgmg-fv
 hpgmg-fv : $(hpgmg-fv)
 hpgmg-fv-y.o := $(call srctoobj,$(hpgmg-fv-y.c))
-$(hpgmg-fv-y.o) : CFLAGS += $(CONFIG_FV_CFLAGS)
+$(hpgmg-fv-y.o) : CPPFLAGS += $(CONFIG_FV_CPPFLAGS)
 $(BINDIR)/hpgmg-fv : $(hpgmg-fv-y.o) | $$(@D)/.DIR
 	$(HPGMG_LINK) $^ $(HPGMG_LDLIBS) $(LDLIBS) -lm
 

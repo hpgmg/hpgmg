@@ -5,3 +5,9 @@ edison-*
 hopper-*
 mira-*
 build*
+*~
+*.pyc
+mpi_profile.*
+hpm_process_summary.*
+hpm_job_summary.*
+gmon.out.*

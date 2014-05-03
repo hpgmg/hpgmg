@@ -38,7 +38,7 @@ int  corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-print_communicator(int printSendRecv, int rank, int level, communicator_type *comm){
+void print_communicator(int printSendRecv, int rank, int level, communicator_type *comm){
   int i;
   printf("rank=%2d level=%d ",rank,level);
   if(printSendRecv & 0x1){
@@ -136,10 +136,12 @@ int create_box(box_type *box, int numVectors, int dim, int ghosts){
   // allocate an array of pointers to vectors...
   box->vectors = (double **)malloc(box->numVectors*sizeof(double*));
                memory_allocated += box->numVectors*sizeof(double*);
+  if((box->numVectors>0)&&(box->vectors==NULL)){printf("malloc failed - create_box/box->vectors\n");fflush(stdout);exit(0);}
   // allocate one aligned, double-precision array and divide it among vectors...
   uint64_t malloc_size = box->volume*box->numVectors*sizeof(double) + BOX_ALIGN_1ST_CELL; // shift pointer by up to 1 TLB page...
   box->vectors_base = (double*)malloc(malloc_size);
                   memory_allocated += malloc_size;
+  if((box->numVectors>0)&&(box->vectors_base==NULL)){printf("malloc failed - create_box/box->vectors_base\n");fflush(stdout);exit(0);}
   double * tmpbuf = box->vectors_base;
   while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (BOX_ALIGN_1ST_CELL-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
   memset(tmpbuf,0,box->volume*box->numVectors*sizeof(double)); // zero to avoid 0.0*NaN or 0.0*Inf
@@ -159,9 +161,11 @@ void add_vectors_to_box(box_type *box, int numAdditionalVectors){
   double ** old_v = box->vectors;									// save a pointer to the old array of pointers...
   box->numVectors+=numAdditionalVectors;								//
   box->vectors = (double **)malloc(box->numVectors*sizeof(double*));				// new array of pointers vectors
+  if((box->numVectors>0)&&(box->vectors==NULL)){printf("malloc failed - add_vectors_to_box/box->vectors\n");fflush(stdout);exit(0);}
   // NOTE !!! realloc() cannot guarantee the same alignment... malloc, allign, copy...
   uint64_t malloc_size = box->volume*box->numVectors*sizeof(double) + BOX_ALIGN_1ST_CELL; // shift pointer by up to 1 TLB page...
   box->vectors_base = (double*)malloc(malloc_size);
+  if((box->numVectors>0)&&(box->vectors_base==NULL)){printf("malloc failed - add_vectors_to_box/box->vectors_base\n");fflush(stdout);exit(0);}
   double * tmpbuf = box->vectors_base;
   while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (BOX_ALIGN_1ST_CELL-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
   memset(tmpbuf,0,box->volume*box->numVectors*sizeof(double));	// zero to avoid 0.0*NaN or 0.0*Inf
@@ -348,6 +352,10 @@ void build_exchange_ghosts(level_type *level, int justFaces){
   // traverse my list of boxes and create a lists of neighboring boxes and neighboring ranks
   GZ_type *ghostsToSend = (GZ_type*)malloc(26*level->num_my_boxes*sizeof(GZ_type)); // There are at most 26 neighbors per box.
          int *sendRanks = (    int*)malloc(26*level->num_my_boxes*sizeof(    int)); // There are at most 26 neighbors per box.
+  if(level->num_my_boxes>0){
+  if(ghostsToSend == NULL){printf("malloc failed - build_exchange_ghosts/ghostsToSend\n");fflush(stdout);exit(0);}
+  if(sendRanks    == NULL){printf("malloc failed - build_exchange_ghosts/sendRanks   \n");fflush(stdout);exit(0);}
+  }
   numGhosts       = 0;
   numGhostsRemote = 0;
   for(sendBox=0;sendBox<level->num_my_boxes;sendBox++){
@@ -393,6 +401,11 @@ void build_exchange_ghosts(level_type *level, int justFaces){
   level->exchange_ghosts[justFaces].send_ranks    =     (int*)malloc(numSendRanks*sizeof(int));
   level->exchange_ghosts[justFaces].send_sizes    =     (int*)malloc(numSendRanks*sizeof(int));
   level->exchange_ghosts[justFaces].send_buffers  = (double**)malloc(numSendRanks*sizeof(double*));
+  if(numSendRanks>0){
+  if(level->exchange_ghosts[justFaces].send_ranks  ==NULL){printf("malloc failed - exchange_ghosts[%d].send_ranks\n",justFaces);fflush(stdout);exit(0);}
+  if(level->exchange_ghosts[justFaces].send_sizes  ==NULL){printf("malloc failed - exchange_ghosts[%d].send_sizes\n",justFaces);fflush(stdout);exit(0);}
+  if(level->exchange_ghosts[justFaces].send_buffers==NULL){printf("malloc failed - exchange_ghosts[%d].send_buffers\n",justFaces);fflush(stdout);exit(0);}
+  }
   level->exchange_ghosts[justFaces].blocks[0] = NULL;
   level->exchange_ghosts[justFaces].blocks[1] = NULL;
   level->exchange_ghosts[justFaces].num_blocks[0] = 0;
@@ -406,6 +419,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
     for(neighbor=0;neighbor<numSendRanks;neighbor++){
       if(stage==1){
              level->exchange_ghosts[justFaces].send_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[justFaces].send_sizes[neighbor]*sizeof(double));
+          if(level->exchange_ghosts[justFaces].send_buffers[neighbor]==NULL){printf("malloc failed - exchange_ghosts[%d].send_buffers[neighbor]\n",justFaces);fflush(stdout);exit(0);}
       memset(level->exchange_ghosts[justFaces].send_buffers[neighbor],                0,level->exchange_ghosts[justFaces].send_sizes[neighbor]*sizeof(double));
       }
       level->exchange_ghosts[justFaces].send_ranks[neighbor]=sendRanks[neighbor];
@@ -506,6 +520,10 @@ void build_exchange_ghosts(level_type *level, int justFaces){
   // traverse my list of boxes and create a lists of neighboring boxes and neighboring ranks
   GZ_type *ghostsToRecv = (GZ_type*)malloc(26*level->num_my_boxes*sizeof(GZ_type)); // There are at most 26 neighbors per box.
          int *recvRanks = (    int*)malloc(26*level->num_my_boxes*sizeof(    int)); // There are at most 26 neighbors per box.
+  if(level->num_my_boxes>0){
+  if(ghostsToRecv == NULL){printf("malloc failed - build_exchange_ghosts/ghostsToRecv\n");fflush(stdout);exit(0);}
+  if(recvRanks    == NULL){printf("malloc failed - build_exchange_ghosts/recvRanks   \n");fflush(stdout);exit(0);}
+  }
   numGhosts       = 0;
   numGhostsRemote = 0;
   for(recvBox=0;recvBox<level->num_my_boxes;recvBox++){
@@ -548,6 +566,11 @@ void build_exchange_ghosts(level_type *level, int justFaces){
   level->exchange_ghosts[justFaces].recv_ranks    =     (int*)malloc(numRecvRanks*sizeof(int));
   level->exchange_ghosts[justFaces].recv_sizes    =     (int*)malloc(numRecvRanks*sizeof(int));
   level->exchange_ghosts[justFaces].recv_buffers  = (double**)malloc(numRecvRanks*sizeof(double*));
+  if(numRecvRanks>0){
+  if(level->exchange_ghosts[justFaces].recv_ranks  ==NULL){printf("malloc failed - exchange_ghosts[%d].recv_ranks\n",justFaces);fflush(stdout);exit(0);}
+  if(level->exchange_ghosts[justFaces].recv_sizes  ==NULL){printf("malloc failed - exchange_ghosts[%d].recv_sizes\n",justFaces);fflush(stdout);exit(0);}
+  if(level->exchange_ghosts[justFaces].recv_buffers==NULL){printf("malloc failed - exchange_ghosts[%d].recv_buffers\n",justFaces);fflush(stdout);exit(0);}
+  }
   level->exchange_ghosts[justFaces].blocks[2] = NULL;
   level->exchange_ghosts[justFaces].num_blocks[2] = 0;
   level->exchange_ghosts[justFaces].allocated_blocks[2] = 0;
@@ -558,6 +581,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
     for(neighbor=0;neighbor<numRecvRanks;neighbor++){
       if(stage==1){
              level->exchange_ghosts[justFaces].recv_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[justFaces].recv_sizes[neighbor]*sizeof(double));
+          if(level->exchange_ghosts[justFaces].recv_buffers[neighbor]==NULL){printf("malloc failed - exchange_ghosts[%d].recv_buffers[neighbor]\n",justFaces);fflush(stdout);exit(0);}
       memset(level->exchange_ghosts[justFaces].recv_buffers[neighbor],                0,level->exchange_ghosts[justFaces].recv_sizes[neighbor]*sizeof(double));
       }
       level->exchange_ghosts[justFaces].recv_ranks[neighbor]=recvRanks[neighbor];
@@ -627,6 +651,10 @@ void build_exchange_ghosts(level_type *level, int justFaces){
   #ifdef USE_MPI
   level->exchange_ghosts[justFaces].requests = (MPI_Request*)malloc((level->exchange_ghosts[justFaces].num_sends+level->exchange_ghosts[justFaces].num_recvs)*sizeof(MPI_Request));
   level->exchange_ghosts[justFaces].status   = (MPI_Status *)malloc((level->exchange_ghosts[justFaces].num_sends+level->exchange_ghosts[justFaces].num_recvs)*sizeof(MPI_Status ));
+  if((level->exchange_ghosts[justFaces].num_sends+level->exchange_ghosts[justFaces].num_recvs)>0){
+  if(level->exchange_ghosts[justFaces].requests==NULL){printf("malloc failed - exchange_ghosts[%d].requests\n",justFaces);fflush(stdout);exit(0);}
+  if(level->exchange_ghosts[justFaces].status  ==NULL){printf("malloc failed - exchange_ghosts[%d].status\n",justFaces);fflush(stdout);exit(0);}
+  }
   #endif
 
 
@@ -679,7 +707,8 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   //level->concurrent_boxes = omp_threads;
 
   // allocate 3D array of integers to hold the MPI rank of the corresponding box
-  level->rank_of_box = (int*)malloc(level->boxes_in.i*level->boxes_in.j*level->boxes_in.k*sizeof(int));
+     level->rank_of_box = (int*)malloc(level->boxes_in.i*level->boxes_in.j*level->boxes_in.k*sizeof(int));
+  if(level->rank_of_box==NULL){printf("malloc of level->rank_of_box failed\n");fflush(stdout);exit(0);}
   level->memory_allocated +=       (level->boxes_in.i*level->boxes_in.j*level->boxes_in.k*sizeof(int));
   for(box=0;box<level->boxes_in.i*level->boxes_in.j*level->boxes_in.k;box++){level->rank_of_box[box]=-1;}  // -1 denotes that there is no actual box assigned to this region
 
