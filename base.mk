@@ -49,7 +49,7 @@ C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(HPGMG_CFLAGS) $(CFLAGS)),,$(if 
 HPGMG_COMPILE.c = $(call quiet,CC) -c $(C99FLAGS) $(HPGMG_CPPFLAGS) $(CPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
 HPGMG_LINK = $(call quiet,CCLD) $(HPGMG_CFLAGS) $(CFLAGS) $(HPGMG_LDFLAGS) $(LDFLAGS) -o $@
 CC = $(HPGMG_CC)
-CCLD = $(if $(CLINKER),$(CLINKER),$(HPGMG_CC))
+CCLD = $(if $(PCC_LINKER),$(PCC_LINKER),$(HPGMG_CC))
 
 hpgmg-fe = $(BINDIR)/hpgmg-fe
 hpgmg-fe : $(hpgmg-fe)
