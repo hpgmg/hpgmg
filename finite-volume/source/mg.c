@@ -711,6 +711,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   
   // build the list of levels...
   all_grids->levels = (level_type**)malloc(maxLevels*sizeof(level_type*));
+  if(all_grids->levels == NULL){printf("malloc failed - MGBuild/all_grids->levels\n");fflush(stdout);exit(0);}
   all_grids->levels[0] = fine_grid;
 
   all_grids->num_levels=1;
@@ -743,6 +744,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
 
     if(doRestrict){
       all_grids->levels[level] = (level_type*)malloc(sizeof(level_type));
+      if(all_grids->levels[level] == NULL){printf("malloc failed - MGBuild/doRestrict\n");fflush(stdout);exit(0);}
       int numRanks = all_grids->levels[level-1]->num_ranks;  
       // FIX... Consider using << numRanks as you descend
       create_level(all_grids->levels[level],boxes_in_i,box_dim,box_ghosts,box_vectors,all_grids->levels[level-1]->domain_boundary_condition,all_grids->levels[level-1]->my_rank,numRanks);
@@ -777,7 +779,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     all_grids->levels[level]->active=0;
     int ll;for(ll=level;ll<all_grids->num_levels;ll++)if(all_grids->levels[ll]->num_my_boxes>0)all_grids->levels[level]->active=1;
     if(all_grids->levels[level]->active)MPI_Comm_split(MPI_COMM_WORLD,0                                  ,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL);
-                                   else MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->my_rank+1,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL);
+                                   else MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->my_rank+1,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL); // = MPI_COMM_SELF
     if(all_grids->my_rank==0){printf("done\n");fflush(stdout);}
   }
   #endif

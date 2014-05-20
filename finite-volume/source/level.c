@@ -291,6 +291,7 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
     if(*num_blocks >= *allocated_blocks){
       *allocated_blocks = *allocated_blocks + 100;
       *blocks = (blockCopy_type *)realloc((void*)(*blocks),(*allocated_blocks)*sizeof(blockCopy_type));
+      if(*blocks == NULL){printf("realloc failed - append_block_to_list\n");fflush(stdout);exit(0);}
     }
     (*blocks)[*num_blocks].dim.i         = dim_i;
     (*blocks)[*num_blocks].dim.j         = dim_j_mod;
@@ -419,6 +420,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
     for(neighbor=0;neighbor<numSendRanks;neighbor++){
       if(stage==1){
              level->exchange_ghosts[justFaces].send_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[justFaces].send_sizes[neighbor]*sizeof(double));
+          if(level->exchange_ghosts[justFaces].send_sizes[neighbor]>0)
           if(level->exchange_ghosts[justFaces].send_buffers[neighbor]==NULL){printf("malloc failed - exchange_ghosts[%d].send_buffers[neighbor]\n",justFaces);fflush(stdout);exit(0);}
       memset(level->exchange_ghosts[justFaces].send_buffers[neighbor],                0,level->exchange_ghosts[justFaces].send_sizes[neighbor]*sizeof(double));
       }
@@ -581,6 +583,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
     for(neighbor=0;neighbor<numRecvRanks;neighbor++){
       if(stage==1){
              level->exchange_ghosts[justFaces].recv_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[justFaces].recv_sizes[neighbor]*sizeof(double));
+          if(level->exchange_ghosts[justFaces].recv_sizes[neighbor]>0)
           if(level->exchange_ghosts[justFaces].recv_buffers[neighbor]==NULL){printf("malloc failed - exchange_ghosts[%d].recv_buffers[neighbor]\n",justFaces);fflush(stdout);exit(0);}
       memset(level->exchange_ghosts[justFaces].recv_buffers[neighbor],                0,level->exchange_ghosts[justFaces].recv_sizes[neighbor]*sizeof(double));
       }
@@ -721,6 +724,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->num_my_boxes=0;
   for(box=0;box<level->boxes_in.i*level->boxes_in.j*level->boxes_in.k;box++){if(level->rank_of_box[box]==level->my_rank)level->num_my_boxes++;} 
   level->my_boxes = (box_type*)malloc(level->num_my_boxes*sizeof(box_type));
+  if((level->num_my_boxes>0)&&(level->my_boxes==NULL)){printf("malloc failed - create_level/level->my_boxes\n");fflush(stdout);exit(0);}
   box=0;
   int i,j,k;
   for(k=0;k<level->boxes_in.k;k++){
