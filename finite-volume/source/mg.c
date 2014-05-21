@@ -10,7 +10,6 @@
 #include <math.h>
 #include <unistd.h>
 //------------------------------------------------------------------------------------------------------------------------------
-//#include <hpgmgconf.h>
 #ifdef USE_MPI
 #include <mpi.h>
 #endif
@@ -22,16 +21,6 @@
 #include "operators.h"
 #include "solvers.h"
 #include "mg.h"
-//------------------------------------------------------------------------------------------------------------------------------
-#ifndef MG_BOX_DIM_THRESHOLD
-#define MG_BOX_DIM_THRESHOLD     4
-#endif
-#ifndef MG_DOMAIN_DIM_THRESHOLD
-#define MG_DOMAIN_DIM_THRESHOLD 13
-#endif
-#ifndef DEFAULT_BOTTOM_NORM
-#define DEFAULT_BOTTOM_NORM  1e-3
-#endif
 //------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
   int sendRank;
@@ -726,17 +715,16 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     int boxes_in_i = -1;
     int box_ghosts      = all_grids->levels[level-1]->box_ghosts;
     int box_vectors     = all_grids->levels[level-1]->box_vectors;
-//  if( (fine_domain_dim % 2 == 0) && (fine_domain_dim/2 <= MG_DOMAIN_DIM_THRESHOLD) ){box_dim=fine_domain_dim/2;boxes_in_i=1;                doRestrict=1;}else // FIX... agglomerate everything !!!
-    if( (fine_box_dim    % 2 == 0) && (fine_box_dim > MG_BOX_DIM_THRESHOLD)          ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;   doRestrict=1;}else
+    if( (fine_box_dim    % 2 == 0) && (fine_box_dim > MG_AGGLOMERATION_START)           ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;   doRestrict=1;}else // local restriction
     #ifndef USE_UCYCLES
-    if(                               (fine_boxes_in_i %  2 == 0)                    ){box_dim=   fine_box_dim;  boxes_in_i=fine_boxes_in_i/2; doRestrict=1;}else //    8-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  3 == 0)                    ){box_dim= 3*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/3; doRestrict=1;}else //   27-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  5 == 0)                    ){box_dim= 5*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/5; doRestrict=1;}else //  125-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  7 == 0)                    ){box_dim= 7*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/7; doRestrict=1;}else //  343-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i % 11 == 0)                    ){box_dim=11*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/11;doRestrict=1;}else // 1331-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i % 13 == 0)                    ){box_dim=13*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/13;doRestrict=1;}else // 2197-way gather
+    if(                               (fine_boxes_in_i %  2 == 0) && (MG_MAX_FANIN>= 2) ){box_dim=   fine_box_dim;  boxes_in_i=fine_boxes_in_i/2; doRestrict=1;}else //    8-way gather
+    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  3 == 0) && (MG_MAX_FANIN>= 3) ){box_dim= 3*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/3; doRestrict=1;}else //   27-way gather
+    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  5 == 0) && (MG_MAX_FANIN>= 5) ){box_dim= 5*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/5; doRestrict=1;}else //  125-way gather
+    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  7 == 0) && (MG_MAX_FANIN>= 7) ){box_dim= 7*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/7; doRestrict=1;}else //  343-way gather
+    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i % 11 == 0) && (MG_MAX_FANIN>=11) ){box_dim=11*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/11;doRestrict=1;}else // 1331-way gather
+    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i % 13 == 0) && (MG_MAX_FANIN>=13) ){box_dim=13*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/13;doRestrict=1;}else // 2197-way gather
     #endif
-    if( (fine_box_dim    % 2 == 0)                                                   ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;  doRestrict=1;}
+    if( (fine_box_dim    % 2 == 0)                                                      ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;  doRestrict=1;}
 
     if( level >= maxLevels)doRestrict=0;
     if( box_dim < box_ghosts)doRestrict=0; // wont't be able to gather all ghost zone data from immediate neighbors
@@ -809,7 +797,7 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
   // bottom solve...
   if(level==all_grids->num_levels-1){
     uint64_t _timeBottomStart = CycleTime();
-    IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,DEFAULT_BOTTOM_NORM);
+    IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,MG_DEFAULT_BOTTOM_NORM);
     all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_timeBottomStart);
     return;
   }
@@ -929,7 +917,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
     uint64_t _timeBottomStart = CycleTime();
     level = all_grids->num_levels-1;
     if(level>0)zero_vector(all_grids->levels[level],e_id);//else use whatever was the initial guess
-    IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,DEFAULT_BOTTOM_NORM);  // -1 == exact solution
+    IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,MG_DEFAULT_BOTTOM_NORM);  // -1 == exact solution
     all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_timeBottomStart);
 
 

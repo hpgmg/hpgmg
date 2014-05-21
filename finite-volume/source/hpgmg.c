@@ -33,7 +33,6 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
-//#include <hpgmgconf.h>
 #include <omp.h>
 #ifdef USE_MPI
 #include <mpi.h>
