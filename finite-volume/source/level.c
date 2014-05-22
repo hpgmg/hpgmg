@@ -812,14 +812,17 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   double time_start = MPI_Wtime();
   MPI_Comm_dup(MPI_COMM_WORLD,&level->MPI_COMM_LEVEL);
   double time_end = MPI_Wtime();
-  if(MPI_Rank==0){printf("done (%0.6f seconds)\n",time_end-time_start);fflush(stdout);}
+  double time_in_comm_dup = 0;
+  double time_in_comm_dup_send = time_end-time_start;
+  MPI_Allreduce(&time_in_comm_dup_send,&time_in_comm_dup,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
+  if(MPI_Rank==0){printf("done (%0.6f seconds)\n",time_in_comm_dup);fflush(stdout);}
   #endif
     
   // report on potential load imbalance
   uint64_t BoxesPerProcess = level->num_my_boxes;
   #ifdef USE_MPI
-  uint64_t send = level->num_my_boxes;
-  MPI_Allreduce(&send,&BoxesPerProcess,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
+  uint64_t BoxesPerProcessSend = level->num_my_boxes;
+  MPI_Allreduce(&BoxesPerProcessSend,&BoxesPerProcess,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
   #endif
   if(MPI_Rank==0){printf("  Calculating boxes per process... target=%0.3f, max=%ld\n\n",(double)TotalBoxes/(double)MPI_Tasks,BoxesPerProcess);fflush(stdout);}
 }

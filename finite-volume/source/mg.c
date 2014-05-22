@@ -771,7 +771,10 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if(all_grids->levels[level]->active)MPI_Comm_split(MPI_COMM_WORLD,0                                  ,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL);
                                    else MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->my_rank+1,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL); // = MPI_COMM_SELF
     double comm_split_end = MPI_Wtime();
-    if(all_grids->my_rank==0){printf("done (%0.6f seconds)\n",(comm_split_end-comm_split_start));fflush(stdout);}
+    double comm_split_time_send = comm_split_end-comm_split_start;
+    double comm_split_time = 0;
+    MPI_Allreduce(&comm_split_time_send,&comm_split_time,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
+    if(all_grids->my_rank==0){printf("done (%0.6f seconds)\n",comm_split_time);fflush(stdout);}
   }
   if(all_grids->my_rank==0){printf("\n");}
   #endif
