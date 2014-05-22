@@ -124,8 +124,8 @@ int main(int argc, char **argv){
     exit(0);
   }
 
-  if(MPI_Rank==0)if(OMP_Nested)printf("%d MPI Tasks of %d threads (OMP_NESTED=TRUE)\n" ,MPI_Tasks,OMP_Threads);
-                          else printf("%d MPI Tasks of %d threads (OMP_NESTED=FALSE)\n",MPI_Tasks,OMP_Threads);
+  if(MPI_Rank==0)if(OMP_Nested)printf("%d MPI Tasks of %d threads (OMP_NESTED=TRUE)\n\n" ,MPI_Tasks,OMP_Threads);
+                          else printf("%d MPI Tasks of %d threads (OMP_NESTED=FALSE)\n\n",MPI_Tasks,OMP_Threads);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   // calculate the problem size...
   int box_dim=1<<log2_box_dim;

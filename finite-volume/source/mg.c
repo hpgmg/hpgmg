@@ -762,14 +762,18 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   // build subcommunicators...
   #ifdef USE_MPI
   #ifdef USE_SUBCOMM
+  if(all_grids->my_rank==0){printf("Building MPI subcommunicators...\n");fflush(stdout);}
   for(level=1;level<all_grids->num_levels;level++){
-    if(all_grids->my_rank==0){printf("  Building MPI subcommunicator for level %d...",level);fflush(stdout);}
+    double comm_split_start = MPI_Wtime();
+    if(all_grids->my_rank==0){printf("  level %d...",level);fflush(stdout);}
     all_grids->levels[level]->active=0;
     int ll;for(ll=level;ll<all_grids->num_levels;ll++)if(all_grids->levels[ll]->num_my_boxes>0)all_grids->levels[level]->active=1;
     if(all_grids->levels[level]->active)MPI_Comm_split(MPI_COMM_WORLD,0                                  ,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL);
                                    else MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->my_rank+1,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL); // = MPI_COMM_SELF
-    if(all_grids->my_rank==0){printf("done\n");fflush(stdout);}
+    double comm_split_end = MPI_Wtime();
+    if(all_grids->my_rank==0){printf("done (%0.6f seconds)\n",(comm_split_end-comm_split_start));fflush(stdout);}
   }
+  if(all_grids->my_rank==0){printf("\n");}
   #endif
   #endif
 
@@ -778,6 +782,8 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   for(level=1;level<all_grids->num_levels;level++){
     rebuild_operator(all_grids->levels[level],(level>0)?all_grids->levels[level-1]:NULL,a,b);
   }
+  if(all_grids->my_rank==0){printf("\n");}
+
 
   // used for quick test for poisson
   for(level=0;level<all_grids->num_levels;level++){

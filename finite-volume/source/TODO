@@ -1,4 +1,3 @@
-- tests for malloc/realloc failure
 - more efficient ghost zone exchange (box intersection algebra) when communicating edges and corners
 - #define'd box/block list, box/block element iterators that allow easy replacement of omp with ???
 - communication-avoiding smoothers (wavefront, simdized)

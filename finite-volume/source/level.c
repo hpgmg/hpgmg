@@ -673,7 +673,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   int TotalBoxes = boxes_in_i*boxes_in_i*boxes_in_i;
 
   //if(MPI_Rank==0){printf("attempting to create a %5d^3 level using a %3d^3 grid of %3d^3 boxes with a target of %6.3f boxes per process...\n",box_dim*boxes_in_i,boxes_in_i,box_dim,(double)TotalBoxes/(double)MPI_Tasks);fflush(stdout);}
-  if(MPI_Rank==0){printf("\nattempting to create a %5d^3 level using a %3d^3 grid of %3d^3 boxes...\n",box_dim*boxes_in_i,boxes_in_i,box_dim);fflush(stdout);}
+  if(MPI_Rank==0){printf("attempting to create a %5d^3 level using a %3d^3 grid of %3d^3 boxes...\n",box_dim*boxes_in_i,boxes_in_i,box_dim);fflush(stdout);}
 
   int omp_threads = 1;
   int omp_nested  = 0;
@@ -808,7 +808,11 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
   // duplicate MPI_COMM_WORLD to be the communicator for each level
   #ifdef USE_MPI
+  if(MPI_Rank==0){printf("  Duplicating MPI_COMM_WORLD...");fflush(stdout);}
+  double time_start = MPI_Wtime();
   MPI_Comm_dup(MPI_COMM_WORLD,&level->MPI_COMM_LEVEL);
+  double time_end = MPI_Wtime();
+  if(MPI_Rank==0){printf("done (%0.6f seconds)\n",time_end-time_start);fflush(stdout);}
   #endif
     
   // report on potential load imbalance
@@ -817,7 +821,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   uint64_t send = level->num_my_boxes;
   MPI_Allreduce(&send,&BoxesPerProcess,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
   #endif
-  if(MPI_Rank==0){printf("  calculating boxes per process... target=%0.3f, max=%ld\n",(double)TotalBoxes/(double)MPI_Tasks,BoxesPerProcess);fflush(stdout);}
+  if(MPI_Rank==0){printf("  Calculating boxes per process... target=%0.3f, max=%ld\n\n",(double)TotalBoxes/(double)MPI_Tasks,BoxesPerProcess);fflush(stdout);}
 }
 
 

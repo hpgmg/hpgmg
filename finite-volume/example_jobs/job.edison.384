@@ -25,3 +25,11 @@ aprun -n    64  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
 aprun -n   128  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
 aprun -n   256  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
 aprun -n   384  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  6  1
+
+aprun -n     1  -d 12  -N  1  -S 1  -ss  -cc numa_node ./run.edison.fmg  5  1
+aprun -n     8  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  5  1
+aprun -n    32  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  5  1
+aprun -n    64  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  5  1
+aprun -n   128  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  5  1
+aprun -n   256  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  5  1
+aprun -n   384  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  5  1

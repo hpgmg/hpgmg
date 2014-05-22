@@ -138,8 +138,6 @@ typedef struct {
   int Krylov_iterations;        // total number of bottom solver iterations
   int CAKrylov_formations_of_G; // i.e. [G,g] = [P,R]^T[P,R,rt]
   int vcycles_from_this_level;  // number of vcycles performed that were initiated from this level
-
-
 } level_type;
 
 
