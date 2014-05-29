@@ -13,10 +13,7 @@
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
 #ifndef MG_AGGLOMERATION_START
-#define MG_AGGLOMERATION_START  4 // i.e. start the distributed v-cycle when boxes are smaller than 4^3
-#endif
-#ifndef MG_MAX_FANIN
-#define MG_MAX_FANIN 5 // allow up to a 5^3 = 125:1 agglomeration 
+#define MG_AGGLOMERATION_START  8 // i.e. start the distributed v-cycle when boxes are smaller than 8^3
 #endif
 #ifndef MG_DEFAULT_BOTTOM_NORM
 #define MG_DEFAULT_BOTTOM_NORM  1e-3

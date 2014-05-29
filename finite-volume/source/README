@@ -81,7 +81,6 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 -DSTENCIL_FUSE_DINV		// recompute the inverse of the diagonal on the fly (more flops including a divide, but eliminates an array)
 -DSTENCIL_FUSE_BC  		// fuse the boundary conditions on the fly (more flops, but eliminates a difficult to efficiently thread traversal over the surface)
 
--DMG_MAX_FANIN=#		// controls the maximum fan-in in the MG agglomeration tree.  MG_MAX_FANIN=5 restricts agglomeration to 125:1
 -DMG_AGGLOMERATION_START=#	// controls the point at which agglomeration (the distribute v-cycle) is initiated.  MG_AGGLOMERATION_START=4 initiates agglomeration when the local box dimension falls below 4^3 cells
 
 

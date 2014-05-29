@@ -10,6 +10,7 @@ set -x
 cd $PBS_O_WORKDIR
 
 export OMP_NUM_THREADS=12
+export OMP_NESTED=true
 aprun -n  10752  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
 aprun -n  10648  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1
 aprun -n   9344  -d 12  -N  2  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  1

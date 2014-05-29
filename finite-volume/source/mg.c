@@ -681,65 +681,131 @@ void build_restriction(mg_type *all_grids){
 
 //------------------------------------------------------------------------------------------------------------------------------
 void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int minCoarseGridDim){
-  int maxLevels=1000;
+  int  maxLevels=100;
+  int     nProcs[100];
+  int      dim_i[100];
+  int boxes_in_i[100];
+  int    box_dim[100];
+  int box_ghosts[100];
   all_grids->my_rank = fine_grid->my_rank;
   all_grids->cycles.MGBuild = 0;
   uint64_t _timeStartMGBuild = CycleTime();
 
   // calculate how deep we can make the v-cycle...
   int level=1;
-                          int min_dim = fine_grid->dim.i;
-//if(fine_grid->dim.j<min_dim)min_dim = fine_grid->dim.j;
-//if(fine_grid->dim.k<min_dim)min_dim = fine_grid->dim.k;
-  while( (min_dim>=2*minCoarseGridDim) && ((min_dim&0x1)==0) ){ // grid dimension is even and big enough...
+                             int coarse_dim = fine_grid->dim.i;
+//if(fine_grid->dim.j<coarse_dim)coarse_dim = fine_grid->dim.j;
+//if(fine_grid->dim.k<coarse_dim)coarse_dim = fine_grid->dim.k;
+  while( (coarse_dim>=2*minCoarseGridDim) && ((coarse_dim&0x1)==0) ){ // grid dimension is even and big enough...
     level++;
-    min_dim = min_dim / 2;
-  }
-  if(level<maxLevels)maxLevels=level;
+    coarse_dim = coarse_dim / 2;
+  }if(level<maxLevels)maxLevels=level;
 
-  
+      nProcs[0] = fine_grid->num_ranks;
+       dim_i[0] = fine_grid->dim.i;
+  boxes_in_i[0] = fine_grid->boxes_in.i;
+     box_dim[0] = fine_grid->box_dim;
+  box_ghosts[0] = fine_grid->box_ghosts;
+
   // build the list of levels...
   all_grids->levels = (level_type**)malloc(maxLevels*sizeof(level_type*));
   if(all_grids->levels == NULL){printf("malloc failed - MGBuild/all_grids->levels\n");fflush(stdout);exit(0);}
+  all_grids->num_levels=1;
   all_grids->levels[0] = fine_grid;
 
-  all_grids->num_levels=1;
+
+  // build a table to guide the construction of the v-cycle...
   int doRestrict=1;if(maxLevels<2)doRestrict=0; // i.e. can't restrict if there is only one level !!!
+  #ifdef USE_UCYCLES
   while(doRestrict){
-    int level = all_grids->num_levels;
+    level = all_grids->num_levels;
     doRestrict=0;
-    int fine_box_dim    = all_grids->levels[level-1]->box_dim;
-    int fine_boxes_in_i = all_grids->levels[level-1]->boxes_in.i;
-    int fine_domain_dim = fine_box_dim*fine_boxes_in_i;
-    int box_dim    = -1;
-    int boxes_in_i = -1;
-    int box_ghosts      = all_grids->levels[level-1]->box_ghosts;
-    int box_vectors     = all_grids->levels[level-1]->box_vectors;
-    if( (fine_box_dim    % 2 == 0) && (fine_box_dim > MG_AGGLOMERATION_START)           ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;   doRestrict=1;}else // local restriction
-    #ifndef USE_UCYCLES
-    if(                               (fine_boxes_in_i %  2 == 0) && (MG_MAX_FANIN>= 2) ){box_dim=   fine_box_dim;  boxes_in_i=fine_boxes_in_i/2; doRestrict=1;}else //    8-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  3 == 0) && (MG_MAX_FANIN>= 3) ){box_dim= 3*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/3; doRestrict=1;}else //   27-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  5 == 0) && (MG_MAX_FANIN>= 5) ){box_dim= 5*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/5; doRestrict=1;}else //  125-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i %  7 == 0) && (MG_MAX_FANIN>= 7) ){box_dim= 7*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/7; doRestrict=1;}else //  343-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i % 11 == 0) && (MG_MAX_FANIN>=11) ){box_dim=11*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/11;doRestrict=1;}else // 1331-way gather
-    if( (fine_box_dim    % 2 == 0) && (fine_boxes_in_i % 13 == 0) && (MG_MAX_FANIN>=13) ){box_dim=13*fine_box_dim/2;boxes_in_i=fine_boxes_in_i/13;doRestrict=1;}else // 2197-way gather
-    #endif
-    if( (fine_box_dim    % 2 == 0)                                                      ){box_dim=   fine_box_dim/2;boxes_in_i=fine_boxes_in_i;  doRestrict=1;}
-
-    if( level >= maxLevels)doRestrict=0;
-    if( box_dim < box_ghosts)doRestrict=0; // wont't be able to gather all ghost zone data from immediate neighbors
-//  if( box_dim <          4)doRestrict=0; // wont't be able to do 4th order BC's
-
-    if(doRestrict){
-      all_grids->levels[level] = (level_type*)malloc(sizeof(level_type));
-      if(all_grids->levels[level] == NULL){printf("malloc failed - MGBuild/doRestrict\n");fflush(stdout);exit(0);}
-      int numRanks = all_grids->levels[level-1]->num_ranks;  
-      // FIX... Consider using << numRanks as you descend
-      create_level(all_grids->levels[level],boxes_in_i,box_dim,box_ghosts,box_vectors,all_grids->levels[level-1]->domain_boundary_condition,all_grids->levels[level-1]->my_rank,numRanks);
-      all_grids->levels[level]->h = 2.0*all_grids->levels[level-1]->h;
-      all_grids->num_levels++;
+    if( (box_dim[level-1] % 2 == 0) ){
+          nProcs[level] =     nProcs[level-1];
+           dim_i[level] =      dim_i[level-1]/2;
+         box_dim[level] =    box_dim[level-1]/2;
+      boxes_in_i[level] = boxes_in_i[level-1];
+      box_ghosts[level] = box_ghosts[level-1];
+             doRestrict = 1;
     }
+    if(box_dim[level] < box_ghosts[level])doRestrict=0;
+    if(doRestrict)all_grids->num_levels++;
   }
+  #else // TRUE V-Cycle...
+  int FinalAgglomerationRanks = coarse_dim*coarse_dim*coarse_dim;
+  while(doRestrict){
+    level = all_grids->num_levels;
+    doRestrict=0;
+    int fine_box_dim    =    box_dim[level-1];
+    int fine_nProcs     =     nProcs[level-1];
+    int fine_dim_i      =      dim_i[level-1];
+    int fine_boxes_in_i = boxes_in_i[level-1];
+    int stencil_radius  = box_ghosts[level-1]; // FIX tune the number of ghost zones...
+    if( (fine_box_dim % 2 == 0) && (fine_box_dim > MG_AGGLOMERATION_START) ){ // Boxes are too big to agglomerate
+          nProcs[level] = fine_nProcs;
+           dim_i[level] = fine_dim_i/2;
+         box_dim[level] = fine_box_dim/2;
+      boxes_in_i[level] = fine_boxes_in_i;
+      box_ghosts[level] = stencil_radius;
+             doRestrict = 1;
+    }else
+    if( (fine_boxes_in_i % 2 == 0) ){ // 8:1 box agglomeration
+          nProcs[level] = fine_nProcs;
+           dim_i[level] = fine_dim_i/2;
+         box_dim[level] = fine_box_dim;
+      boxes_in_i[level] = fine_boxes_in_i/2;
+      box_ghosts[level] = stencil_radius;
+             doRestrict = 1;
+    }else
+    if( (coarse_dim != 1) && (fine_dim_i == 2*coarse_dim) ){ // agglomerate everything
+          nProcs[level] = 1;
+           dim_i[level] = fine_dim_i/2;
+         box_dim[level] = fine_dim_i/2;
+      boxes_in_i[level] = 1;
+      box_ghosts[level] = stencil_radius;
+             doRestrict = 1;
+    }else
+    if( (coarse_dim != 1) && (fine_dim_i == 4*coarse_dim) ){ // restrict box dimension, and run on fewer ranks
+          nProcs[level] = coarse_dim<fine_nProcs ? coarse_dim : fine_nProcs;
+           dim_i[level] = fine_dim_i/2;
+         box_dim[level] = fine_box_dim/2;
+      boxes_in_i[level] = fine_boxes_in_i;
+      box_ghosts[level] = stencil_radius;
+             doRestrict = 1;
+    }else
+    if( (coarse_dim != 1) && (fine_dim_i == 8*coarse_dim) ){ // restrict box dimension, and run on fewer ranks
+          nProcs[level] = coarse_dim*coarse_dim<fine_nProcs ? coarse_dim*coarse_dim : fine_nProcs;
+           dim_i[level] = fine_dim_i/2;
+         box_dim[level] = fine_box_dim/2;
+      boxes_in_i[level] = fine_boxes_in_i;
+      box_ghosts[level] = stencil_radius;
+             doRestrict = 1;
+    }else
+    if( (fine_box_dim % 2 == 0) ){ // restrict box dimension, and run on the same number of ranks
+          nProcs[level] = fine_nProcs;
+           dim_i[level] = fine_dim_i/2;
+         box_dim[level] = fine_box_dim/2;
+      boxes_in_i[level] = fine_boxes_in_i;
+      box_ghosts[level] = stencil_radius;
+             doRestrict = 1;
+    }
+    if(box_dim[level] < stencil_radius)doRestrict=0;
+    if(doRestrict)all_grids->num_levels++;
+  }
+  #endif
+  //if(all_grids->my_rank==0){for(level=0;level<all_grids->num_levels;level++){
+  //  printf("level %2d: %4d^3 using %4d^3.%4d^3 spread over %4d processes\n",level,dim_i[level],boxes_in_i[level],box_dim[level],nProcs[level]);
+  //}fflush(stdout);}
+
+
+  // now build all the coarsened levels...
+  for(level=1;level<all_grids->num_levels;level++){
+    all_grids->levels[level] = (level_type*)malloc(sizeof(level_type));
+    if(all_grids->levels[level] == NULL){printf("malloc failed - MGBuild/doRestrict\n");fflush(stdout);exit(0);}
+    create_level(all_grids->levels[level],boxes_in_i[level],box_dim[level],box_ghosts[level],all_grids->levels[level-1]->box_vectors,all_grids->levels[level-1]->domain_boundary_condition,all_grids->levels[level-1]->my_rank,nProcs[level]);
+    all_grids->levels[level]->h = 2.0*all_grids->levels[level-1]->h;
+  }
+
 
   // bottom solver gets extra grids...
   level = all_grids->num_levels-1;
@@ -768,8 +834,8 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if(all_grids->my_rank==0){printf("  level %d...",level);fflush(stdout);}
     all_grids->levels[level]->active=0;
     int ll;for(ll=level;ll<all_grids->num_levels;ll++)if(all_grids->levels[ll]->num_my_boxes>0)all_grids->levels[level]->active=1;
-    if(all_grids->levels[level]->active)MPI_Comm_split(MPI_COMM_WORLD,0                                  ,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL);
-                                   else MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->my_rank+1,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_LEVEL); // = MPI_COMM_SELF
+    if(all_grids->levels[level]->active)MPI_Comm_split(MPI_COMM_WORLD,0                                  ,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_ALLREDUCE);
+                                   else MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->my_rank+1,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_ALLREDUCE); // = MPI_COMM_SELF
     double comm_split_end = MPI_Wtime();
     double comm_split_time_send = comm_split_end-comm_split_start;
     double comm_split_time = 0;

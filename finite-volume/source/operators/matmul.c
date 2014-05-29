@@ -54,7 +54,7 @@ void matmul(level_type * level, double *C, int * id_A, int * id_B, int rows, int
   }}
   uint64_t _timeStartAllReduce = CycleTime();
 //MPI_Allreduce(send_buffer,C,rows*cols,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(send_buffer,C,rows*cols,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_LEVEL);
+  MPI_Allreduce(send_buffer,C,rows*cols,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_ALLREDUCE);
   uint64_t _timeEndAllReduce = CycleTime();
   level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
   free(send_buffer);

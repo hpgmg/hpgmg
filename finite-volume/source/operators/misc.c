@@ -230,7 +230,7 @@ double dot(level_type * level, int id_a, int id_b){
   #ifdef USE_MPI
   uint64_t _timeStartAllReduce = CycleTime();
   double send = a_dot_b_level;
-  MPI_Allreduce(&send,&a_dot_b_level,1,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_LEVEL);
+  MPI_Allreduce(&send,&a_dot_b_level,1,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_ALLREDUCE);
   uint64_t _timeEndAllReduce = CycleTime();
   level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
@@ -269,7 +269,7 @@ double norm(level_type * level, int component_id){ // implements the max norm
   #ifdef USE_MPI
   uint64_t _timeStartAllReduce = CycleTime();
   double send = max_norm;
-  MPI_Allreduce(&send,&max_norm,1,MPI_DOUBLE,MPI_MAX,level->MPI_COMM_LEVEL);
+  MPI_Allreduce(&send,&max_norm,1,MPI_DOUBLE,MPI_MAX,level->MPI_COMM_ALLREDUCE);
   uint64_t _timeEndAllReduce = CycleTime();
   level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
@@ -308,7 +308,7 @@ double mean(level_type * level, int id_a){
   #ifdef USE_MPI
   uint64_t _timeStartAllReduce = CycleTime();
   double send = sum_level;
-  MPI_Allreduce(&send,&sum_level,1,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_LEVEL);
+  MPI_Allreduce(&send,&sum_level,1,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_ALLREDUCE);
   uint64_t _timeEndAllReduce = CycleTime();
   level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
   #endif

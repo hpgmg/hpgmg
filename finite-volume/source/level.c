@@ -672,8 +672,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   int box;
   int TotalBoxes = boxes_in_i*boxes_in_i*boxes_in_i;
 
-  //if(MPI_Rank==0){printf("attempting to create a %5d^3 level using a %3d^3 grid of %3d^3 boxes with a target of %6.3f boxes per process...\n",box_dim*boxes_in_i,boxes_in_i,box_dim,(double)TotalBoxes/(double)MPI_Tasks);fflush(stdout);}
-  if(MPI_Rank==0){printf("attempting to create a %5d^3 level using a %3d^3 grid of %3d^3 boxes...\n",box_dim*boxes_in_i,boxes_in_i,box_dim);fflush(stdout);}
+  if(MPI_Rank==0){printf("attempting to create a %d^3 level using a %d^3 grid of %d^3 boxes and %d tasks...\n",box_dim*boxes_in_i,boxes_in_i,box_dim,MPI_Tasks);fflush(stdout);}
 
   int omp_threads = 1;
   int omp_nested  = 0;
@@ -746,19 +745,23 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
   // Tune the OpenMP style of parallelism...
   if(omp_nested){
-  #ifndef OMP_STENCILS_PER_THREAD
-  #define OMP_STENCILS_PER_THREAD 64
-  #endif
-                                           level->concurrent_boxes = level->num_my_boxes;
-  if(level->concurrent_boxes > omp_threads)level->concurrent_boxes = omp_threads;
-  if(level->concurrent_boxes <           1)level->concurrent_boxes = 1;
-  level->threads_per_box = omp_threads / level->concurrent_boxes;
-  if(level->threads_per_box > level->box_dim*level->box_dim)
-     level->threads_per_box = level->box_dim*level->box_dim; // JK collapse
-  if(level->threads_per_box > level->box_dim*level->box_dim*level->box_dim/OMP_STENCILS_PER_THREAD )
-     level->threads_per_box = level->box_dim*level->box_dim*level->box_dim/OMP_STENCILS_PER_THREAD;
-  if(level->threads_per_box<1)level->threads_per_box = 1;
+    #ifndef OMP_STENCILS_PER_THREAD
+    #define OMP_STENCILS_PER_THREAD 64
+    #endif
+                                             level->concurrent_boxes = level->num_my_boxes;
+    if(level->concurrent_boxes > omp_threads)level->concurrent_boxes = omp_threads;
+    if(level->concurrent_boxes <           1)level->concurrent_boxes = 1;
+    level->threads_per_box = omp_threads / level->concurrent_boxes;
+    if(level->threads_per_box > level->box_dim*level->box_dim)
+       level->threads_per_box = level->box_dim*level->box_dim; // JK collapse
+    if(level->threads_per_box > level->box_dim*level->box_dim*level->box_dim/OMP_STENCILS_PER_THREAD )
+       level->threads_per_box = level->box_dim*level->box_dim*level->box_dim/OMP_STENCILS_PER_THREAD;
+    if(level->threads_per_box<1)level->threads_per_box = 1;
+  }else{
+    if(level->num_my_boxes>8){level->concurrent_boxes=omp_threads;level->threads_per_box=1;}
   }
+
+
   if(MPI_Rank==0){
     if(omp_nested)printf("  OMP_NESTED=TRUE  OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
              else printf("  OMP_NESTED=FALSE OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
@@ -810,7 +813,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   #ifdef USE_MPI
   if(MPI_Rank==0){printf("  Duplicating MPI_COMM_WORLD...");fflush(stdout);}
   double time_start = MPI_Wtime();
-  MPI_Comm_dup(MPI_COMM_WORLD,&level->MPI_COMM_LEVEL);
+  MPI_Comm_dup(MPI_COMM_WORLD,&level->MPI_COMM_ALLREDUCE);
   double time_end = MPI_Wtime();
   double time_in_comm_dup = 0;
   double time_in_comm_dup_send = time_end-time_start;
