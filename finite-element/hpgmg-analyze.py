@@ -43,7 +43,7 @@ def plot(args):
     symbols = iter(['ro', 'bv', 'ks', 'g^', 'bx'])
     import matplotlib.pyplot as plt
     fig, ax1 = plt.subplots()
-    plt.title('FE-FAS Performance')
+    plt.title('HPGMG-FE Performance')
     if args.perprocess:
         plt.xlabel('Number of equations/process')
     else:
