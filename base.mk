@@ -54,14 +54,14 @@ CCLD = $(if $(PCC_LINKER),$(PCC_LINKER),$(HPGMG_CC))
 hpgmg-fe = $(BINDIR)/hpgmg-fe
 hpgmg-fe : $(hpgmg-fe)
 hpgmg-fe-y.o := $(patsubst %.c,%.o,$(filter $(OBJDIR)/%,$(hpgmg-fe-y.c))) $(call srctoobj,$(hpgmg-fe-y.c))
-$(BINDIR)/hpgmg-fe : $(hpgmg-fe-y.o) | $$(@D)/.DIR
+$(hpgmg-fe) : $(hpgmg-fe-y.o) | $$(@D)/.DIR
 	$(HPGMG_LINK) $^ $(HPGMG_LDLIBS) $(LDLIBS) $(PETSC_SNES_LIB)
 
 hpgmg-fv = $(BINDIR)/hpgmg-fv
 hpgmg-fv : $(hpgmg-fv)
 hpgmg-fv-y.o := $(call srctoobj,$(hpgmg-fv-y.c))
 $(hpgmg-fv-y.o) : CPPFLAGS += $(CONFIG_FV_CPPFLAGS)
-$(BINDIR)/hpgmg-fv : $(hpgmg-fv-y.o) | $$(@D)/.DIR
+$(hpgmg-fv) : $(hpgmg-fv-y.o) | $$(@D)/.DIR
 	$(HPGMG_LINK) $^ $(HPGMG_LDLIBS) $(LDLIBS) -lm
 
 $(OBJDIR)/%.o: $(OBJDIR)/%.c
