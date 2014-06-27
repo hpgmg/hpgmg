@@ -11,7 +11,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;
   int buffer=0;
-  int sendBox,recvBox,n;
+  int n;
 
   if(justFaces)justFaces=1;else justFaces=0;  // must be 0 or 1 in order to index into exchange_ghosts[]
 

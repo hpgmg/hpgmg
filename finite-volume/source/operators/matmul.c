@@ -11,8 +11,6 @@ void matmul(level_type * level, double *C, int * id_A, int * id_B, int rows, int
   // FIX, id_A and id_B are likely the same and thus C[][] will be symmetric (modulo missing row?)
   // if(A_equals_B_transpose && (cols>=rows)) then use id_B and only run for nn>=mm // common case for s-step Krylov methods
   // C_is_symmetric && cols< rows (use id_A)
-  int omp_across_matrix = 1;
-  int omp_within_a_box  = 0;
   int mm,nn;
 
 

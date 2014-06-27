@@ -14,7 +14,7 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // 
 
   #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
-    int i,j,k,s;
+    int i,j,k;
     int jStride = level->my_boxes[box].jStride;
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;

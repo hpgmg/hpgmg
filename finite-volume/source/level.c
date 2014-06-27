@@ -428,9 +428,9 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       level->exchange_ghosts[justFaces].send_sizes[neighbor]=0;
     }
     for(ghost=0;ghost<numGhosts;ghost++){
-      int dim_i,dim_j,dim_k;
-      int send_i,send_j,send_k;
-      int recv_i,recv_j,recv_k;
+      int  dim_i=-1, dim_j=-1, dim_k=-1;
+      int send_i=-1,send_j=-1,send_k=-1;
+      int recv_i=-1,recv_j=-1,recv_k=-1;
   
       // decode ghostsToSend[ghost].sendDir (direction sent) into di/dj/dk 
       int di = ((ghostsToSend[ghost].sendDir % 3)  )-1;
@@ -591,9 +591,9 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       level->exchange_ghosts[justFaces].recv_sizes[neighbor]=0;
     }
     for(ghost=0;ghost<numGhosts;ghost++){
-      int dim_i,dim_j,dim_k;
-      int send_i,send_j,send_k;
-      int recv_i,recv_j,recv_k;
+      int  dim_i=-1, dim_j=-1, dim_k=-1;
+    //int send_i=-1,send_j=-1,send_k=-1;
+      int recv_i=-1,recv_j=-1,recv_k=-1;
   
       // decode ghostsToRecv[ghost].sendDir (direction sent) into di/dj/dk 
       int di = ((ghostsToRecv[ghost].sendDir % 3)  )-1;

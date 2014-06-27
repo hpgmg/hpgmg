@@ -1,7 +1,8 @@
-- more efficient ghost zone exchange (box intersection algebra) when communicating edges and corners
-- #define'd box/block list, box/block element iterators that allow easy replacement of omp with ???
+- cycleTime:  uint64_t nanoseconds to double seconds.  cycles.* convert to double
+- iterators.c/iterators.h: box/block element iterators that allow easy replacement of omp workshare with tasks, openACC, etc...
 - communication-avoiding smoothers (wavefront, simdized)
+- more efficient ghost zone exchange (box intersection algebra) when communicating edges and corners
 - high-order (4th order) operators
-  - 27pt constant coefficient + Mehrstellen
   - 13pt constant coefficient
-  - 61pt(?) variable coefficient
+  - 27pt constant coefficient + Mehrstellen
+  - 125pt(?) variable coefficient

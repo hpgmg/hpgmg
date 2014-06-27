@@ -53,7 +53,7 @@ void interpolation_pc(level_type * level_f, int id_f, double prescale_f, level_t
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;
   int buffer=0;
-  int sendBox,recvBox,n;
+  int n;
 
 
   #ifdef USE_MPI

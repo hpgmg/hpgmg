@@ -732,7 +732,6 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if(doRestrict)all_grids->num_levels++;
   }
   #else // TRUE V-Cycle...
-  int FinalAgglomerationRanks = coarse_dim*coarse_dim*coarse_dim;
   while(doRestrict){
     level = all_grids->num_levels;
     doRestrict=0;
@@ -809,7 +808,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
 
   // bottom solver gets extra grids...
   level = all_grids->num_levels-1;
-  int box,c;
+  int box;
   int numAdditionalVectors = IterativeSolver_NumVectors();
   all_grids->levels[level]->box_vectors += numAdditionalVectors;
   if(numAdditionalVectors){

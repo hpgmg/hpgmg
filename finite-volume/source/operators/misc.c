@@ -245,7 +245,11 @@ double norm(level_type * level, int component_id){ // implements the max norm
   int box;
   double max_norm =  0.0;
   // FIX, schedule(static) is a stand in to guarantee reproducibility...
+  #if (_OPENMP>=201107)
   #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes) reduction(max:max_norm) schedule(static)
+  #else
+  #warning Threading norm() requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.
+  #endif
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     int jStride = level->my_boxes[box].jStride;
@@ -254,7 +258,11 @@ double norm(level_type * level, int component_id){ // implements the max norm
     int     dim = level->my_boxes[box].dim;
     double * __restrict__ grid   = level->my_boxes[box].vectors[component_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double box_norm = 0.0;
+    #if (_OPENMP>=201107)
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(max:box_norm) schedule(static)
+    #else
+    #warning Threading norm() requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.
+    #endif
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){

@@ -25,10 +25,8 @@ static inline void InterpolateBlock_PL(level_type *level_f, int id_f, double pre
 
   double * __restrict__  read = block->read.ptr;
   double * __restrict__ write = block->write.ptr;
-  double * __restrict__ valid;
   if(block->read.box >=0){
      read = level_c->my_boxes[ block->read.box].vectors[        id_c] + level_c->my_boxes[ block->read.box].ghosts*(1+level_c->my_boxes[ block->read.box].jStride+level_c->my_boxes[ block->read.box].kStride);
-     valid= level_c->my_boxes[ block->read.box].vectors[VECTOR_VALID] + level_c->my_boxes[ block->read.box].ghosts*(1+level_c->my_boxes[ block->read.box].jStride+level_c->my_boxes[ block->read.box].kStride);
      read_jStride = level_c->my_boxes[block->read.box ].jStride;
      read_kStride = level_c->my_boxes[block->read.box ].kStride;
   }
@@ -78,7 +76,7 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;
   int buffer=0;
-  int sendBox,recvBox,n;
+  int n;
 
   #ifdef USE_MPI
 
