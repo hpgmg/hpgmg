@@ -858,7 +858,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     all_grids->levels[level]->alpha_is_zero = (dot(all_grids->levels[level],VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
   }
 
-
+  
   all_grids->cycles.MGBuild += (uint64_t)(CycleTime()-_timeStartMGBuild);
 }
 

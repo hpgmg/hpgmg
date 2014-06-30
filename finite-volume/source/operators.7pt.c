@@ -15,12 +15,7 @@
 #include "level.h"
 #include "operators.h"
 //------------------------------------------------------------------------------------------------------------------------------
-#define STENCIL_IS_STAR_SHAPED 1
-#define STENCIL_RADIUS         1
-//------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_VARIABLE_COEFFICIENT
-//#define STENCIL_FUSE_BC
-//#define STENCIL_FUSE_DINV
 //------------------------------------------------------------------------------------------------------------------------------
 #define OMP_THREAD_ACROSS_BOXES(thread_teams    ) if(thread_teams    >1) num_threads(thread_teams    )
 #define OMP_THREAD_WITHIN_A_BOX(threads_per_team) if(threads_per_team>1) num_threads(threads_per_team) collapse(2)
@@ -136,6 +131,9 @@ void apply_BCs(level_type * level, int x_id){
 #endif // BCs
 
 
+//------------------------------------------------------------------------------------------------------------------------------
+int stencil_get_radius()    {return(1);} // replaces #define STENCIL_RADIUS         1
+int stencil_is_star_shaped(){return(1);} // replaces #define STENCIL_IS_STAR_SHAPED 1
 //------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
   if(level->my_rank==0){printf("  rebuilding operator for level...  h=%e  ",level->h);fflush(stdout);}

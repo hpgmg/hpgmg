@@ -50,6 +50,7 @@ int main(int argc, char **argv){
   int OMP_Threads = 1;
   int OMP_Nested = 0;
 
+  #ifdef _OPENMP
   #pragma omp parallel 
   {
     #pragma omp master
@@ -58,7 +59,7 @@ int main(int argc, char **argv){
       OMP_Nested  = omp_get_nested();
     }
   }
-  //omp_set_nested(1);
+  #endif
     
 
   #ifdef USE_MPI

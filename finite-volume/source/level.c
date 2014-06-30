@@ -676,6 +676,8 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
   int omp_threads = 1;
   int omp_nested  = 0;
+
+  #ifdef _OPENMP
   #pragma omp parallel 
   {
     #pragma omp master
@@ -684,6 +686,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
       omp_nested  = omp_get_nested();
     }
   }
+  #endif
 
   level->memory_allocated = 0;
   level->box_dim        = box_dim;

@@ -8,22 +8,16 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
   int box,s;
-  int ghosts = level->box_ghosts;
-  int radius     = STENCIL_RADIUS;
-  int communicationAvoiding = ghosts > radius;  
+  for(s=0;s<2*NUM_SMOOTHS;s++){ // there are two sweeps per GSRB smooth
+    // exchange the ghost zone...
+    exchange_boundary(level,phi_id,stencil_is_star_shaped());apply_BCs(level,phi_id);
 
-  // if communication-avoiding, need updated RHS for stencils in ghost zones
-  if(communicationAvoiding)exchange_boundary(level,rhs_id,0); 
-
-  for(s=0;s<2*NUM_SMOOTHS;s+=ghosts){ // there are two sweeps per GSRB smooth
-    exchange_boundary(level,phi_id,STENCIL_IS_STAR_SHAPED && !communicationAvoiding);
-            apply_BCs(level,phi_id);
-
-    // now do ghosts communication-avoiding smooths on each box...
+    // apply the smoother...
     uint64_t _timeStart = CycleTime();
     #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
     for(box=0;box<level->num_my_boxes;box++){
-      int i,j,k,ss;
+      int i,j,k;
+      int ghosts = level->box_ghosts;
       int color000 = (level->my_boxes[box].low.i^level->my_boxes[box].low.j^level->my_boxes[box].low.k)&1;  // is element 000 red or black ???  (should only be an issue if box dimension is odd)
       const int jStride = level->my_boxes[box].jStride;
       const int kStride = level->my_boxes[box].kStride;
@@ -42,46 +36,43 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
                                                  level->RedBlack_FP[1] + ghosts*(1+jStride)};
           
 
-      int ghostsToOperateOn=ghosts-1;
-      for(ss=s;ss<s+ghosts;ss++,ghostsToOperateOn--){
-        #if defined(GSRB_FP)
-        #warning GSRB using pre-computed 1.0/0.0 FP array for Red-Black to facilitate vectorization...
-        #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
-        for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
-        for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
-        for(i=0-ghostsToOperateOn;i<dim+ghostsToOperateOn;i++){
-              int EvenOdd = (k^ss^color000)&1;
-              int ij  = i + j*jStride;
-              int ijk = i + j*jStride + k*kStride;
-              double Ax     = apply_op_ijk(phi);
-              double lambda =     Dinv_ijk();
-              phi_new[ijk] = phi[ijk] + RedBlack[EvenOdd][ij]*lambda*(rhs[ijk]-Ax); // compiler seems to get confused unless there are disjoint read/write pointers
-        }}}
-        #elif defined(GSRB_STRIDE2)
-        #warning GSRB using stride-2 accesses to minimie the number of flop's
-        #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
-        for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
-        for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
-        for(i=((j^k^ss^color000)&1)+1-ghosts;i<dim+ghostsToOperateOn;i+=2){ // stride-2 GSRB
-              int ijk = i + j*jStride + k*kStride; 
-              double Ax     = apply_op_ijk(phi);
-              double lambda =     Dinv_ijk();
-              phi_new[ijk] = phi[ijk] + lambda*(rhs[ijk]-Ax);
-        }}}
-        #else
-        #warning GSRB using if-then-else on loop indices for Red-Black because its easy to read...
-        #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
-        for(k=0-ghostsToOperateOn;k<dim+ghostsToOperateOn;k++){
-        for(j=0-ghostsToOperateOn;j<dim+ghostsToOperateOn;j++){
-        for(i=0-ghostsToOperateOn;i<dim+ghostsToOperateOn;i++){
-        if((i^j^k^ss^color000^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
-              int ijk = i + j*jStride + k*kStride;
-              double Ax     = apply_op_ijk(phi);
-              double lambda =     Dinv_ijk();
-              phi_new[ijk] = phi[ijk] + lambda*(rhs[ijk]-Ax);
-        }}}}
-        #endif
-      } // ss-loop
+      #if defined(GSRB_FP)
+      #warning GSRB using pre-computed 1.0/0.0 FP array for Red-Black to facilitate vectorization...
+      #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
+      for(k=0;k<dim;k++){
+      for(j=0;j<dim;j++){
+      for(i=0;i<dim;i++){
+            int EvenOdd = (k^s^color000)&1;
+            int ij  = i + j*jStride;
+            int ijk = i + j*jStride + k*kStride;
+            double Ax     = apply_op_ijk(phi);
+            double lambda =     Dinv_ijk();
+            phi_new[ijk] = phi[ijk] + RedBlack[EvenOdd][ij]*lambda*(rhs[ijk]-Ax); // compiler seems to get confused unless there are disjoint read/write pointers
+      }}}
+      #elif defined(GSRB_STRIDE2)
+      #warning GSRB using stride-2 accesses to minimie the number of flop's
+      #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
+      for(k=0;k<dim;k++){
+      for(j=0;j<dim;j++){
+      for(i=((j^k^s^color000)&1)+1-ghosts;i<dim;i+=2){ // stride-2 GSRB
+            int ijk = i + j*jStride + k*kStride; 
+            double Ax     = apply_op_ijk(phi);
+            double lambda =     Dinv_ijk();
+            phi_new[ijk] = phi[ijk] + lambda*(rhs[ijk]-Ax);
+      }}}
+      #else
+      #warning GSRB using if-then-else on loop indices for Red-Black because its easy to read...
+      #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
+      for(k=0;k<dim;k++){
+      for(j=0;j<dim;j++){
+      for(i=0;i<dim;i++){
+      if((i^j^k^s^color000^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
+            int ijk = i + j*jStride + k*kStride;
+            double Ax     = apply_op_ijk(phi);
+            double lambda =     Dinv_ijk();
+            phi_new[ijk] = phi[ijk] + lambda*(rhs[ijk]-Ax);
+      }}}}
+      #endif
     } // boxes
     level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
   } // s-loop

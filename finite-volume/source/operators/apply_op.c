@@ -5,7 +5,7 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // y=Ax
   // exchange the boundary of x in preparation for Ax
-  exchange_boundary(level,x_id,STENCIL_IS_STAR_SHAPED);
+  exchange_boundary(level,x_id,stencil_is_star_shaped());
           apply_BCs(level,x_id);
 
   // now do Ax proper...

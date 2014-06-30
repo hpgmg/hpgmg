@@ -78,6 +78,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
   #ifdef USE_MPI 
   _timeStart = CycleTime();
   if(nMessages)MPI_Waitall(nMessages,level->exchange_ghosts[justFaces].requests,level->exchange_ghosts[justFaces].status);
+  //if(level->exchange_ghosts[justFaces].num_recvs)MPI_Waitall(level->exchange_ghosts[justFaces].num_recvs,level->exchange_ghosts[justFaces].requests,level->exchange_ghosts[justFaces].status); // wait just for recvs...
   _timeEnd = CycleTime();
   level->cycles.ghostZone_wait += (_timeEnd-_timeStart);
 
@@ -89,6 +90,14 @@ void exchange_boundary(level_type * level, int id, int justFaces){
   _timeEnd = CycleTime();
   level->cycles.ghostZone_unpack += (_timeEnd-_timeStart);
   #endif
+
+  // wait for sends to finish...
+  //#ifdef USE_MPI
+  //_timeStart = CycleTime();
+  //if(level->exchange_ghosts[justFaces].num_sends)MPI_Waitall(level->exchange_ghosts[justFaces].num_sends,level->exchange_ghosts[justFaces].requests+level->exchange_ghosts[justFaces].num_recvs,level->exchange_ghosts[justFaces].status+level->exchange_ghosts[justFaces].num_recvs);
+  //_timeEnd = CycleTime();
+  //level->cycles.ghostZone_wait += (_timeEnd-_timeStart);
+  //#endif
  
  
   level->cycles.ghostZone_total += (uint64_t)(CycleTime()-_timeCommunicationStart);
