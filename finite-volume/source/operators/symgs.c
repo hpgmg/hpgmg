@@ -5,12 +5,9 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
   int box,s;
-  int ghosts = level->box_ghosts;
-  int radius     = STENCIL_RADIUS;
-  int communicationAvoiding = ghosts > radius; 
 
   for(s=0;s<2*NUM_SMOOTHS;s++){ // there are two sweeps (forward/backward) per GS smooth
-    exchange_boundary(level,phi_id,STENCIL_IS_STAR_SHAPED);
+    exchange_boundary(level,phi_id,stencil_is_star_shaped());
             apply_BCs(level,phi_id);
 
     // now do ghosts communication-avoiding smooths on each box...
@@ -18,6 +15,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
     #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
     for(box=0;box<level->num_my_boxes;box++){
       int i,j,k;
+      int ghosts = level->box_ghosts;
       const int jStride = level->my_boxes[box].jStride;
       const int kStride = level->my_boxes[box].kStride;
       const int     dim = level->my_boxes[box].dim;

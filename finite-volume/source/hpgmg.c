@@ -33,7 +33,6 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
-//#include <hpgmgconf.h>
 #include <omp.h>
 #ifdef USE_MPI
 #include <mpi.h>
@@ -51,6 +50,7 @@ int main(int argc, char **argv){
   int OMP_Threads = 1;
   int OMP_Nested = 0;
 
+  #ifdef _OPENMP
   #pragma omp parallel 
   {
     #pragma omp master
@@ -59,7 +59,7 @@ int main(int argc, char **argv){
       OMP_Nested  = omp_get_nested();
     }
   }
-  //omp_set_nested(1);
+  #endif
     
 
   #ifdef USE_MPI
@@ -125,8 +125,10 @@ int main(int argc, char **argv){
     exit(0);
   }
 
-  if(MPI_Rank==0)if(OMP_Nested)printf("%d MPI Tasks of %d threads (OMP_NESTED=TRUE)\n" ,MPI_Tasks,OMP_Threads);
-                          else printf("%d MPI Tasks of %d threads (OMP_NESTED=FALSE)\n",MPI_Tasks,OMP_Threads);
+  if(MPI_Rank==0){
+    if(OMP_Nested)printf("%d MPI Tasks of %d threads (OMP_NESTED=TRUE)\n\n" ,MPI_Tasks,OMP_Threads);
+             else printf("%d MPI Tasks of %d threads (OMP_NESTED=FALSE)\n\n",MPI_Tasks,OMP_Threads);
+  }
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   // calculate the problem size...
   int box_dim=1<<log2_box_dim;
@@ -154,20 +156,24 @@ int main(int argc, char **argv){
   int minCoarseDim = 1;
   MGBuild(&all_grids,&fine_grid,a,b,minCoarseDim);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  int doTiming;for(doTiming=0;doTiming<=1;doTiming++){ // first pass warms up, second times
   MGResetTimers(&all_grids);
   #ifdef USE_HPM // IBM performance counters for BGQ...
-  HPM_Start("FMGSolve()");
+  if(doTiming)HPM_Start("FMGSolve()");
   #endif
   #ifdef USE_FCYCLES
-  int trial;for(trial=0;trial<20;trial++){zero_vector(all_grids.levels[0],VECTOR_U);FMGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
+  int trial;for(trial=0;trial<10;trial++){zero_vector(all_grids.levels[0],VECTOR_U);FMGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
   #else
   int trial;for(trial=0;trial< 5;trial++){zero_vector(all_grids.levels[0],VECTOR_U); MGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
   #endif
   #ifdef USE_HPM // IBM performance counters for BGQ...
-  HPM_Stop("FMGSolve()");
+  if(doTiming)HPM_Stop("FMGSolve()");
   #endif
-  double fine_error = error(&fine_grid,VECTOR_U,VECTOR_UTRUE);if(MPI_Rank==0){printf("h = %e, error = %1.15e\n",h0,fine_error);}
-  MGPrintTiming(&all_grids);
+  }
+  MGPrintTiming(&all_grids); // don't include the error check in the timing results
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  if(MPI_Rank==0){printf("calculating error...\n");}
+  double fine_error = error(&fine_grid,VECTOR_U,VECTOR_UTRUE);if(MPI_Rank==0){printf(" h = %22.15e  ||error|| = %22.15e\n\n",h0,fine_error);fflush(stdout);}
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // MGDestroy()
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

@@ -12,6 +12,13 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef MG_AGGLOMERATION_START
+#define MG_AGGLOMERATION_START  8 // i.e. start the distributed v-cycle when boxes are smaller than 8^3
+#endif
+#ifndef MG_DEFAULT_BOTTOM_NORM
+#define MG_DEFAULT_BOTTOM_NORM  1e-3
+#endif
+//------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
   int num_ranks;	// total number of MPI ranks for MPI_COMM_WORLD
   int my_rank;		// my MPI rank for MPI_COMM_WORLD

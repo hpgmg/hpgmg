@@ -10,18 +10,12 @@
 #include <math.h>
 //#include<instrinsics.h>
 //------------------------------------------------------------------------------------------------------------------------------
-//#include <hpgmgconf.h>
 #include "timer.h"
 #include "defines.h"
 #include "level.h"
 #include "operators.h"
 //------------------------------------------------------------------------------------------------------------------------------
-#define STENCIL_IS_STAR_SHAPED 1
-#define STENCIL_RADIUS         1
-//------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_VARIABLE_COEFFICIENT
-//#define STENCIL_FUSE_BC
-//#define STENCIL_FUSE_DINV
 //------------------------------------------------------------------------------------------------------------------------------
 #define OMP_THREAD_ACROSS_BOXES(thread_teams    ) if(thread_teams    >1) num_threads(thread_teams    )
 #define OMP_THREAD_WITHIN_A_BOX(threads_per_team) if(threads_per_team>1) num_threads(threads_per_team) collapse(2)
@@ -138,6 +132,9 @@ void apply_BCs(level_type * level, int x_id){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+int stencil_get_radius()    {return(1);} // replaces #define STENCIL_RADIUS         1
+int stencil_is_star_shaped(){return(1);} // replaces #define STENCIL_IS_STAR_SHAPED 1
+//------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
   if(level->my_rank==0){printf("  rebuilding operator for level...  h=%e  ",level->h);fflush(stdout);}
 
@@ -162,16 +159,19 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // calculate Dinv, L1inv, and estimate the dominant Eigenvalue
   uint64_t _timeStart = CycleTime();
-  int printedError=0;
   int box;
 
   double dominant_eigenvalue = -1e9;
+  #if (_OPENMP>=201107)
   #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes) reduction(max:dominant_eigenvalue) schedule(static)
+  #else
+  #warning Threading rebuild_operator() requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.
+  #endif
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
-    int lowi    = level->my_boxes[box].low.i;
-    int lowj    = level->my_boxes[box].low.j;
-    int lowk    = level->my_boxes[box].low.k;
+  //int lowi    = level->my_boxes[box].low.i;
+  //int lowj    = level->my_boxes[box].low.j;
+  //int lowk    = level->my_boxes[box].low.k;
     int jStride = level->my_boxes[box].jStride;
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
@@ -185,7 +185,11 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     double * __restrict__  L1inv = level->my_boxes[box].vectors[VECTOR_L1INV ] + ghosts*(1+jStride+kStride);
     double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID ] + ghosts*(1+jStride+kStride);
     double box_eigenvalue = -1e9;
+    #if (_OPENMP>=201107)
     #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(max:box_eigenvalue) schedule(static)
+    #else
+    #warning Threading rebuild_operator() requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.
+    #endif
     for(k=0;k<dim;k++){
     for(j=0;j<dim;j++){
     for(i=0;i<dim;i++){

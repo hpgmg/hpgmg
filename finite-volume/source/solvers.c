@@ -23,31 +23,10 @@
 #include "solvers/cacg.c"
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-#define MODIFY_BOTTOM_FOR_PERIODIC
-//------------------------------------------------------------------------------------------------------------------------------
 void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b, double desired_reduction_in_norm){ 
   if(!level->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  double meanF;
   if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);  // haven't determined if alpha[] == 0
-  #ifdef MODIFY_BOTTOM_FOR_PERIODIC
-  if(level->domain_boundary_condition == BC_PERIODIC){ // RHS should sum to zero !!!
-    meanF = mean(level,f_id);
-    if( (meanF!=0.0) && ((a==0.0) || (level->alpha_is_zero==1)) ){
-      // Poisson with Periodic Boundary Conditions, but the RHS didn't sum to zero
-      //if(level->my_rank==0)printf("coarse grid Poisson solve with periodic BC's and a RHS that doesn't sum to zero!!!\n");
-      shift_vector(level,f_id,f_id,-meanF); // FIX  !!!
-    }
-    //if( (meanF!=0.0) && (a!=0.0) && (level->alpha_is_zero==0) ){  // FIX !!! change from alpha_is_zero to no element of alpha is zero
-    //  // Helmholtz with Periodic Boundary Conditions, but the RHS didn't sum to zero
-    //  // let u' = u - (meanF/a)(1/alpha)
-    //  // solve a alpha u' - b div beta grad u' = f' = f - meanF + b div beta grad (meanF/a)(1/alpha)
-    //  invert_vector(level,VECTOR_TEMP,meanF/a,VECTOR_ALPHA);  // FIX !!!  no element of alpha must ever be zero !!!
-    //  residual(level,f_id,VECTOR_TEMP,f_id,0.0,b); // f' = f - (0*VECTOR_TEMP - b div beta grad VECTOR_TEMP) = f + b div beta grad VECTOR_TEMP
-    //  shift_vector(level,f_id,f_id,-meanF);
-    //}
-  }
-  #endif
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef USE_BICGSTAB
     BiCGStab(level,u_id,f_id,a,b,desired_reduction_in_norm);
@@ -80,22 +59,6 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
       s++;
     }
     #endif
-  #endif
-  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  #ifdef MODIFY_BOTTOM_FOR_PERIODIC
-  if(level->domain_boundary_condition == BC_PERIODIC){ 
-    if( (meanF!=0.0) && ((a==0.0) || (level->alpha_is_zero==1)) ){
-      // Poisson with Periodic Boundary Conditions, but the RHS didn't sum to zero
-      // by convention, we shift the correction to sum to zero (eliminate any constants)
-      double average_value_of_e = mean(level,u_id);shift_vector(level,u_id,u_id,-average_value_of_e);
-    }
-    //if( (meanF!=0.0) && (a!=0.0) && (level->alpha_is_zero==0) ){
-    //  // Helmholtz with Periodic Boundary Conditions, but the RHS didn't sum to zero...
-    //  // u = u' + (meanF/a)(1/alpha)
-    //  invert_vector(level,VECTOR_TEMP,meanF/a,VECTOR_ALPHA);  // FIX !!!  no element of alpha must ever be zero !!!
-    //  add_vectors(level,u_id,1.0,u_id,1.0,VECTOR_TEMP);
-    //}
-  } 
   #endif
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 }

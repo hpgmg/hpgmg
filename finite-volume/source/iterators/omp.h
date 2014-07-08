@@ -1,4 +1,8 @@
-
+//------------------------------------------------------------------------------------------------------------------------------
+// Samuel Williams
+// SWWilliams@lbl.gov
+// Lawrence Berkeley National Lab
+//------------------------------------------------------------------------------------------------------------------------------
 #define FOR_ALL_BOXES(level,box)			\
   _Pragma("omp parallel for private(box) if(level->concurrent_boxes>1) num_threads(level->concurrent_boxes)")\
   for(box=0;box<level->num_my_boxes;box++){		\

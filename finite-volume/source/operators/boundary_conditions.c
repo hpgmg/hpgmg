@@ -23,20 +23,17 @@ void apply_BCs_linear(level_type * level, int x_id){
   //
 
   uint64_t _timeStart = CycleTime();
-  int omp_across_boxes = 1;
-  int omp_within_a_box = 0;
   int box;
 
   #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
   for(box=0;box<level->num_my_boxes;box++){
-    int i,j,k,s;
+    int i,j,k;
     int jStride = level->my_boxes[box].jStride;
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
     int     dim = level->my_boxes[box].dim;
-    double h2inv = 1.0/(level->h*level->h);
     double * __restrict__ x      = level->my_boxes[box].vectors[        x_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
-    double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID] + ghosts*(1+jStride+kStride);
+  //double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID] + ghosts*(1+jStride+kStride);
 
     if(level->domain_boundary_condition == BC_DIRICHLET){
       // why these and not -1, -5, +77 ???

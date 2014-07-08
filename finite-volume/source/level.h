@@ -88,7 +88,7 @@ typedef struct {
   communicator_type restriction;		// mini program that performs restriction and agglomeration...
   communicator_type interpolation;		// mini program that performs interpolation and dissemination...
   #ifdef USE_MPI
-  MPI_Comm MPI_COMM_LEVEL;			// MPI sub communicator for just the ranks that have boxes on this level or any subsequent level... 
+  MPI_Comm MPI_COMM_ALLREDUCE;			// MPI sub communicator for just the ranks that have boxes on this level or any subsequent level... 
   #endif
   double dominant_eigenvalue_of_DinvA;		// estimate on the dominate eigenvalue of D^{-1}A
   int alpha_is_zero;				// useful for determining Poisson... (a==0) && (alpha_is_zero)
@@ -138,8 +138,6 @@ typedef struct {
   int Krylov_iterations;        // total number of bottom solver iterations
   int CAKrylov_formations_of_G; // i.e. [G,g] = [P,R]^T[P,R,rt]
   int vcycles_from_this_level;  // number of vcycles performed that were initiated from this level
-
-
 } level_type;
 
 

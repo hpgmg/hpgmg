@@ -17,16 +17,16 @@ void evaluateBeta(double x, double y, double z, double *B, double *Bx, double *B
   double r2x  = 2.0*(x-xcenter);
   double r2y  = 2.0*(y-ycenter);
   double r2z  = 2.0*(z-zcenter);
-  double r2xx = 2.0;
-  double r2yy = 2.0;
-  double r2zz = 2.0;
+//double r2xx = 2.0;
+//double r2yy = 2.0;
+//double r2zz = 2.0;
   double r    = pow(r2,0.5);
   double rx   = 0.5*r2x*pow(r2,-0.5);
   double ry   = 0.5*r2y*pow(r2,-0.5);
   double rz   = 0.5*r2z*pow(r2,-0.5);
-  double rxx  = 0.5*r2xx*pow(r2,-0.5) - 0.25*r2x*r2x*pow(r2,-1.5);
-  double ryy  = 0.5*r2yy*pow(r2,-0.5) - 0.25*r2y*r2y*pow(r2,-1.5);
-  double rzz  = 0.5*r2zz*pow(r2,-0.5) - 0.25*r2z*r2z*pow(r2,-1.5);
+//double rxx  = 0.5*r2xx*pow(r2,-0.5) - 0.25*r2x*r2x*pow(r2,-1.5);
+//double ryy  = 0.5*r2yy*pow(r2,-0.5) - 0.25*r2y*r2y*pow(r2,-1.5);
+//double rzz  = 0.5*r2zz*pow(r2,-0.5) - 0.25*r2z*r2z*pow(r2,-1.5);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   *B  =           c1+c2*tanh( c3*(r-0.25) );
   *Bx = c2*c3*rx*(1-pow(tanh( c3*(r-0.25) ),2));

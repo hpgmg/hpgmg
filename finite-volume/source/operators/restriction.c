@@ -93,7 +93,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;
   int buffer=0;
-  int sendBox,recvBox,n;
+  int n;
 
 
 
