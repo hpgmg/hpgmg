@@ -28,7 +28,8 @@ void exchange_boundary(level_type * level, int id, int justFaces){
               level->exchange_ghosts[justFaces].recv_sizes[n],
               MPI_DOUBLE,
               level->exchange_ghosts[justFaces].recv_ranks[n],
-              0, // by construction, only one message should be received from each neighboring process
+              level->exchange_ghosts[justFaces].recv_ranks[n], // taged by sender's rank (i.e. recv tag is the tag of sending process)
+              //0, // by construction, only one message should be received from each neighboring process
               MPI_COMM_WORLD,
               &level->exchange_ghosts[justFaces].requests[n]
     );
@@ -55,7 +56,8 @@ void exchange_boundary(level_type * level, int id, int justFaces){
               level->exchange_ghosts[justFaces].send_sizes[n],
               MPI_DOUBLE,
               level->exchange_ghosts[justFaces].send_ranks[n],
-              0, // by construction, only one message should be sent to each neighboring process
+              level->my_rank, // tag with sender's rank (i.e. my rank)
+              //0, // by construction, only one message should be sent to each neighboring process
               MPI_COMM_WORLD,
               &level->exchange_ghosts[justFaces].requests[n+level->exchange_ghosts[justFaces].num_recvs]
                                               // requests[0..num_recvs-1] were used by recvs.  So sends start at num_recvs
@@ -78,6 +80,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
   #ifdef USE_MPI 
   _timeStart = CycleTime();
   if(nMessages)MPI_Waitall(nMessages,level->exchange_ghosts[justFaces].requests,level->exchange_ghosts[justFaces].status);
+  //if(level->exchange_ghosts[justFaces].num_sends)MPI_Waitall(level->exchange_ghosts[justFaces].num_sends,level->exchange_ghosts[justFaces].requests+level->exchange_ghosts[justFaces].num_recvs,level->exchange_ghosts[justFaces].status+level->exchange_ghosts[justFaces].num_recvs);
   //if(level->exchange_ghosts[justFaces].num_recvs)MPI_Waitall(level->exchange_ghosts[justFaces].num_recvs,level->exchange_ghosts[justFaces].requests,level->exchange_ghosts[justFaces].status); // wait just for recvs...
   _timeEnd = CycleTime();
   level->cycles.ghostZone_wait += (_timeEnd-_timeStart);

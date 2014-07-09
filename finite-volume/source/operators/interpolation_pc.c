@@ -68,7 +68,8 @@ void interpolation_pc(level_type * level_f, int id_f, double prescale_f, level_t
               level_f->interpolation.recv_sizes[n],
               MPI_DOUBLE,
               level_f->interpolation.recv_ranks[n],
-              0, // only one message should be received from each neighboring process
+              level_f->interpolation.recv_ranks[n], // messages are tagged with sender's rank
+              //0, // only one message should be received from each neighboring process
               MPI_COMM_WORLD,
               &level_f->interpolation.requests[n]
     );
@@ -95,7 +96,8 @@ void interpolation_pc(level_type * level_f, int id_f, double prescale_f, level_t
               level_c->interpolation.send_sizes[n],
               MPI_DOUBLE,
               level_c->interpolation.send_ranks[n],
-              0, // only one message should be sent to each neighboring process
+              level_c->my_rank, // tag messages with sender's rank
+              //0, // only one message should be sent to each neighboring process
               MPI_COMM_WORLD,
               &level_c->interpolation.requests[n]
     );
@@ -117,6 +119,7 @@ void interpolation_pc(level_type * level_f, int id_f, double prescale_f, level_t
   #ifdef USE_MPI 
   _timeStart = CycleTime();
   if(level_c->interpolation.num_sends)MPI_Waitall(level_c->interpolation.num_sends,level_c->interpolation.requests,level_c->interpolation.status);
+//if(level_f->interpolation.num_recvs){int done=0;while(done){MPI_Testall(level_f->interpolation.num_recvs,level_f->interpolation.requests,&done,level_f->interpolation.status);}}
   if(level_f->interpolation.num_recvs)MPI_Waitall(level_f->interpolation.num_recvs,level_f->interpolation.requests,level_f->interpolation.status);
   _timeEnd = CycleTime();
   level_f->cycles.interpolation_wait += (_timeEnd-_timeStart);
