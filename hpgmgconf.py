@@ -38,7 +38,6 @@ def main():
     fv.add_argument('--no-fv-subcomm', action='store_false', dest='fv_subcomm', help='Build a subcommunicator for each level in the MG v-cycle to minimize the scope of MPI_AllReduce()')
     fv.add_argument('--fv-coarse-solver', help='Use BiCGStab as a bottom (coarse grid) solver', choices=['bicgstab','cabicgstab','cg','cacg'], default='bicgstab')
     fv.add_argument('--fv-smoother', help='Multigrid smoother', choices=['cheby','gsrb','jacobi','l1jacobi'], default='cheby')
-    fv.add_argument('--fv-timer', help='Timer implementation', choices=['omp','mpi'], default='mpi')
     args = parser.parse_args()
     if args.arch is None:
         args.arch = args.petsc_arch
@@ -94,7 +93,6 @@ def makefile(args):
         m.append('CONFIG_FV = y')
     if args.fe and args.petsc_dir:
         m.append('CONFIG_FE = y')
-    m.append('CONFIG_TIMER_%s = y' % args.fv_timer.upper())
     m.append('CONFIG_FV_CPPFLAGS = ' + hpgmg_fv_cflags(args))
     if args.petsc_dir:
         m.append('include $(PETSC_DIR)/conf/variables')

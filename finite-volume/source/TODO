@@ -1,3 +1,4 @@
+- generalized/optimized boundary condition enforcement... block copies like ghost zones?
 - cycleTime:  uint64_t nanoseconds to double seconds.  cycles.* convert to double
 - iterators.c/iterators.h: box/block element iterators that allow easy replacement of omp workshare with tasks, openACC, etc...
 - communication-avoiding smoothers (wavefront, simdized)

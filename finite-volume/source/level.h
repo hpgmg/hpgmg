@@ -145,9 +145,10 @@ typedef struct {
  int create_box(box_type *box, int numVectors, int dim, int ghosts);
 void add_vectors_to_box(box_type *box, int numAdditionalVectors);
 void destroy_box(box_type *box);
-void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_vectors, int domain_boundary_condition, int MPI_Rank, int MPI_Tasks);
+void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_vectors, int domain_boundary_condition, int my_rank, int num_ranks);
 void destroy_level(level_type *level);
 void reset_level_timers(level_type *level);
+void   max_level_timers(level_type *level);
 int qsortInt(const void *a, const void *b);
 void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *num_blocks,
                           int dim_i, int dim_j, int dim_k,

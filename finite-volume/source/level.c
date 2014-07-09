@@ -668,11 +668,11 @@ void build_exchange_ghosts(level_type *level, int justFaces){
 
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
-void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_vectors, int domain_boundary_condition, int MPI_Rank, int MPI_Tasks){
+void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_vectors, int domain_boundary_condition, int my_rank, int num_ranks){
   int box;
   int TotalBoxes = boxes_in_i*boxes_in_i*boxes_in_i;
 
-  if(MPI_Rank==0){printf("attempting to create a %d^3 level using a %d^3 grid of %d^3 boxes and %d tasks...\n",box_dim*boxes_in_i,boxes_in_i,box_dim,MPI_Tasks);fflush(stdout);}
+  if(my_rank==0){printf("attempting to create a %d^3 level using a %d^3 grid of %d^3 boxes and %d tasks...\n",box_dim*boxes_in_i,boxes_in_i,box_dim,num_ranks);fflush(stdout);}
 
   int omp_threads = 1;
   int omp_nested  = 0;
@@ -699,8 +699,8 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->dim.j          = box_dim*level->boxes_in.j;
   level->dim.k          = box_dim*level->boxes_in.k;
   level->active         = 1;
-  level->my_rank        = MPI_Rank;
-  level->num_ranks      = MPI_Tasks;
+  level->my_rank        = my_rank;
+  level->num_ranks      = num_ranks;
   level->domain_boundary_condition = domain_boundary_condition;
   level->alpha_is_zero  = -1;
   level->num_threads      = omp_threads;
@@ -718,7 +718,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   for(box=0;box<level->boxes_in.i*level->boxes_in.j*level->boxes_in.k;box++){level->rank_of_box[box]=-1;}  // -1 denotes that there is no actual box assigned to this region
 
   // parallelize the grid...
-  decompose_level_kd_tree(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,MPI_Tasks);
+  decompose_level_kd_tree(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,num_ranks);
   //print_decomposition(level);// for debug purposes only
 
 
@@ -765,7 +765,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   }
 
 
-  if(MPI_Rank==0){
+  if(my_rank==0){
     if(omp_nested)printf("  OMP_NESTED=TRUE  OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
              else printf("  OMP_NESTED=FALSE OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
     fflush(stdout);
@@ -814,14 +814,14 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
   // duplicate MPI_COMM_WORLD to be the communicator for each level
   #ifdef USE_MPI
-  if(MPI_Rank==0){printf("  Duplicating MPI_COMM_WORLD...");fflush(stdout);}
+  if(my_rank==0){printf("  Duplicating MPI_COMM_WORLD...");fflush(stdout);}
   double time_start = MPI_Wtime();
   MPI_Comm_dup(MPI_COMM_WORLD,&level->MPI_COMM_ALLREDUCE);
   double time_end = MPI_Wtime();
   double time_in_comm_dup = 0;
   double time_in_comm_dup_send = time_end-time_start;
   MPI_Allreduce(&time_in_comm_dup_send,&time_in_comm_dup,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
-  if(MPI_Rank==0){printf("done (%0.6f seconds)\n",time_in_comm_dup);fflush(stdout);}
+  if(my_rank==0){printf("done (%0.6f seconds)\n",time_in_comm_dup);fflush(stdout);}
   #endif
     
   // report on potential load imbalance
@@ -830,7 +830,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   uint64_t BoxesPerProcessSend = level->num_my_boxes;
   MPI_Allreduce(&BoxesPerProcessSend,&BoxesPerProcess,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
   #endif
-  if(MPI_Rank==0){printf("  Calculating boxes per process... target=%0.3f, max=%ld\n\n",(double)TotalBoxes/(double)MPI_Tasks,BoxesPerProcess);fflush(stdout);}
+  if(my_rank==0){printf("  Calculating boxes per process... target=%0.3f, max=%ld\n\n",(double)TotalBoxes/(double)num_ranks,BoxesPerProcess);fflush(stdout);}
 }
 
 
@@ -874,8 +874,44 @@ void reset_level_timers(level_type *level){
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
+void max_level_timers(level_type *level){
+  uint64_t temp;
+  #ifdef USE_MPI
+  temp=level->cycles.smooth;              MPI_Allreduce(&temp,&level->cycles.smooth              ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.apply_op;            MPI_Allreduce(&temp,&level->cycles.apply_op            ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.residual;            MPI_Allreduce(&temp,&level->cycles.residual            ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.blas1;               MPI_Allreduce(&temp,&level->cycles.blas1               ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.blas3;               MPI_Allreduce(&temp,&level->cycles.blas3               ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.boundary_conditions; MPI_Allreduce(&temp,&level->cycles.boundary_conditions ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.restriction_total;   MPI_Allreduce(&temp,&level->cycles.restriction_total   ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.restriction_pack;    MPI_Allreduce(&temp,&level->cycles.restriction_pack    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.restriction_local;   MPI_Allreduce(&temp,&level->cycles.restriction_local   ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.restriction_unpack;  MPI_Allreduce(&temp,&level->cycles.restriction_unpack  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.restriction_recv;    MPI_Allreduce(&temp,&level->cycles.restriction_recv    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.restriction_send;    MPI_Allreduce(&temp,&level->cycles.restriction_send    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.restriction_wait;    MPI_Allreduce(&temp,&level->cycles.restriction_wait    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.interpolation_total; MPI_Allreduce(&temp,&level->cycles.interpolation_total ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.interpolation_pack;  MPI_Allreduce(&temp,&level->cycles.interpolation_pack  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.interpolation_local; MPI_Allreduce(&temp,&level->cycles.interpolation_local ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.interpolation_unpack;MPI_Allreduce(&temp,&level->cycles.interpolation_unpack,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.interpolation_recv;  MPI_Allreduce(&temp,&level->cycles.interpolation_recv  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.interpolation_send;  MPI_Allreduce(&temp,&level->cycles.interpolation_send  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.interpolation_wait;  MPI_Allreduce(&temp,&level->cycles.interpolation_wait  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.ghostZone_total;     MPI_Allreduce(&temp,&level->cycles.ghostZone_total     ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.ghostZone_pack;      MPI_Allreduce(&temp,&level->cycles.ghostZone_pack      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.ghostZone_local;     MPI_Allreduce(&temp,&level->cycles.ghostZone_local     ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.ghostZone_unpack;    MPI_Allreduce(&temp,&level->cycles.ghostZone_unpack    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.ghostZone_recv;      MPI_Allreduce(&temp,&level->cycles.ghostZone_recv      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.ghostZone_send;      MPI_Allreduce(&temp,&level->cycles.ghostZone_send      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.ghostZone_wait;      MPI_Allreduce(&temp,&level->cycles.ghostZone_wait      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.collectives;         MPI_Allreduce(&temp,&level->cycles.collectives         ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  temp=level->cycles.Total;               MPI_Allreduce(&temp,&level->cycles.Total               ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
+  #endif
+}
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------
 void destroy_level(level_type *level){
   int box;
-  for(box=0;box>level->num_my_boxes;box++)destroy_box(&level->my_boxes[box]);
+  for(box=0;box<level->num_my_boxes;box++)destroy_box(&level->my_boxes[box]);
   free(level->rank_of_box);
 }

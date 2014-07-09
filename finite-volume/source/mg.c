@@ -15,7 +15,7 @@
 #endif
 #include <omp.h>
 //------------------------------------------------------------------------------------------------------------------------------
-#include "timer.h"
+#include "timers.h"
 #include "defines.h"
 #include "level.h"
 #include "operators.h"
@@ -52,8 +52,13 @@ void MGPrintTiming(mg_type *all_grids){
   double SecondsPerCycle = (double)1.0/(double)(_timeEnd-_timeStart);
   double scale = SecondsPerCycle/(double)all_grids->MGSolves_performed; // prints average performance per MGSolve
 
-  if(all_grids->my_rank!=0)return;
+   
+  #if 0 // find the maximum time taken by any process in any function... 
+  #warning Will print the max time spent by any process for each operation/level
+  for(level=0;level<num_levels;level++)max_level_timers(all_grids->levels[level]);
+  #endif
 
+  if(all_grids->my_rank!=0)return;
   double this,total;
           printf("                          ");for(level=0;level<(num_levels  );level++){printf("%12d ",level);}printf("\n");
         //printf("v-cycles initiated        ");for(level=0;level<(num_levels  );level++){printf("%12d ",all_grids->levels[level]->vcycles_from_this_level/all_grids->MGSolves_performed);}printf("\n");
@@ -964,7 +969,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   int e_id = u_id;
   int R_id = VECTOR_F_MINUS_AV;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(all_grids->levels[0]->my_rank==0){printf("FMGSolve...\n");fflush(stdout);}
+  if(all_grids->levels[0]->my_rank==0){printf("FMGSolve...\n");/*fflush(stdout);*/}
   uint64_t _timeStartMGSolve = CycleTime();
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   //double norm_of_r0 = norm(all_grids->levels[0],F_id);
@@ -1031,7 +1036,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
     if(all_grids->levels[level]->my_rank==0){if(v>=0)printf("v-cycle=%2d, norm=%22.20f (%1.15e)\n",v+1,norm_of_residual,norm_of_residual);else
-                                                     printf("f-cycle,    norm=%22.20f (%1.15e)\n",norm_of_residual,norm_of_residual);fflush(stdout);}
+                                                     printf("f-cycle,    norm=%22.20f (%1.15e)\n",norm_of_residual,norm_of_residual);/*fflush(stdout);*/}
     if(norm_of_residual<desired_mg_norm)break;
   }
 
@@ -1040,6 +1045,6 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   all_grids->cycles.MGSolve += (uint64_t)(CycleTime()-_timeStartMGSolve);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(all_grids->levels[0]->my_rank==0){printf("done\n");fflush(stdout);}
+  if(all_grids->levels[0]->my_rank==0){printf("done\n");/*fflush(stdout);*/}
 }
 //------------------------------------------------------------------------------------------------------------------------------

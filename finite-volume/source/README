@@ -85,17 +85,17 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 
 
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
-cc -O3 -fno-alias -fno-fnalias -xAVX -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.omp.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.avx
+cc -O3 -fno-alias -fno-fnalias -xAVX -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.avx
 
 On Mira (an IBM BlueGene/Q), one can use the following...
 soft add +mpiwrapper-xl
-mpixlc_r -O5 -qsmp=omp:noauto                level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.omp.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.bgq
+mpixlc_r -O5 -qsmp=omp:noauto                level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.bgq
 In order to compile with IBM's HPM counters...
-mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.omp.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.bgq \
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.bgq \
   -DUSE_HPM -I/bgsys/drivers/ppcfloor/bgpm/include -L/soft/perftools/hpctw/lib -L/bgsys/drivers/ppcfloor/bgpm/lib /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a  -lbgpm  -lmpihpm_smp -lmpitrace
 
 On Babbage (Xeon Phi cluster at NERSC), one can use
-mpiicc -O3 -fno-alias -fno-fnalias -mmic -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timer.omp.c -DUSE_MPI -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.babbage
+mpiicc -O3 -fno-alias -fno-fnalias -mmic -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.babbage
 
 
 Running the benchmark
