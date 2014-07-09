@@ -1,0 +1,28 @@
+#!/bin/sh
+#PBS -q regular
+#PBS -N HPGMG
+#PBS -o results.carver.01728
+#PBS -j oe
+#PBS -l walltime=0:30:00
+#PBS -l nodes=864:ppn=8
+#####PBS -l pvmem=10GB
+
+
+set -x
+cd $PBS_O_WORKDIR
+module swap pgi intel
+module swap openmpi openmpi-intel
+
+export OMP_NUM_THREADS=4
+mpirun -np    1 -report-bindings -npernode 1 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np    8 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np   27 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np   64 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np  125 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np  216 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np  343 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np  512 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np  729 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np 1000 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np 1331 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np 1728 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1

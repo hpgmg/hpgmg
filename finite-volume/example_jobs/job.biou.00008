@@ -1,0 +1,19 @@
+#PBS -N HPGMG-FV
+#PBS -q parallel
+#PBS -l nodes=2:ppn=32,walltime=00:30:00
+#PBS -m abe
+#PBS -V
+
+cd $PBS_O_WORKDIR
+
+module load openmpi/1.6.5-gcc
+
+# Hybrid MPI + OpenMP
+export OMP_NUM_THREADS=8
+mpiexec -report-bindings -np   1 -npernode  1 -cpus-per-proc 8 -bind-to-core ./run.power7 7 1
+mpiexec -report-bindings -np   8 -npernode  4 -cpus-per-proc 8 -bind-to-core ./run.power7 7 1
+
+# flat MPI
+export OMP_NUM_THREADS=1
+mpiexec -report-bindings -np   8 -npernode  8 -cpus-per-proc 1 -bind-to-core ./run.power7 6 1
+mpiexec -report-bindings -np  64 -npernode 32 -cpus-per-proc 1 -bind-to-core ./run.power7 6 1
