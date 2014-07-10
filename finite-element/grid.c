@@ -34,7 +34,7 @@ struct FE_private {
   PetscInt dof;         // Number of degrees of freedom per vertex
   PetscInt om[3];       // Array dimensions of owned part of global vectors
   PetscInt lM[3];       // Array dimensions of local vectors
-  PetscInt ls[3],lm[3]; // Start and extent of owned elements in local vector
+  PetscInt ls[3],lm[3]; // Start and extent of the local vector.
   PetscReal Luniform[3];
   PetscBool hascoordinates;
   MPI_Datatype unit;
