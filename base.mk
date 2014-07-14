@@ -71,9 +71,13 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c | $$(@D)/.DIR
 	$(HPGMG_COMPILE.c) $< -o $@
 
 test: test-fe
+prove: prove-fe
 
 test-fe : $(hpgmg-fe)
 	make -C "$(SRCDIR)/finite-element/test" PETSC_DIR="$(PETSC_DIR)" PETSC_ARCH="$(PETSC_ARCH)" HPGMG_BINDIR="$(abspath $(BINDIR))" all
+
+prove-fe : $(hpgmg-fe)
+	make -C "$(SRCDIR)/finite-element/test" PETSC_DIR="$(PETSC_DIR)" PETSC_ARCH="$(PETSC_ARCH)" HPGMG_BINDIR="$(abspath $(BINDIR))" prove
 
 %/.DIR :
 	@mkdir -p $(@D)

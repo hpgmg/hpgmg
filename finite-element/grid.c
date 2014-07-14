@@ -33,8 +33,23 @@ struct FE_private {
   PetscInt degree;      // Finite element polynomial degree
   PetscInt dof;         // Number of degrees of freedom per vertex
   PetscInt om[3];       // Array dimensions of owned part of global vectors
-  PetscInt lM[3];       // Array dimensions of local vectors
-  PetscInt ls[3],lm[3]; // Start and extent of the local vector.
+  // Local vectors have sufficient fringe to include C-points needed for interpolation and (soon) overlap for segmental
+  // refinement.  Vertices 0 and 0+lM-1 will always correspond to a vertex at the corner of a coarse elements.  In the
+  // Q2 example below:
+  //
+  //   C is a coarse corner point
+  //   F is a fine corner point and coarse interior point
+  //   f is a fine interior point
+  //
+  // Suppose that the fine-grid partition had the current process owning vertices [2,a), thus the active region (with a
+  // non-overlapping element partition) is [2,a].
+  //
+  // 0C -- 1f -- 2F -- 3f -- 4C -- 5f -- 6F -- 7f -- 8C -- 9f -- aF -- bf -- cC
+  //             ^                                           ^     ^           ^
+  //           ls=2                                        om=lm-1           lM=c+1=13
+  //                                                             lm=a+1-2=9
+  PetscInt lM[3];       // Array dimensions of local vectors (includes enough fringe for interpolation)
+  PetscInt ls[3],lm[3]; // Start and extent of active part of local vector
   PetscReal Luniform[3];
   PetscBool hascoordinates;
   MPI_Datatype unit;
@@ -1024,9 +1039,9 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
   for (i=0; i<3; i++) {
     PetscInt gs = 2*(grid->s[i]/2)*fedegree;                       // coordinate of start
     PetscInt ge = 2*CeilDiv(grid->s[i]+grid->m[i],2)*fedegree + 1; // one past coordinate of end
-    fe->lM[i] = ge - gs;
-    fe->ls[i] = grid->s[i]*fedegree - gs;
-    fe->lm[i] = (grid->s[i]+grid->m[i])*fedegree + 1 - (gs + fe->ls[i]);
+    fe->lM[i] = ge - gs;                                           // extent of local array
+    fe->ls[i] = grid->s[i]*fedegree - gs;                          // first active part of local array
+    fe->lm[i] = (grid->s[i]+grid->m[i])*fedegree + 1 - (gs + fe->ls[i]); // extent of active part in local array
     if (grid->neighborranks[1+(i==0)][1+(i==1)][1+(i==2)] >= 0) { // My neighbor exists so I don't own that fringe
       fe->om[i] = fe->lm[i]-1;
     } else {                    // I own my high boundary
