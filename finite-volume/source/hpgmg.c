@@ -64,22 +64,21 @@ int main(int argc, char **argv){
 
   #ifdef USE_MPI
   int    actual_threading_model = -1;
-  int requested_threading_model = MPI_THREAD_SINGLE;
+  int requested_threading_model = -1;
+      requested_threading_model = MPI_THREAD_SINGLE;
+      requested_threading_model = MPI_THREAD_FUNNELED;
   #ifdef _OPENMP
       requested_threading_model = MPI_THREAD_FUNNELED;
     //requested_threading_model = MPI_THREAD_SERIALIZED;
     //requested_threading_model = MPI_THREAD_MULTIPLE;
-  MPI_Init_thread(&argc, &argv, requested_threading_model, &actual_threading_model);
-  #else
-         MPI_Init(&argc, &argv);
+//MPI_Init_thread(&argc, &argv, requested_threading_model, &actual_threading_model);
+//#else
+//       MPI_Init(&argc, &argv);
   #endif
+  MPI_Init_thread(&argc, &argv, requested_threading_model, &actual_threading_model);
   MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-  #ifdef USE_HPM // IBM HPM counters for BGQ...
-  HPM_Init();
-  #endif
-  #ifdef _OPENMP
-  if(actual_threading_model>requested_threading_model)actual_threading_model=requested_threading_model;
+//if(actual_threading_model>requested_threading_model)actual_threading_model=requested_threading_model;
   if(my_rank==0){
        if(requested_threading_model == MPI_THREAD_MULTIPLE  )printf("Requested MPI_THREAD_MULTIPLE, ");
   else if(requested_threading_model == MPI_THREAD_SINGLE    )printf("Requested MPI_THREAD_SINGLE, ");
@@ -87,14 +86,16 @@ int main(int argc, char **argv){
   else if(requested_threading_model == MPI_THREAD_SERIALIZED)printf("Requested MPI_THREAD_SERIALIZED, ");
   else if(requested_threading_model == MPI_THREAD_MULTIPLE  )printf("Requested MPI_THREAD_MULTIPLE, ");
   else                                                       printf("Requested Unknown MPI Threading Model (%d), ",requested_threading_model);
-       if(actual_threading_model          == MPI_THREAD_MULTIPLE  )printf("got MPI_THREAD_MULTIPLE\n");
-  else if(actual_threading_model          == MPI_THREAD_SINGLE    )printf("got MPI_THREAD_SINGLE\n");
-  else if(actual_threading_model          == MPI_THREAD_FUNNELED  )printf("got MPI_THREAD_FUNNELED\n");
-  else if(actual_threading_model          == MPI_THREAD_SERIALIZED)printf("got MPI_THREAD_SERIALIZED\n");
-  else if(actual_threading_model          == MPI_THREAD_MULTIPLE  )printf("got MPI_THREAD_MULTIPLE\n");
-  else                                                             printf("got Unknown MPI Threading Model (%d)\n",actual_threading_model);
+       if(actual_threading_model    == MPI_THREAD_MULTIPLE  )printf("got MPI_THREAD_MULTIPLE\n");
+  else if(actual_threading_model    == MPI_THREAD_SINGLE    )printf("got MPI_THREAD_SINGLE\n");
+  else if(actual_threading_model    == MPI_THREAD_FUNNELED  )printf("got MPI_THREAD_FUNNELED\n");
+  else if(actual_threading_model    == MPI_THREAD_SERIALIZED)printf("got MPI_THREAD_SERIALIZED\n");
+  else if(actual_threading_model    == MPI_THREAD_MULTIPLE  )printf("got MPI_THREAD_MULTIPLE\n");
+  else                                                       printf("got Unknown MPI Threading Model (%d)\n",actual_threading_model);
   fflush(stdout);}
-  #endif // _OPENMP
+  #ifdef USE_HPM // IBM HPM counters for BGQ...
+  HPM_Init();
+  #endif
   #endif // USE_MPI
 
 
@@ -159,19 +160,32 @@ int main(int argc, char **argv){
   int minCoarseDim = 1;
   MGBuild(&all_grids,&fine_grid,a,b,minCoarseDim);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  int doTiming;for(doTiming=0;doTiming<=1;doTiming++){ // first pass warms up, second times
-  MGResetTimers(&all_grids);
-  #ifdef USE_HPM // IBM performance counters for BGQ...
-  if(doTiming)HPM_Start("FMGSolve()");
-  #endif
-  #ifdef USE_FCYCLES
-  int trial;for(trial=0;trial<10;trial++){zero_vector(all_grids.levels[0],VECTOR_U);FMGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
-  #else
-  int trial;for(trial=0;trial< 5;trial++){zero_vector(all_grids.levels[0],VECTOR_U); MGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);}
-  #endif
-  #ifdef USE_HPM // IBM performance counters for BGQ...
-  if(doTiming)HPM_Stop("FMGSolve()");
-  #endif
+  int doTiming;
+  for(doTiming=0;doTiming<=1;doTiming++){ // first pass warms up, second pass times
+    MGResetTimers(&all_grids);
+    #ifdef USE_HPM // IBM performance counters for BGQ...
+    if(doTiming)HPM_Start("FMGSolve()");
+    #endif
+       int numSolves = 0; // solves completed
+       int minSolves = 5; // do at least minSolves MGSolves
+    #ifdef USE_MPI
+    double minTime   = 10.0; // minimum time in seconds that the benchmark should run
+    double startTime = MPI_Wtime();
+    while( (numSolves<minSolves) || ((MPI_Wtime()-startTime)<minTime) ){
+    #else
+    while( (numSolves<minSolves)                                      ){
+    #endif
+      zero_vector(all_grids.levels[0],VECTOR_U);
+      #ifdef USE_FCYCLES
+      FMGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);
+      #else
+       MGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);
+      #endif
+      numSolves++;
+    }
+    #ifdef USE_HPM // IBM performance counters for BGQ...
+    if(doTiming)HPM_Stop("FMGSolve()");
+    #endif
   }
   MGPrintTiming(&all_grids); // don't include the error check in the timing results
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

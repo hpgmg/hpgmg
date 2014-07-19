@@ -289,6 +289,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #include "operators/blockCopy.c"
 #include "operators/misc.c"
 #include "operators/exchange_boundary.c"
+//#include "operators/exchange_boundary_chunk.c"
 #include "operators/boundary_conditions.c"
 #include "operators/matmul.c"
 #include "operators/restriction.c"

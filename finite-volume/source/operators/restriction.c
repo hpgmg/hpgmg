@@ -99,6 +99,11 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
 
 
   #ifdef USE_MPI
+  // by convention, level_f allocates a combined array of requests for both level_f sends and level_c recvs...
+  int nMessages = level_c->restriction.num_recvs + level_f->restriction.num_sends;
+  MPI_Request *recv_requests = level_f->restriction.requests;
+  MPI_Request *send_requests = level_f->restriction.requests + level_c->restriction.num_recvs;
+
 
   // loop through packed list of MPI receives and prepost Irecv's...
   _timeStart = CycleTime();
@@ -113,7 +118,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
               level_c->restriction.recv_ranks[n], // i.e. message was tagged by sender's rank
               //0, // only one message should be received from each neighboring process
               MPI_COMM_WORLD,
-              &level_c->restriction.requests[n]
+              &recv_requests[n]
     );
   }
   _timeEnd = CycleTime();
@@ -141,7 +146,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
               level_f->my_rank, // i.e. tag messages by the sender's rank
               //0, // only one message should be sent to each neighboring process
               MPI_COMM_WORLD,
-              &level_f->restriction.requests[n]
+              &send_requests[n]
     );
   }
   _timeEnd = CycleTime();
@@ -160,8 +165,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // wait for MPI to finish...
   #ifdef USE_MPI 
   _timeStart = CycleTime();
-  if(level_f->restriction.num_sends)MPI_Waitall(level_f->restriction.num_sends,level_f->restriction.requests,level_f->restriction.status);
-  if(level_c->restriction.num_recvs)MPI_Waitall(level_c->restriction.num_recvs,level_c->restriction.requests,level_c->restriction.status);
+  if(nMessages)MPI_Waitall(nMessages,level_f->restriction.requests,level_f->restriction.status);
   _timeEnd = CycleTime();
   level_f->cycles.restriction_wait += (_timeEnd-_timeStart);
 
@@ -172,6 +176,8 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   for(buffer=0;buffer<level_c->restriction.num_blocks[2];buffer++){CopyBlock(level_c,id_c,&level_c->restriction.blocks[2][buffer]);}
   _timeEnd = CycleTime();
   level_f->cycles.restriction_unpack += (_timeEnd-_timeStart);
+
+
   #endif
  
  

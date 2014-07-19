@@ -391,10 +391,14 @@ void build_interpolation(mg_type *all_grids){
 
   #ifdef USE_MPI
   for(level=0;level<all_grids->num_levels;level++){
-  // malloc MPI requests/status arrays
-  // FIX, shouldn't it be the max of sends or recvs ???
-  all_grids->levels[level]->interpolation.requests = (MPI_Request*)malloc((all_grids->levels[level]->interpolation.num_sends+all_grids->levels[level]->interpolation.num_recvs)*sizeof(MPI_Request));
-  all_grids->levels[level]->interpolation.status   = (MPI_Status *)malloc((all_grids->levels[level]->interpolation.num_sends+all_grids->levels[level]->interpolation.num_recvs)*sizeof(MPI_Status ));
+    all_grids->levels[level]->interpolation.requests = NULL;
+    all_grids->levels[level]->interpolation.status   = NULL;
+    if(level<all_grids->num_levels-1){  // i.e. bottom never calls interpolation()
+    // by convention, level_f allocates a combined array of requests for both level_f recvs and level_c sends...
+    int nMessages = all_grids->levels[level+1]->interpolation.num_sends + all_grids->levels[level]->interpolation.num_recvs;
+    all_grids->levels[level]->interpolation.requests = (MPI_Request*)malloc(nMessages*sizeof(MPI_Request));
+    all_grids->levels[level]->interpolation.status   = (MPI_Status *)malloc(nMessages*sizeof(MPI_Status ));
+    }
   }
   #endif
 }
@@ -675,10 +679,14 @@ void build_restriction(mg_type *all_grids){
 
   #ifdef USE_MPI
   for(level=0;level<all_grids->num_levels;level++){
-  // malloc MPI requests/status arrays
-  // FIX shouldn't it be max of sends or recvs
-  all_grids->levels[level]->restriction.requests = (MPI_Request*)malloc((all_grids->levels[level]->restriction.num_sends+all_grids->levels[level]->restriction.num_recvs)*sizeof(MPI_Request));
-  all_grids->levels[level]->restriction.status   = (MPI_Status *)malloc((all_grids->levels[level]->restriction.num_sends+all_grids->levels[level]->restriction.num_recvs)*sizeof(MPI_Status ));
+    all_grids->levels[level]->restriction.requests = NULL;
+    all_grids->levels[level]->restriction.status   = NULL;
+    if(level<all_grids->num_levels-1){ // bottom never calls restriction()
+    // by convention, level_f allocates a combined array of requests for both level_f sends and level_c recvs...
+    int nMessages = all_grids->levels[level+1]->restriction.num_recvs + all_grids->levels[level]->restriction.num_sends;
+    all_grids->levels[level]->restriction.requests = (MPI_Request*)malloc(nMessages*sizeof(MPI_Request));
+    all_grids->levels[level]->restriction.status   = (MPI_Status *)malloc(nMessages*sizeof(MPI_Status ));
+    }
   }
   #endif
 }
@@ -969,7 +977,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   int e_id = u_id;
   int R_id = VECTOR_F_MINUS_AV;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(all_grids->levels[0]->my_rank==0){printf("FMGSolve...\n");/*fflush(stdout);*/}
+  if(all_grids->levels[0]->my_rank==0){printf("FMGSolve...\n");fflush(stdout);}
   uint64_t _timeStartMGSolve = CycleTime();
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   //double norm_of_r0 = norm(all_grids->levels[0],F_id);
@@ -1036,7 +1044,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
     if(all_grids->levels[level]->my_rank==0){if(v>=0)printf("v-cycle=%2d, norm=%22.20f (%1.15e)\n",v+1,norm_of_residual,norm_of_residual);else
-                                                     printf("f-cycle,    norm=%22.20f (%1.15e)\n",norm_of_residual,norm_of_residual);/*fflush(stdout);*/}
+                                                     printf("f-cycle,    norm=%22.20f (%1.15e)\n",norm_of_residual,norm_of_residual);fflush(stdout);}
     if(norm_of_residual<desired_mg_norm)break;
   }
 
@@ -1045,6 +1053,6 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   all_grids->cycles.MGSolve += (uint64_t)(CycleTime()-_timeStartMGSolve);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(all_grids->levels[0]->my_rank==0){printf("done\n");/*fflush(stdout);*/}
+  if(all_grids->levels[0]->my_rank==0){printf("done\n");fflush(stdout);}
 }
 //------------------------------------------------------------------------------------------------------------------------------

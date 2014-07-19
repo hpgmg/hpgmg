@@ -21,3 +21,25 @@ aprun -n   343  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
 aprun -n   512  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
 aprun -n   729  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
 aprun -n  1000  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+export OMP_NUM_THREADS=6
+aprun -n     1  -d  6               -ss  -cc numa_node ./run.hopper  7  1
+aprun -n     8  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n    27  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n    64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n   125  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n   216  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n   343  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n   512  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n   729  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n  1000  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+export OMP_NUM_THREADS=6
+aprun -n     1  -d  6               -ss  -cc numa_node ./run.hopper  7  1
+aprun -n     8  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n    27  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n    64  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n   125  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n   216  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n   343  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n   512  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n   729  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n  1000  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1

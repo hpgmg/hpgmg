@@ -1,10 +1,9 @@
 #!/bin/sh
 #PBS -N HPGMG
-#PBS -A m1270
-#PBS -o results.hopper.special
+#PBS -o results.hopper.special4
 #PBS -q regular
 #PBS -j oe
-#PBS -l walltime=0:59:00
+#PBS -l walltime=0:19:00
 #PBS -l mppwidth=131712
 #PBS -W x=FLAGS:ADVRES:samw.755
 
