@@ -171,6 +171,7 @@ PetscErrorCode MGSetUpPC(MG mg) {
 static PetscReal ConvergenceRate(PetscReal normCoarse,PetscReal normFine) {
   // Try to avoid reporting noisy rates in pre-asymptotic regime
   if (normCoarse < 1e3*PETSC_MACHINE_EPSILON && normFine > 1e3*PETSC_MACHINE_EPSILON) return 0;
+  if (normCoarse == 0 || normFine == 0) return 0;
   return log2(normCoarse/normFine);
 }
 
