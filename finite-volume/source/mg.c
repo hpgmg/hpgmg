@@ -977,6 +977,9 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   int e_id = u_id;
   int R_id = VECTOR_F_MINUS_AV;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  #ifdef USE_MPI
+  double FMG_Start_Time = MPI_Wtime();
+  #endif
   if(all_grids->levels[0]->my_rank==0){printf("FMGSolve...\n");fflush(stdout);}
   uint64_t _timeStartMGSolve = CycleTime();
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1053,6 +1056,10 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   all_grids->cycles.MGSolve += (uint64_t)(CycleTime()-_timeStartMGSolve);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  #ifdef USE_MPI
+  if(all_grids->levels[0]->my_rank==0){printf("done (%f seconds)\n",MPI_Wtime()-FMG_Start_Time);fflush(stdout);} // used to monitor variability in individual solve times
+  #else
   if(all_grids->levels[0]->my_rank==0){printf("done\n");fflush(stdout);}
+  #endif
 }
 //------------------------------------------------------------------------------------------------------------------------------

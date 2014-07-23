@@ -247,8 +247,7 @@ void decompose_level_kd_tree(int *rank_of_box, int jStride, int kStride, int ilo
     decompose_level_kd_tree(rank_of_box,jStride,kStride,ilo,jlo,klo+dim0,idim,jdim,dim1,rank_lo+r0,r1); // hi
     return;
   }
-    printf("decompose_level_kd_tree failed !!!\n");
-    exit(0);
+  printf("decompose_level_kd_tree failed !!!\n");fflush(stdout);exit(0);
 }
 
 

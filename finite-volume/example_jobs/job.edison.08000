@@ -8,7 +8,7 @@
 
 set -x
 cd $PBS_O_WORKDIR
-module load craype-hugepages2M
+#module load craype-hugepages2M
 
 export OMP_NUM_THREADS=8
 export OMP_NESTED=true
