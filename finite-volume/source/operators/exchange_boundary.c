@@ -30,8 +30,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
               level->exchange_ghosts[justFaces].recv_sizes[n],
               MPI_DOUBLE,
               level->exchange_ghosts[justFaces].recv_ranks[n],
-              level->exchange_ghosts[justFaces].recv_ranks[n], // taged by sender's rank (i.e. recv tag is the tag of sending process)
-              //0, // by construction, only one message should be received from each neighboring process
+              0, // by convention, ghost zone exchanges use tag=0
               MPI_COMM_WORLD,
               //&level->exchange_ghosts[justFaces].requests[n]
               &recv_requests[n]
@@ -59,8 +58,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
               level->exchange_ghosts[justFaces].send_sizes[n],
               MPI_DOUBLE,
               level->exchange_ghosts[justFaces].send_ranks[n],
-              level->my_rank, // tag with sender's rank (i.e. my rank)
-              //0, // by construction, only one message should be sent to each neighboring process
+              0, // by convention, ghost zone exchanges use tag=0
               MPI_COMM_WORLD,
               &send_requests[n]
               //&level->exchange_ghosts[justFaces].requests[n+level->exchange_ghosts[justFaces].num_recvs]

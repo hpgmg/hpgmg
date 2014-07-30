@@ -136,7 +136,7 @@ int stencil_get_radius()    {return(1);} // replaces #define STENCIL_RADIUS     
 int stencil_is_star_shaped(){return(1);} // replaces #define STENCIL_IS_STAR_SHAPED 1
 //------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
-  if(level->my_rank==0){printf("  rebuilding operator for level...  h=%e  ",level->h);fflush(stdout);}
+  if(level->my_rank==0){fprintf(stdout,"  rebuilding operator for level...  h=%e  ",level->h);}
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // form restriction of alpha[], beta_*[] coefficients from fromLevel
@@ -251,7 +251,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   uint64_t _timeEndAllReduce = CycleTime();
   level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
-  if(level->my_rank==0){printf("eigenvalue_max<%e\n",dominant_eigenvalue);fflush(stdout);}
+  if(level->my_rank==0){fprintf(stdout,"eigenvalue_max<%e\n",dominant_eigenvalue);}
   level->dominant_eigenvalue_of_DinvA = dominant_eigenvalue;
 
 

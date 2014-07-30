@@ -71,7 +71,7 @@ void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double
     #ifdef __DEBUG                                                              //
     residual(level,VECTOR_TEMP,x_id,R_id,a,b);                                       //
     double norm_of_residual = norm(level,VECTOR_TEMP);                               //
-    if(level->my_rank==0)printf("j=%8d, norm=%12.6e, norm_inital=%12.6e, reduction=%e\n",j,norm_of_residual,norm_of_r0,norm_of_residual/norm_of_r0);   //
+    if(level->my_rank==0)fprintf(stdout,"j=%8d, norm=%12.6e, norm_inital=%12.6e, reduction=%e\n",j,norm_of_residual,norm_of_r0,norm_of_residual/norm_of_r0);   //
     #endif                                                                      //
     double r_dot_r0_new = dot(level,r_id,r0_id);                                //   r_dot_r0_new = dot(r,r0)
     if(r_dot_r0_new == 0.0){BiCGStabFailed=5;break;}                            //   Lanczos breakdown ???
@@ -85,6 +85,6 @@ void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double
     mul_vectors(level,x_id,1.0,VECTOR_DINV,x_id);                                //   x_id[] = Dinv[]*x_id[] // i.e. x = D^{-1}x'
     #endif                                                                      //
   #ifdef __DEBUG
-  if(BiCGStabFailed)if(level->my_rank==0)printf("BiCGStab Failed... error = %d\n",BiCGStabFailed);
+  if(BiCGStabFailed)if(level->my_rank==0)fprintf(stderr,"BiCGStab Failed... error = %d\n",BiCGStabFailed);
   #endif
 }

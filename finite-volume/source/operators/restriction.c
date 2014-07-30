@@ -115,8 +115,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
               level_c->restriction.recv_sizes[n],
               MPI_DOUBLE,
               level_c->restriction.recv_ranks[n],
-              level_c->restriction.recv_ranks[n], // i.e. message was tagged by sender's rank
-              //0, // only one message should be received from each neighboring process
+              5, // by convention, restriction uses tag=5
               MPI_COMM_WORLD,
               &recv_requests[n]
     );
@@ -143,8 +142,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
               level_f->restriction.send_sizes[n],
               MPI_DOUBLE,
               level_f->restriction.send_ranks[n],
-              level_f->my_rank, // i.e. tag messages by the sender's rank
-              //0, // only one message should be sent to each neighboring process
+              5, // by convention, restriction uses tag=5
               MPI_COMM_WORLD,
               &send_requests[n]
     );

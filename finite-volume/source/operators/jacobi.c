@@ -7,7 +7,7 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   if(NUM_SMOOTHS&1){
-    printf("error - NUM_SMOOTHS must be even...\n");fflush(stdout);
+    fprintf(stderr,"error - NUM_SMOOTHS must be even...\n");
     exit(0);
   }
 

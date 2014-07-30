@@ -73,8 +73,7 @@ void interpolation_pc(level_type * level_f, int id_f, double prescale_f, level_t
               level_f->interpolation.recv_sizes[n],
               MPI_DOUBLE,
               level_f->interpolation.recv_ranks[n],
-              level_f->interpolation.recv_ranks[n], // messages are tagged with sender's rank
-              //0, // only one message should be received from each neighboring process
+              6, // by convention, piecewise constant interpolation uses tag=6
               MPI_COMM_WORLD,
               &recv_requests[n]
     );
@@ -101,8 +100,7 @@ void interpolation_pc(level_type * level_f, int id_f, double prescale_f, level_t
               level_c->interpolation.send_sizes[n],
               MPI_DOUBLE,
               level_c->interpolation.send_ranks[n],
-              level_c->my_rank, // tag messages with sender's rank
-              //0, // only one message should be sent to each neighboring process
+              6, // by convention, piecewise constant interpolation uses tag=6
               MPI_COMM_WORLD,
               &send_requests[n]
     );

@@ -87,7 +87,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
   scale_vector(level, p_id,1.0,rt_id);                                                               // p[] = rt[]
   double norm_of_rt = norm(level,rt_id);                                                         // the norm of the initial residual...
   #ifdef VERBOSE
-  if(level->my_rank==0)printf("m=%8d, norm   =%0.20f\n",m,norm_of_rt);
+  if(level->my_rank==0)ffprintf(stderr,stderr,"m=%8d, norm   =%0.20f\n",m,norm_of_rt);
   #endif
   if(norm_of_rt == 0.0){BiCGStabConverged=1;}                                                   // entered BiCGStab with exact solution
   delta = dot(level,r_id,rt_id);                                                                  // delta = dot(r,rt)
@@ -160,14 +160,14 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
                        g_dot_Tpaj = vdotv(g,Tpaj,4*ca_krylov_s+1);                            // (g,T'aj)
       if(g_dot_Tpaj == 0.0){                                                                    // pivot breakdown ???
         #ifdef VERBOSE                                                                        //
-        if(level->my_rank==0){printf("g_dot_Tpaj == 0.0\n");}                                   //
+        if(level->my_rank==0){ffprintf(stderr,stderr,"g_dot_Tpaj == 0.0\n");}                                   //
         #endif                                                                                  //
         BiCGStabFailed=1;break;                                                                 //
       }                                                                                         //
       alpha = delta / g_dot_Tpaj;                                                               // delta / (g,T'aj)
       if(isinf(alpha)){                                                                         // alpha = big/tiny(overflow) = inf -> breakdown
         #ifdef VERBOSE                                                                        //
-        if(level->my_rank==0){printf("alpha == inf\n");}                                        // 
+        if(level->my_rank==0){ffprintf(stderr,stderr,"alpha == inf\n");}                                        // 
         #endif                                                                                  //
         BiCGStabFailed=1;break;                                                                 // 
       }                                                                                         // 
@@ -199,21 +199,21 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
                                  L2_norm_of_s = vdotv(temp1,temp2,4*ca_krylov_s+1);           //  (temp1,temp2) = ( (cj - alpha*T'aj) , G(cj - alpha*T'aj) )  == square of L2 norm of s in exact arithmetic
       if(L2_norm_of_s<0)L2_norm_of_s=0;else L2_norm_of_s=sqrt(L2_norm_of_s);                    // finite precision can lead to the norm^2 being < 0 (Demmel says flush to 0.0)
       #ifdef VERBOSE                                                                          //
-      if(level->my_rank==0){printf("m=%8d, norm(s)=%0.20f\n",m+n,L2_norm_of_s);}                //
+      if(level->my_rank==0){fprintf(stderr,"m=%8d, norm(s)=%0.20f\n",m+n,L2_norm_of_s);}                //
       #endif                                                                                    //
       if(L2_norm_of_s < desired_reduction_in_norm*L2_norm_of_rt){BiCGStabConverged=1;break;}    // terminate the inner n-loop
 
 
       if(omega_denominator == 0.0){                                                             // ??? breakdown
         #ifdef VERBOSE                                                                        //
-        if(level->my_rank==0){if(omega_denominator == 0.0)printf("omega_denominator == 0.0\n");}//
+        if(level->my_rank==0){if(omega_denominator == 0.0)fprintf(stderr,"omega_denominator == 0.0\n");}//
         #endif                                                                                  //
         BiCGStabFailed=1;break;                                                                 //
       }                                                                                         //
       omega = omega_numerator / omega_denominator;                                              // 
       if(isinf(omega)){                                                                         // omega = big/tiny(oveflow) = inf
         #ifdef VERBOSE                                                                        //
-        if(level->my_rank==0){if(isinf(omega))printf("omega == inf\n");}                        // 
+        if(level->my_rank==0){if(isinf(omega))fprintf(stderr,"omega == inf\n");}                        // 
         #endif                                                                                  //
         BiCGStabFailed=1;break;                                                                 //
       }                                                                                         //
@@ -230,7 +230,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
                                        cj_dot_Gcj = vdotv(cj,temp1,4*ca_krylov_s+1);          // sqrt( (cj,Gcj) ) == L2 norm of the intermediate residual in exact arithmetic
       L2_norm_of_residual = 0.0;if(cj_dot_Gcj>0)L2_norm_of_residual=sqrt(cj_dot_Gcj);           // finite precision can lead to the norm^2 being < 0 (Demmel says flush to 0.0)
       #ifdef VERBOSE 
-      if(level->my_rank==0){printf("m=%8d, norm(r)=%0.20f (cj_dot_Gcj=%0.20e)\n",m+n,L2_norm_of_residual,cj_dot_Gcj);}
+      if(level->my_rank==0){fprintf(stderr,"m=%8d, norm(r)=%0.20f (cj_dot_Gcj=%0.20e)\n",m+n,L2_norm_of_residual,cj_dot_Gcj);}
       #endif
       if(L2_norm_of_residual < desired_reduction_in_norm*L2_norm_of_rt){BiCGStabConverged=1;break;} // terminate the inner n-loop
 
@@ -238,10 +238,10 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
       delta_next = vdotv( g,cj,4*ca_krylov_s+1);                                              // (g,cj)
       #ifdef VERBOSE                                                                          //
       if(level->my_rank==0){                                                                    //
-        if(isinf(delta_next)     ){printf("delta == inf\n");}                                   // delta = big/tiny(overflow) = inf
-        if(delta_next      == 0.0){printf("delta == 0.0\n");}                                   // Lanczos breakdown
-        if(omega_numerator == 0.0){printf("omega_numerator == 0.0\n");}                         // stabilization breakdown
-        if(omega           == 0.0){printf("omega == 0.0\n");}                                   // stabilization breakdown 
+        if(isinf(delta_next)     ){fprintf(stderr,"delta == inf\n");}                                   // delta = big/tiny(overflow) = inf
+        if(delta_next      == 0.0){fprintf(stderr,"delta == 0.0\n");}                                   // Lanczos breakdown
+        if(omega_numerator == 0.0){fprintf(stderr,"omega_numerator == 0.0\n");}                         // stabilization breakdown
+        if(omega           == 0.0){fprintf(stderr,"omega == 0.0\n");}                                   // stabilization breakdown 
       }                                                                                         //
       #endif                                                                                    //
       if(isinf(delta_next)){BiCGStabFailed   =1;break;}                                         // delta = inf?
@@ -250,8 +250,8 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
       beta = (delta_next/delta)*(alpha/omega);                                                  // (delta_next/delta)*(alpha/omega)
       #ifdef VERBOSE                                                                          //
       if(level->my_rank==0){                                                                    //
-        if(isinf(beta)           ){printf("beta == inf\n");}                                    // beta = inf?
-        if(beta            == 0.0){printf("beta == 0.0\n");}                                    // beta = 0?  can't make further progress(?)
+        if(isinf(beta)           ){fprintf(stderr,"beta == inf\n");}                                    // beta = inf?
+        if(beta            == 0.0){fprintf(stderr,"beta == 0.0\n");}                                    // beta = 0?  can't make further progress(?)
       }                                                                                         //
       #endif                                                                                    //
       if(isinf(beta)      ){BiCGStabFailed   =1;break;}                                         // beta = inf?
@@ -321,7 +321,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
   scale_vector(level, p_id,1.0,rt_id);                                               // p[] = rt[]
   double norm_of_rt = norm(level,rt_id);                                         // the norm of the initial residual...
   #ifdef VERBOSE
-  if(level->my_rank==0)printf("m=%8d, norm   =%0.20f\n",m,norm_of_rt);
+  if(level->my_rank==0)fprintf(stderr,"m=%8d, norm   =%0.20f\n",m,norm_of_rt);
   #endif
   if(norm_of_rt == 0.0){BiCGStabConverged=1;}                                   // entered BiCGStab with exact solution
   delta = dot(level,r_id,rt_id);                                                  // delta = dot(r,rt)
@@ -395,14 +395,14 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
                        g_dot_Tpaj = vdotv(g,Tpaj,4*ca_krylov_s+1);                            // (g,T'aj)
       if(g_dot_Tpaj == 0.0){                                                                    // pivot breakdown ???
         #ifdef VERBOSE                                                                        //
-        if(level->my_rank==0){printf("g_dot_Tpaj == 0.0\n");}                                   //
+        if(level->my_rank==0){fprintf(stderr,"g_dot_Tpaj == 0.0\n");}                                   //
         #endif                                                                                  //
         BiCGStabFailed=1;break;                                                                 //
       }                                                                                         //
       alpha = delta / g_dot_Tpaj;                                                               // delta / (g,T'aj)
       if(isinf(alpha)){                                                                         // alpha = big/tiny(overflow) = inf -> breakdown
         #ifdef VERBOSE                                                                        //
-        if(level->my_rank==0){printf("alpha == inf\n");}                                        // 
+        if(level->my_rank==0){fprintf(stderr,"alpha == inf\n");}                                        // 
         #endif                                                                                  //
         BiCGStabFailed=1;break;                                                                 // 
       }                                                                                         // 
@@ -434,21 +434,21 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
                                  L2_norm_of_s = vdotv(temp1,temp2,4*ca_krylov_s+1);           //  (temp1,temp2) = ( (cj - alpha*T'aj) , G(cj - alpha*T'aj) )  == square of L2 norm of s in exact arithmetic
       if(L2_norm_of_s<0)L2_norm_of_s=0;else L2_norm_of_s=sqrt(L2_norm_of_s);                    // finite precision can lead to the norm^2 being < 0 (Demmel says flush to 0.0)
       #ifdef VERBOSE                                                                          //
-      if(level->my_rank==0){printf("m=%8d, norm(s)=%0.20f\n",m+n,L2_norm_of_s);}                //
+      if(level->my_rank==0){fprintf(stderr,"m=%8d, norm(s)=%0.20f\n",m+n,L2_norm_of_s);}                //
       #endif                                                                                    //
       if(L2_norm_of_s < desired_reduction_in_norm*L2_norm_of_rt){BiCGStabConverged=1;break;}    // terminate the inner n-loop
 
 
       if(omega_denominator == 0.0){                                                             // ??? breakdown
         #ifdef VERBOSE                                                                        //
-        if(level->my_rank==0){if(omega_denominator == 0.0)printf("omega_denominator == 0.0\n");}//
+        if(level->my_rank==0){if(omega_denominator == 0.0)fprintf(stderr,"omega_denominator == 0.0\n");}//
         #endif                                                                                  //
         BiCGStabFailed=1;break;                                                                 //
       }                                                                                         //
       omega = omega_numerator / omega_denominator;                                              // 
       if(isinf(omega)){                                                                         // omega = big/tiny(oveflow) = inf
         #ifdef VERBOSE                                                                        //
-        if(level->my_rank==0){if(isinf(omega))printf("omega == inf\n");}                        // 
+        if(level->my_rank==0){if(isinf(omega))fprintf(stderr,"omega == inf\n");}                        // 
         #endif                                                                                  //
         BiCGStabFailed=1;break;                                                                 //
       }                                                                                         //
@@ -465,7 +465,7 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
                                        cj_dot_Gcj = vdotv(cj,temp1,4*ca_krylov_s+1);          // sqrt( (cj,Gcj) ) == L2 norm of the intermediate residual in exact arithmetic
       L2_norm_of_residual = 0.0;if(cj_dot_Gcj>0)L2_norm_of_residual=sqrt(cj_dot_Gcj);           // finite precision can lead to the norm^2 being < 0 (Demmel says flush to 0.0)
       #ifdef VERBOSE 
-      if(level->my_rank==0){printf("m=%8d, norm(r)=%0.20f (cj_dot_Gcj=%0.20e)\n",m+n,L2_norm_of_residual,cj_dot_Gcj);}
+      if(level->my_rank==0){fprintf(stderr,"m=%8d, norm(r)=%0.20f (cj_dot_Gcj=%0.20e)\n",m+n,L2_norm_of_residual,cj_dot_Gcj);}
       #endif
       if(L2_norm_of_residual < desired_reduction_in_norm*L2_norm_of_rt){BiCGStabConverged=1;break;} // terminate the inner n-loop
 
@@ -473,10 +473,10 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
       delta_next = vdotv( g,cj,4*ca_krylov_s+1);                                              // (g,cj)
       #ifdef VERBOSE                                                                          //
       if(level->my_rank==0){                                                                    //
-        if(isinf(delta_next)     ){printf("delta == inf\n");}                                   // delta = big/tiny(overflow) = inf
-        if(delta_next      == 0.0){printf("delta == 0.0\n");}                                   // Lanczos breakdown
-        if(omega_numerator == 0.0){printf("omega_numerator == 0.0\n");}                         // stabilization breakdown
-        if(omega           == 0.0){printf("omega == 0.0\n");}                                   // stabilization breakdown 
+        if(isinf(delta_next)     ){fprintf(stderr,"delta == inf\n");}                                   // delta = big/tiny(overflow) = inf
+        if(delta_next      == 0.0){fprintf(stderr,"delta == 0.0\n");}                                   // Lanczos breakdown
+        if(omega_numerator == 0.0){fprintf(stderr,"omega_numerator == 0.0\n");}                         // stabilization breakdown
+        if(omega           == 0.0){fprintf(stderr,"omega == 0.0\n");}                                   // stabilization breakdown 
       }                                                                                         //
       #endif                                                                                    //
       if(isinf(delta_next)){BiCGStabFailed   =1;break;}                                         // delta = inf?
@@ -485,8 +485,8 @@ void CABiCGStab(level_type * level, int e_id, int R_id, double a, double b, doub
       beta = (delta_next/delta)*(alpha/omega);                                                  // (delta_next/delta)*(alpha/omega)
       #ifdef VERBOSE                                                                          //
       if(level->my_rank==0){                                                                    //
-        if(isinf(beta)           ){printf("beta == inf\n");}                                    // beta = inf?
-        if(beta            == 0.0){printf("beta == 0.0\n");}                                    // beta = 0?  can't make further progress(?)
+        if(isinf(beta)           ){fprintf(stderr,"beta == inf\n");}                                    // beta = inf?
+        if(beta            == 0.0){fprintf(stderr,"beta == 0.0\n");}                                    // beta = 0?  can't make further progress(?)
       }                                                                                         //
       #endif                                                                                    //
       if(isinf(beta)      ){BiCGStabFailed   =1;break;}                                         // beta = inf?

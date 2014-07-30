@@ -12,95 +12,95 @@ module load craype-hugepages2M
 
 export OMP_NUM_THREADS=8
 export OMP_NESTED=true
-aprun -n     1  -N  1  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n     8  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n    27  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n    64  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   125  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   216  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   384  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   512  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
+aprun -n     1  -N  1  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n     8  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n    27  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n    64  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   125  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   216  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   384  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   512  -N  2  -S 1  -cc numa_node ./run.edison  7  1
 export OMP_NUM_THREADS=8
 export OMP_NESTED=true
-aprun -n     1  -N  1  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n     8  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n    27  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n    64  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   125  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   216  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   384  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   512  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
+aprun -n     1  -N  1  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n     8  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n    27  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n    64  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   125  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   216  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   384  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   512  -N  2  -S 1  -cc numa_node ./run.edison  7  1
 export OMP_NUM_THREADS=8
 export OMP_NESTED=true
-aprun -n     1  -N  1  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n     8  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n    27  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n    64  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   125  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   216  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   384  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
-aprun -n   512  -N  2  -S 1  -ss  -cc numa_node ./run.edison  7  1
+aprun -n     1  -N  1  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n     8  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n    27  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n    64  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   125  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   216  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   384  -N  2  -S 1  -cc numa_node ./run.edison  7  1
+aprun -n   512  -N  2  -S 1  -cc numa_node ./run.edison  7  1
 
 export OMP_NUM_THREADS=8
 export OMP_NESTED=true
-aprun -n     1  -N  1  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n     8  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n    27  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n    64  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   125  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   216  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   384  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   512  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
+aprun -n     1  -N  1  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n     8  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n    27  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n    64  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   125  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   216  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   384  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   512  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
 export OMP_NUM_THREADS=8
 export OMP_NESTED=true
-aprun -n     1  -N  1  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n     8  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n    27  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n    64  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   125  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   216  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   384  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   512  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
+aprun -n     1  -N  1  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n     8  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n    27  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n    64  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   125  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   216  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   384  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   512  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
 export OMP_NUM_THREADS=8
 export OMP_NESTED=true
-aprun -n     1  -N  1  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n     8  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n    27  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n    64  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   125  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   216  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   384  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
-aprun -n   512  -N  2  -S 1  -ss  -cc numa_node ./run.edison.chunk  7  1
+aprun -n     1  -N  1  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n     8  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n    27  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n    64  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   125  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   216  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   384  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
+aprun -n   512  -N  2  -S 1  -cc numa_node ./run.edison.chunk  7  1
 
 export OMP_NUM_THREADS=1
 export OMP_NESTED=true
-aprun -n     8  -N  8  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n    64  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n   216  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n   512  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  1000  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  1728  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  2744  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  4096  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
+aprun -n     8  -N  8  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n    64  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n   216  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n   512  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  1000  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  1728  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  2744  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  4096  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
 export OMP_NUM_THREADS=1
 export OMP_NESTED=true
-aprun -n     8  -N  8  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n    64  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n   216  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n   512  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  1000  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  1728  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  2744  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  4096  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
+aprun -n     8  -N  8  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n    64  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n   216  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n   512  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  1000  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  1728  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  2744  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  4096  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
 export OMP_NUM_THREADS=1
 export OMP_NESTED=true
-aprun -n     8  -N  8  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n    64  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n   216  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n   512  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  1000  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  1728  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  2744  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
-aprun -n  4096  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat  6  1
+aprun -n     8  -N  8  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n    64  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n   216  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n   512  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  1000  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  1728  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  2744  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
+aprun -n  4096  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
 
 

@@ -132,25 +132,25 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
   // FIX... Periodic Boundary Conditions...
   if(level->domain_boundary_condition == BC_PERIODIC){
     double average_value_of_f = mean(level,VECTOR_F);
-    if(average_value_of_f!=0.0)if(level->my_rank==0){printf("\n  WARNING... Periodic boundary conditions, but f does not sum to zero... mean(f)=%e\n",average_value_of_f);}
+    if(average_value_of_f!=0.0)if(level->my_rank==0){fprintf(stderr,"\n  WARNING... Periodic boundary conditions, but f does not sum to zero... mean(f)=%e\n",average_value_of_f);}
    
     if((a==0.0) || (level->alpha_is_zero==1) ){ // poisson... by convention, we assume u sums to zero...
       double average_value_of_u = mean(level,VECTOR_UTRUE);
-      if(level->my_rank==0){printf("\n  average value of u = %20.12e... shifting u to ensure it sums to zero...\n",average_value_of_u);fflush(stdout);}
+      if(level->my_rank==0){fprintf(stdout,"\n  average value of u = %20.12e... shifting u to ensure it sums to zero...\n",average_value_of_u);}
       shift_vector(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_u);
       shift_vector(level,VECTOR_F,VECTOR_F,-average_value_of_f);
     }
     //}else{ // helmholtz...
     // FIX... for helmoltz, does the fine grid RHS have to sum to zero ???
     //double average_value_of_f = mean(level,VECTOR_F);
-    //if(level->my_rank==0){printf("\n");}
-    //if(level->my_rank==0){printf("  average value of f = %20.12e... shifting to ensure f sums to zero...\n",average_value_of_f);fflush(stdout);}
+    //if(level->my_rank==0){fprintf(stdout,"\n");}
+    //if(level->my_rank==0){fprintf(stdout,"  average value of f = %20.12e... shifting to ensure f sums to zero...\n",average_value_of_f);}
     //if(a!=0){
     //  shift_vector(level,VECTOR_F      ,VECTOR_F      ,-average_value_of_f);
     //  shift_vector(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_f/a);
     //}
     //average_value_of_f = mean(level,VECTOR_F);
-    //if(level->my_rank==0){printf("  average value of f = %20.12e after shifting\n",average_value_of_f);fflush(stdout);}
+    //if(level->my_rank==0){fprintf(stdout,"  average value of f = %20.12e after shifting\n",average_value_of_f);}
     //}
   }
 }

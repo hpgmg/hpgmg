@@ -7,10 +7,10 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   if((CHEBYSHEV_DEGREE*NUM_SMOOTHS)&1){
-    printf("error... CHEBYSHEV_DEGREE*NUM_SMOOTHS must be even for the chebyshev smoother...\n");fflush(stdout);
+    fprintf(stderr,"error... CHEBYSHEV_DEGREE*NUM_SMOOTHS must be even for the chebyshev smoother...\n");
     exit(0);
   }
-  if( (level->dominant_eigenvalue_of_DinvA<=0.0) && (level->my_rank==0) )printf("dominant_eigenvalue_of_DinvA <= 0.0 !\n");
+  if( (level->dominant_eigenvalue_of_DinvA<=0.0) && (level->my_rank==0) )fprintf(stderr,"dominant_eigenvalue_of_DinvA <= 0.0 !\n");
 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

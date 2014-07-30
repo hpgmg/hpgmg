@@ -66,14 +66,15 @@ int main(int argc, char **argv){
   int    actual_threading_model = -1;
   int requested_threading_model = -1;
       requested_threading_model = MPI_THREAD_SINGLE;
-      requested_threading_model = MPI_THREAD_FUNNELED;
+    //requested_threading_model = MPI_THREAD_FUNNELED;
+    //requested_threading_model = MPI_THREAD_SERIALIZED;
+    //requested_threading_model = MPI_THREAD_MULTIPLE;
+  //MPI_Init(&argc, &argv);
   #ifdef _OPENMP
       requested_threading_model = MPI_THREAD_FUNNELED;
     //requested_threading_model = MPI_THREAD_SERIALIZED;
     //requested_threading_model = MPI_THREAD_MULTIPLE;
-//MPI_Init_thread(&argc, &argv, requested_threading_model, &actual_threading_model);
-//#else
-//       MPI_Init(&argc, &argv);
+  //MPI_Init_thread(&argc, &argv, requested_threading_model, &actual_threading_model);
   #endif
   MPI_Init_thread(&argc, &argv, requested_threading_model, &actual_threading_model);
   MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
@@ -92,7 +93,7 @@ int main(int argc, char **argv){
   else if(actual_threading_model    == MPI_THREAD_SERIALIZED)printf("got MPI_THREAD_SERIALIZED\n");
   else if(actual_threading_model    == MPI_THREAD_MULTIPLE  )printf("got MPI_THREAD_MULTIPLE\n");
   else                                                       printf("got Unknown MPI Threading Model (%d)\n",actual_threading_model);
-  fflush(stdout);}
+  }
   #ifdef USE_HPM // IBM HPM counters for BGQ...
   HPM_Init();
   #endif
@@ -159,6 +160,7 @@ int main(int argc, char **argv){
   mg_type all_grids;
   int minCoarseDim = 1;
   MGBuild(&all_grids,&fine_grid,a,b,minCoarseDim);
+  fflush(stdout);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   int doTiming;
   for(doTiming=0;doTiming<=1;doTiming++){ // first pass warms up, second pass times
