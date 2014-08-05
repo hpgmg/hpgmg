@@ -187,6 +187,19 @@ void destroy_box(box_type *box){
 // should implement a 3D hilbert curve on non pow2 (but cubical) domain sizes
 //void decompose_level_hilbert(int *rank_of_box, int jStride, int kStride, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int rank_lo, int ranks){
 //}
+//------------------------------------------------------------------------------------------------------------------------------
+void decompose_level_lex(int *rank_of_box, int idim, int jdim, int kdim, int ranks){
+  // simple lexicographical decomposition of the domain
+  int boxes = idim*jdim*kdim;
+  int i,j,k;
+  for(k=0;k<kdim;k++){
+  for(j=0;j<jdim;j++){
+  for(i=0;i<idim;i++){
+    int b = k*kdim*jdim + j*idim + i;
+    int rank = (ranks*b)/boxes;
+    rank_of_box[b] = rank;
+  }}} 
+}
 //---------------------------------------------------------------------------------------------------------------------------------------------------
 void decompose_level_kd_tree(int *rank_of_box, int jStride, int kStride, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int rank_lo, int ranks){
   // recursive bisection (or prime-section) of the domain
@@ -718,6 +731,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
   // parallelize the grid...
   decompose_level_kd_tree(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,num_ranks);
+//decompose_level_lex(level->rank_of_box,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,num_ranks);
   //print_decomposition(level);// for debug purposes only
 
 
