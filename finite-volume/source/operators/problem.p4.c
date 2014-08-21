@@ -81,11 +81,13 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
     int jStride = level->my_boxes[box].jStride;
     int kStride = level->my_boxes[box].kStride;
     int  ghosts = level->my_boxes[box].ghosts;
-    int     dim = level->my_boxes[box].dim;
+    int   dim_i = level->my_boxes[box].dim;
+    int   dim_j = level->my_boxes[box].dim;
+    int   dim_k = level->my_boxes[box].dim;
     #pragma omp parallel for private(k,j,i) collapse(2)
-    for(k=0;k<dim;k++){
-    for(j=0;j<dim;j++){
-    for(i=0;i<dim;i++){
+    for(k=0;k<=dim_k;k++){ // include high face
+    for(j=0;j<=dim_j;j++){ // include high face
+    for(i=0;i<=dim_i;i++){ // include high face
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
       // FIX... move to quadrature version to initialize the problem.  
       // i.e. the value of an array element is the average value of the function over the cell (finite volume)
@@ -115,12 +117,12 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       evaluateU(x,y,z,&U,&Ux,&Uy,&Uz,&Uxx,&Uyy,&Uzz, (level->domain_boundary_condition == BC_PERIODIC) );
       double F = a*A*U - b*( (Bx*Ux + By*Uy + Bz*Uz)  +  B*(Uxx + Uyy + Uzz) );
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-      level->my_boxes[box].vectors[VECTOR_ALPHA ][ijk] = A;
       level->my_boxes[box].vectors[VECTOR_BETA_I][ijk] = Bi;
       level->my_boxes[box].vectors[VECTOR_BETA_J][ijk] = Bj;
       level->my_boxes[box].vectors[VECTOR_BETA_K][ijk] = Bk;
-      level->my_boxes[box].vectors[VECTOR_UTRUE][ijk] = U;
-      level->my_boxes[box].vectors[VECTOR_F    ][ijk] = F;
+      level->my_boxes[box].vectors[VECTOR_ALPHA ][ijk] = A;
+      level->my_boxes[box].vectors[VECTOR_UTRUE ][ijk] = U;
+      level->my_boxes[box].vectors[VECTOR_F     ][ijk] = F;
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
     }}}
   }
