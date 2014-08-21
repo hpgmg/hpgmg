@@ -405,23 +405,20 @@ void build_interpolation(mg_type *all_grids){
 
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-void build_restriction(mg_type *all_grids){
+void build_restriction(mg_type *all_grids, int restrictionType){
   int level;
   for(level=0;level<all_grids->num_levels;level++){
-  all_grids->levels[level]->restriction.num_recvs     = 0;
-  all_grids->levels[level]->restriction.num_sends     = 0;
-  all_grids->levels[level]->restriction.blocks[0]     = NULL;
-  all_grids->levels[level]->restriction.blocks[1]     = NULL;
-  all_grids->levels[level]->restriction.blocks[2]     = NULL;
-  all_grids->levels[level]->restriction.num_blocks[0] = 0;
-  all_grids->levels[level]->restriction.num_blocks[1] = 0;
-  all_grids->levels[level]->restriction.num_blocks[2] = 0;
-  all_grids->levels[level]->restriction.allocated_blocks[0] = 0;
-  all_grids->levels[level]->restriction.allocated_blocks[1] = 0;
-  all_grids->levels[level]->restriction.allocated_blocks[2] = 0;
-  // all_grids->levels[level]->restriction.num_blocks[0] = number of unpack/insert operations  = number of boxes on level+1 that I don't own and restrict to 
-  // all_grids->levels[level]->restriction.num_blocks[1] = number of unpack/insert operations  = number of boxes on level+1 that I own and restrict to
-  // all_grids->levels[level]->restriction.num_blocks[2] = number of unpack/insert operations  = number of boxes on level-1 that I don't own that restrict to me
+  all_grids->levels[level]->restriction[restrictionType].num_recvs           = 0;
+  all_grids->levels[level]->restriction[restrictionType].num_sends           = 0;
+  all_grids->levels[level]->restriction[restrictionType].blocks[0]           = NULL;
+  all_grids->levels[level]->restriction[restrictionType].blocks[1]           = NULL;
+  all_grids->levels[level]->restriction[restrictionType].blocks[2]           = NULL;
+  all_grids->levels[level]->restriction[restrictionType].allocated_blocks[0] = 0;
+  all_grids->levels[level]->restriction[restrictionType].allocated_blocks[1] = 0;
+  all_grids->levels[level]->restriction[restrictionType].allocated_blocks[2] = 0;
+  all_grids->levels[level]->restriction[restrictionType].num_blocks[0]       = 0; // number of unpack/insert operations  = number of boxes on level+1 that I don't own and restrict to 
+  all_grids->levels[level]->restriction[restrictionType].num_blocks[1]       = 0; // number of unpack/insert operations  = number of boxes on level+1 that I own and restrict to
+  all_grids->levels[level]->restriction[restrictionType].num_blocks[2]       = 0; // number of unpack/insert operations  = number of boxes on level-1 that I don't own that restrict to me
 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -473,17 +470,34 @@ void build_restriction(mg_type *all_grids){
     for(neighbor=0;neighbor<numCoarseBoxesRemote;neighbor++)if(coarseRanks[neighbor] != _rank){_rank=coarseRanks[neighbor];coarseRanks[numCoarseRanks++]=coarseRanks[neighbor];}
 
     // allocate structures...
-    all_grids->levels[level]->restriction.num_sends     =                         numCoarseRanks;
-    all_grids->levels[level]->restriction.send_ranks    =            (int*)malloc(numCoarseRanks*sizeof(int));
-    all_grids->levels[level]->restriction.send_sizes    =            (int*)malloc(numCoarseRanks*sizeof(int));
-    all_grids->levels[level]->restriction.send_buffers  =        (double**)malloc(numCoarseRanks*sizeof(double*));
+    all_grids->levels[level]->restriction[restrictionType].num_sends     =                         numCoarseRanks;
+    all_grids->levels[level]->restriction[restrictionType].send_ranks    =            (int*)malloc(numCoarseRanks*sizeof(int));
+    all_grids->levels[level]->restriction[restrictionType].send_sizes    =            (int*)malloc(numCoarseRanks*sizeof(int));
+    all_grids->levels[level]->restriction[restrictionType].send_buffers  =        (double**)malloc(numCoarseRanks*sizeof(double*));
     if(numCoarseRanks>0){
-    if(all_grids->levels[level]->restriction.send_ranks  ==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction.send_ranks\n",level);exit(0);}
-    if(all_grids->levels[level]->restriction.send_sizes  ==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction.send_sizes\n",level);exit(0);}
-    if(all_grids->levels[level]->restriction.send_buffers==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction.send_buffers\n",level);exit(0);}
+    if(all_grids->levels[level]->restriction[restrictionType].send_ranks  ==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction[restrictionType].send_ranks\n",level);exit(0);}
+    if(all_grids->levels[level]->restriction[restrictionType].send_sizes  ==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction[restrictionType].send_sizes\n",level);exit(0);}
+    if(all_grids->levels[level]->restriction[restrictionType].send_buffers==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction[restrictionType].send_buffers\n",level);exit(0);}
     }
 
-    int elementSize = all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim/8;
+    int elementSize;
+    int restrict_dim_i,restrict_dim_j,restrict_dim_k;
+    switch(restrictionType){
+      case RESTRICT_CELL   : restrict_dim_i = (  all_grids->levels[level]->box_dim/2);
+                             restrict_dim_j = (  all_grids->levels[level]->box_dim/2);
+                             restrict_dim_k = (  all_grids->levels[level]->box_dim/2);break;
+      case RESTRICT_FACE_I : restrict_dim_i = (1+all_grids->levels[level]->box_dim/2);
+                             restrict_dim_j = (  all_grids->levels[level]->box_dim/2);
+                             restrict_dim_k = (  all_grids->levels[level]->box_dim/2);break;
+      case RESTRICT_FACE_J : restrict_dim_i = (  all_grids->levels[level]->box_dim/2);
+                             restrict_dim_j = (1+all_grids->levels[level]->box_dim/2);
+                             restrict_dim_k = (  all_grids->levels[level]->box_dim/2);break;
+      case RESTRICT_FACE_K : restrict_dim_i = (  all_grids->levels[level]->box_dim/2);
+                             restrict_dim_j = (  all_grids->levels[level]->box_dim/2);
+                             restrict_dim_k = (1+all_grids->levels[level]->box_dim/2);break;
+    }
+    elementSize = restrict_dim_i*restrict_dim_j*restrict_dim_k;
+   
     double * all_send_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
           if(numCoarseBoxes*elementSize>0)
           if(all_send_buffers==NULL){fprintf(stderr,"malloc failed - restriction/all_send_buffers\n");exit(0);}
@@ -493,13 +507,15 @@ void build_restriction(mg_type *all_grids){
     for(neighbor=0;neighbor<numCoarseRanks;neighbor++){
       int coarseBox;
       int offset = 0;
-      all_grids->levels[level]->restriction.send_buffers[neighbor] = all_send_buffers;
+      all_grids->levels[level]->restriction[restrictionType].send_buffers[neighbor] = all_send_buffers;
       for(coarseBox=0;coarseBox<numCoarseBoxes;coarseBox++)if(coarseBoxes[coarseBox].recvRank==coarseRanks[neighbor]){
         // restrict to MPI send buffer...
-        append_block_to_list(&(all_grids->levels[level]->restriction.blocks[0]),&(all_grids->levels[level]->restriction.allocated_blocks[0]),&(all_grids->levels[level]->restriction.num_blocks[0]),
-          /* dim.i         = */ all_grids->levels[level]->box_dim/2,
-          /* dim.j         = */ all_grids->levels[level]->box_dim/2,
-          /* dim.k         = */ all_grids->levels[level]->box_dim/2,
+        append_block_to_list( &(all_grids->levels[level]->restriction[restrictionType].blocks[0]),
+                              &(all_grids->levels[level]->restriction[restrictionType].allocated_blocks[0]),
+                              &(all_grids->levels[level]->restriction[restrictionType].num_blocks[0]),
+          /* dim.i         = */ restrict_dim_i, 
+          /* dim.j         = */ restrict_dim_j, 
+          /* dim.k         = */ restrict_dim_k, 
           /* read.box      = */ coarseBoxes[coarseBox].sendBox,
           /* read.ptr      = */ NULL,
           /* read.i        = */ 0,
@@ -509,18 +525,18 @@ void build_restriction(mg_type *all_grids){
           /* read.kStride  = */ all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].sendBox].kStride,
           /* read.scale    = */ 2,
           /* write.box     = */ -1,
-          /* write.ptr     = */ all_grids->levels[level]->restriction.send_buffers[neighbor],
+          /* write.ptr     = */ all_grids->levels[level]->restriction[restrictionType].send_buffers[neighbor],
           /* write.i       = */ offset,
           /* write.j       = */ 0,
           /* write.k       = */ 0,
-          /* write.jStride = */ all_grids->levels[level]->box_dim/2,
-          /* write.kStride = */ all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim/4,
+          /* write.jStride = */ restrict_dim_i,
+          /* write.kStride = */ restrict_dim_i*restrict_dim_j, 
           /* write.scale   = */ 1
         );
         offset+=elementSize;
       }
-      all_grids->levels[level]->restriction.send_ranks[neighbor] = coarseRanks[neighbor];
-      all_grids->levels[level]->restriction.send_sizes[neighbor] = offset;
+      all_grids->levels[level]->restriction[restrictionType].send_ranks[neighbor] = coarseRanks[neighbor];
+      all_grids->levels[level]->restriction[restrictionType].send_sizes[neighbor] = offset;
       all_send_buffers+=offset;
     }
     // for construct the local restriction list... 
@@ -528,10 +544,12 @@ void build_restriction(mg_type *all_grids){
       int coarseBox;
       for(coarseBox=0;coarseBox<numCoarseBoxes;coarseBox++)if(coarseBoxes[coarseBox].recvRank==all_grids->levels[level+1]->my_rank){
         // restrict to local...
-        append_block_to_list(&(all_grids->levels[level]->restriction.blocks[1]),&(all_grids->levels[level]->restriction.allocated_blocks[1]),&(all_grids->levels[level]->restriction.num_blocks[1]),
-          /* dim.i         = */ all_grids->levels[level]->box_dim/2,
-          /* dim.j         = */ all_grids->levels[level]->box_dim/2,
-          /* dim.k         = */ all_grids->levels[level]->box_dim/2,
+        append_block_to_list( &(all_grids->levels[level]->restriction[restrictionType].blocks[1]),
+                              &(all_grids->levels[level]->restriction[restrictionType].allocated_blocks[1]),
+                              &(all_grids->levels[level]->restriction[restrictionType].num_blocks[1]),
+          /* dim.i         = */ restrict_dim_i, 
+          /* dim.j         = */ restrict_dim_j, 
+          /* dim.k         = */ restrict_dim_k, 
           /* read.box      = */ coarseBoxes[coarseBox].sendBox,
           /* read.ptr      = */ NULL,
           /* read.i        = */ 0, 
@@ -609,17 +627,34 @@ void build_restriction(mg_type *all_grids){
     for(neighbor=0;neighbor<numFineBoxesRemote;neighbor++)if(fineRanks[neighbor] != _rank){_rank=fineRanks[neighbor];fineRanks[numFineRanks++]=fineRanks[neighbor];}
 
     // allocate structures...
-    all_grids->levels[level]->restriction.num_recvs     =                         numFineRanks;
-    all_grids->levels[level]->restriction.recv_ranks    =            (int*)malloc(numFineRanks*sizeof(int));
-    all_grids->levels[level]->restriction.recv_sizes    =            (int*)malloc(numFineRanks*sizeof(int));
-    all_grids->levels[level]->restriction.recv_buffers  =        (double**)malloc(numFineRanks*sizeof(double*));
+    all_grids->levels[level]->restriction[restrictionType].num_recvs     =                         numFineRanks;
+    all_grids->levels[level]->restriction[restrictionType].recv_ranks    =            (int*)malloc(numFineRanks*sizeof(int));
+    all_grids->levels[level]->restriction[restrictionType].recv_sizes    =            (int*)malloc(numFineRanks*sizeof(int));
+    all_grids->levels[level]->restriction[restrictionType].recv_buffers  =        (double**)malloc(numFineRanks*sizeof(double*));
     if(numFineRanks>0){
-    if(all_grids->levels[level]->restriction.recv_ranks  ==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction.recv_ranks  \n",level);exit(0);}
-    if(all_grids->levels[level]->restriction.recv_sizes  ==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction.recv_sizes  \n",level);exit(0);}
-    if(all_grids->levels[level]->restriction.recv_buffers==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction.recv_buffers\n",level);exit(0);}
+    if(all_grids->levels[level]->restriction[restrictionType].recv_ranks  ==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction[restrictionType].recv_ranks  \n",level);exit(0);}
+    if(all_grids->levels[level]->restriction[restrictionType].recv_sizes  ==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction[restrictionType].recv_sizes  \n",level);exit(0);}
+    if(all_grids->levels[level]->restriction[restrictionType].recv_buffers==NULL){fprintf(stderr,"malloc failed - all_grids->levels[%d]->restriction[restrictionType].recv_buffers\n",level);exit(0);}
     }
 
-    int elementSize = all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim/8;
+    int elementSize;
+    int restrict_dim_i,restrict_dim_j,restrict_dim_k;
+    switch(restrictionType){
+      case RESTRICT_CELL   : restrict_dim_i = (  all_grids->levels[level-1]->box_dim/2);
+                             restrict_dim_j = (  all_grids->levels[level-1]->box_dim/2);
+                             restrict_dim_k = (  all_grids->levels[level-1]->box_dim/2);break;
+      case RESTRICT_FACE_I : restrict_dim_i = (1+all_grids->levels[level-1]->box_dim/2);
+                             restrict_dim_j = (  all_grids->levels[level-1]->box_dim/2);
+                             restrict_dim_k = (  all_grids->levels[level-1]->box_dim/2);break;
+      case RESTRICT_FACE_J : restrict_dim_i = (  all_grids->levels[level-1]->box_dim/2);
+                             restrict_dim_j = (1+all_grids->levels[level-1]->box_dim/2);
+                             restrict_dim_k = (  all_grids->levels[level-1]->box_dim/2);break;
+      case RESTRICT_FACE_K : restrict_dim_i = (  all_grids->levels[level-1]->box_dim/2);
+                             restrict_dim_j = (  all_grids->levels[level-1]->box_dim/2);
+                             restrict_dim_k = (1+all_grids->levels[level-1]->box_dim/2);break;
+    }
+    elementSize = restrict_dim_i*restrict_dim_j*restrict_dim_k;
+
     double * all_recv_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
           if(numFineBoxesRemote*elementSize>0)
           if(all_recv_buffers==NULL){fprintf(stderr,"malloc failed - restriction/all_recv_buffers\n");exit(0);}
@@ -630,20 +665,22 @@ void build_restriction(mg_type *all_grids){
     for(neighbor=0;neighbor<numFineRanks;neighbor++){
       int fineBox;
       int offset = 0;
-      all_grids->levels[level]->restriction.recv_buffers[neighbor] = all_recv_buffers;
+      all_grids->levels[level]->restriction[restrictionType].recv_buffers[neighbor] = all_recv_buffers;
       for(fineBox=0;fineBox<numFineBoxesRemote;fineBox++)if(fineBoxes[fineBox].sendRank==fineRanks[neighbor]){
         // unpack MPI recv buffer...
-        append_block_to_list(&(all_grids->levels[level]->restriction.blocks[2]),&(all_grids->levels[level]->restriction.allocated_blocks[2]),&(all_grids->levels[level]->restriction.num_blocks[2]),
-          /* dim.i         = */ all_grids->levels[level-1]->box_dim/2,
-          /* dim.j         = */ all_grids->levels[level-1]->box_dim/2,
-          /* dim.k         = */ all_grids->levels[level-1]->box_dim/2,
+        append_block_to_list( &(all_grids->levels[level]->restriction[restrictionType].blocks[2]),
+                              &(all_grids->levels[level]->restriction[restrictionType].allocated_blocks[2]),
+                              &(all_grids->levels[level]->restriction[restrictionType].num_blocks[2]),
+          /* dim.i         = */ restrict_dim_i, 
+          /* dim.j         = */ restrict_dim_j, 
+          /* dim.k         = */ restrict_dim_k, 
           /* read.box      = */ -1,
-          /* read.ptr      = */ all_grids->levels[level]->restriction.recv_buffers[neighbor],
+          /* read.ptr      = */ all_grids->levels[level]->restriction[restrictionType].recv_buffers[neighbor],
           /* read.i        = */ offset,
           /* read.j        = */ 0,
           /* read.k        = */ 0,
-          /* read.jStride  = */ all_grids->levels[level-1]->box_dim/2,
-          /* read.kStride  = */ all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim/4,
+          /* read.jStride  = */ restrict_dim_i,
+          /* read.kStride  = */ restrict_dim_i*restrict_dim_j, 
           /* read.scale    = */ 1,
           /* write.box     = */ fineBoxes[fineBox].recvBox,
           /* write.ptr     = */ NULL,
@@ -656,8 +693,8 @@ void build_restriction(mg_type *all_grids){
         );
         offset+=elementSize;
       }
-      all_grids->levels[level]->restriction.recv_ranks[neighbor] = fineRanks[neighbor];
-      all_grids->levels[level]->restriction.recv_sizes[neighbor] = offset;
+      all_grids->levels[level]->restriction[restrictionType].recv_ranks[neighbor] = fineRanks[neighbor];
+      all_grids->levels[level]->restriction[restrictionType].recv_sizes[neighbor] = offset;
       all_recv_buffers+=offset;
     } // neighbor
 
@@ -679,13 +716,13 @@ void build_restriction(mg_type *all_grids){
 
   #ifdef USE_MPI
   for(level=0;level<all_grids->num_levels;level++){
-    all_grids->levels[level]->restriction.requests = NULL;
-    all_grids->levels[level]->restriction.status   = NULL;
+    all_grids->levels[level]->restriction[restrictionType].requests = NULL;
+    all_grids->levels[level]->restriction[restrictionType].status   = NULL;
     if(level<all_grids->num_levels-1){ // bottom never calls restriction()
     // by convention, level_f allocates a combined array of requests for both level_f sends and level_c recvs...
-    int nMessages = all_grids->levels[level+1]->restriction.num_recvs + all_grids->levels[level]->restriction.num_sends;
-    all_grids->levels[level]->restriction.requests = (MPI_Request*)malloc(nMessages*sizeof(MPI_Request));
-    all_grids->levels[level]->restriction.status   = (MPI_Status *)malloc(nMessages*sizeof(MPI_Status ));
+    int nMessages = all_grids->levels[level+1]->restriction[restrictionType].num_recvs + all_grids->levels[level]->restriction[restrictionType].num_sends;
+    all_grids->levels[level]->restriction[restrictionType].requests = (MPI_Request*)malloc(nMessages*sizeof(MPI_Request));
+    all_grids->levels[level]->restriction[restrictionType].status   = (MPI_Status *)malloc(nMessages*sizeof(MPI_Status ));
     }
   }
   #endif
@@ -833,7 +870,10 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
 
 
   // build the restriction and interpolation communicators...
-  build_restriction(all_grids);
+  build_restriction(all_grids,RESTRICT_CELL  ); // cell-centered
+  build_restriction(all_grids,RESTRICT_FACE_I); // face-centered, normal to i
+  build_restriction(all_grids,RESTRICT_FACE_J); // face-centered, normal to j
+  build_restriction(all_grids,RESTRICT_FACE_K); // face-centered, normal to k
   build_interpolation(all_grids);
 
 

@@ -14,9 +14,9 @@
 //#define MAX_MESSAGE_SIZE  32768  //
 //#define MAX_MESSAGE_SIZE  16384  // 128^3
 //#define MAX_MESSAGE_SIZE   8192  //
-#define MAX_MESSAGE_SIZE   4096  //  64^3
+//#define MAX_MESSAGE_SIZE   4096  //  64^3
 //#define MAX_MESSAGE_SIZE   2048  //
-//#define MAX_MESSAGE_SIZE   1024  //  32^3
+#define MAX_MESSAGE_SIZE   1024  //  32^3
 //------------------------------------------------------------------------------------------------------------------------------
 void exchange_boundary(level_type * level, int id, int justFaces){
   uint64_t _timeCommunicationStart = CycleTime();

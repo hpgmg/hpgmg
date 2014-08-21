@@ -100,9 +100,9 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
 
   #ifdef USE_MPI
   // by convention, level_f allocates a combined array of requests for both level_f sends and level_c recvs...
-  int nMessages = level_c->restriction.num_recvs + level_f->restriction.num_sends;
-  MPI_Request *recv_requests = level_f->restriction.requests;
-  MPI_Request *send_requests = level_f->restriction.requests + level_c->restriction.num_recvs;
+  int nMessages = level_c->restriction[restrictionType].num_recvs + level_f->restriction[restrictionType].num_sends;
+  MPI_Request *recv_requests = level_f->restriction[restrictionType].requests;
+  MPI_Request *send_requests = level_f->restriction[restrictionType].requests + level_c->restriction[restrictionType].num_recvs;
 
 
   // loop through packed list of MPI receives and prepost Irecv's...
@@ -110,11 +110,11 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   #ifdef USE_MPI_THREAD_MULTIPLE
   #pragma omp parallel for schedule(dynamic,1)
   #endif
-  for(n=0;n<level_c->restriction.num_recvs;n++){
-    MPI_Irecv(level_c->restriction.recv_buffers[n],
-              level_c->restriction.recv_sizes[n],
+  for(n=0;n<level_c->restriction[restrictionType].num_recvs;n++){
+    MPI_Irecv(level_c->restriction[restrictionType].recv_buffers[n],
+              level_c->restriction[restrictionType].recv_sizes[n],
               MPI_DOUBLE,
-              level_c->restriction.recv_ranks[n],
+              level_c->restriction[restrictionType].recv_ranks[n],
               5, // by convention, restriction uses tag=5
               MPI_COMM_WORLD,
               &recv_requests[n]
@@ -126,8 +126,8 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
 
   // pack MPI send buffers...
   _timeStart = CycleTime();
-  #pragma omp parallel for private(buffer) if(level_f->restriction.num_blocks[0]>1) schedule(static,1)
-  for(buffer=0;buffer<level_f->restriction.num_blocks[0];buffer++){RestrictBlock(level_c,id_c,level_f,id_f,&level_f->restriction.blocks[0][buffer],restrictionType);}
+  #pragma omp parallel for private(buffer) if(level_f->restriction[restrictionType].num_blocks[0]>1) schedule(static,1)
+  for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[0];buffer++){RestrictBlock(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[0][buffer],restrictionType);}
   _timeEnd = CycleTime();
   level_f->cycles.restriction_pack += (_timeEnd-_timeStart);
 
@@ -137,11 +137,11 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   #ifdef USE_MPI_THREAD_MULTIPLE
   #pragma omp parallel for schedule(dynamic,1)
   #endif
-  for(n=0;n<level_f->restriction.num_sends;n++){
-    MPI_Isend(level_f->restriction.send_buffers[n],
-              level_f->restriction.send_sizes[n],
+  for(n=0;n<level_f->restriction[restrictionType].num_sends;n++){
+    MPI_Isend(level_f->restriction[restrictionType].send_buffers[n],
+              level_f->restriction[restrictionType].send_sizes[n],
               MPI_DOUBLE,
-              level_f->restriction.send_ranks[n],
+              level_f->restriction[restrictionType].send_ranks[n],
               5, // by convention, restriction uses tag=5
               MPI_COMM_WORLD,
               &send_requests[n]
@@ -152,10 +152,10 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   #endif
 
 
-  // perform local restriction... try and hide within Isend latency... 
+  // perform local restriction[restrictionType]... try and hide within Isend latency... 
   _timeStart = CycleTime();
-  #pragma omp parallel for private(buffer) if(level_f->restriction.num_blocks[1]>1) schedule(static,1)
-  for(buffer=0;buffer<level_f->restriction.num_blocks[1];buffer++){RestrictBlock(level_c,id_c,level_f,id_f,&level_f->restriction.blocks[1][buffer],restrictionType);}
+  #pragma omp parallel for private(buffer) if(level_f->restriction[restrictionType].num_blocks[1]>1) schedule(static,1)
+  for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[1];buffer++){RestrictBlock(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[1][buffer],restrictionType);}
   _timeEnd = CycleTime();
   level_f->cycles.restriction_local += (_timeEnd-_timeStart);
 
@@ -163,15 +163,15 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // wait for MPI to finish...
   #ifdef USE_MPI 
   _timeStart = CycleTime();
-  if(nMessages)MPI_Waitall(nMessages,level_f->restriction.requests,level_f->restriction.status);
+  if(nMessages)MPI_Waitall(nMessages,level_f->restriction[restrictionType].requests,level_f->restriction[restrictionType].status);
   _timeEnd = CycleTime();
   level_f->cycles.restriction_wait += (_timeEnd-_timeStart);
 
 
   // unpack MPI receive buffers 
   _timeStart = CycleTime();
-  #pragma omp parallel for private(buffer) if(level_c->restriction.num_blocks[2]>1) schedule(static,1)
-  for(buffer=0;buffer<level_c->restriction.num_blocks[2];buffer++){CopyBlock(level_c,id_c,&level_c->restriction.blocks[2][buffer]);}
+  #pragma omp parallel for private(buffer) if(level_c->restriction[restrictionType].num_blocks[2]>1) schedule(static,1)
+  for(buffer=0;buffer<level_c->restriction[restrictionType].num_blocks[2];buffer++){CopyBlock(level_c,id_c,&level_c->restriction[restrictionType].blocks[2][buffer]);}
   _timeEnd = CycleTime();
   level_f->cycles.restriction_unpack += (_timeEnd-_timeStart);
 

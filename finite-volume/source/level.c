@@ -189,13 +189,15 @@ void destroy_box(box_type *box){
 //}
 //------------------------------------------------------------------------------------------------------------------------------
 void decompose_level_lex(int *rank_of_box, int idim, int jdim, int kdim, int ranks){
-  // simple lexicographical decomposition of the domain
+  // simple lexicographical decomposition of the domain (i-j-k ordering)
   int boxes = idim*jdim*kdim;
   int i,j,k;
   for(k=0;k<kdim;k++){
   for(j=0;j<jdim;j++){
   for(i=0;i<idim;i++){
-    int b = k*kdim*jdim + j*idim + i;
+      int b = k*jdim*idim + j*idim + i;
+    //int b = k*jdim*idim + i*jdim + j;
+    //int b = i*jdim*kdim + j*kdim + k;
     int rank = (ranks*b)/boxes;
     rank_of_box[b] = rank;
   }}} 
@@ -381,10 +383,24 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       int       myBox_i = level->my_boxes[sendBox].low.i / level->box_dim;
       int       myBox_j = level->my_boxes[sendBox].low.j / level->box_dim;
       int       myBox_k = level->my_boxes[sendBox].low.k / level->box_dim;
-      int neighborBox_i = (  myBox_i + di + level->boxes_in.i) % level->boxes_in.i;
-      int neighborBox_j = (  myBox_j + dj + level->boxes_in.j) % level->boxes_in.j;
-      int neighborBox_k = (  myBox_k + dk + level->boxes_in.k) % level->boxes_in.k;
-      int neighborBoxID =  neighborBox_i + neighborBox_j*level->boxes_in.i + neighborBox_k*level->boxes_in.i*level->boxes_in.j;
+      int neighborBoxID = -1;
+      //if(1){
+      if(level->domain_boundary_condition == BC_PERIODIC){
+        int neighborBox_i = (  myBox_i + di + level->boxes_in.i) % level->boxes_in.i;
+        int neighborBox_j = (  myBox_j + dj + level->boxes_in.j) % level->boxes_in.j;
+        int neighborBox_k = (  myBox_k + dk + level->boxes_in.k) % level->boxes_in.k;
+            neighborBoxID =  neighborBox_i + neighborBox_j*level->boxes_in.i + neighborBox_k*level->boxes_in.i*level->boxes_in.j;
+      }else{
+        int neighborBox_i = (  myBox_i + di );
+        int neighborBox_j = (  myBox_j + dj );
+        int neighborBox_k = (  myBox_k + dk );
+        if( (neighborBox_i>=0) && (neighborBox_i<level->boxes_in.i) && 
+            (neighborBox_j>=0) && (neighborBox_j<level->boxes_in.j) && 
+            (neighborBox_k>=0) && (neighborBox_k<level->boxes_in.k) ){  // i.e. the neighbor is a valid box
+            neighborBoxID =  neighborBox_i + neighborBox_j*level->boxes_in.i + neighborBox_k*level->boxes_in.i*level->boxes_in.j;
+        }
+      }
+      if(neighborBoxID>=0){
       if( level->rank_of_box[neighborBoxID] != -1 ){
         ghostsToSend[numGhosts].sendRank  = level->my_rank;
         ghostsToSend[numGhosts].sendBoxID = myBoxID;
@@ -393,12 +409,14 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         ghostsToSend[numGhosts].recvRank  = level->rank_of_box[neighborBoxID];
         ghostsToSend[numGhosts].recvBoxID = neighborBoxID;
         ghostsToSend[numGhosts].recvBox   = -1;
-        if( level->rank_of_box[neighborBoxID] != level->my_rank )sendRanks[numGhostsRemote++] = level->rank_of_box[neighborBoxID];else{
+        if( level->rank_of_box[neighborBoxID] != level->my_rank ){
+          sendRanks[numGhostsRemote++] = level->rank_of_box[neighborBoxID];
+        }else{
           int recvBox=0;while(level->my_boxes[recvBox].global_box_id!=neighborBoxID)recvBox++; // search my list of boxes for the appropriate recvBox index
           ghostsToSend[numGhosts].recvBox   = recvBox;
         }
         numGhosts++;
-      }
+      }}
     }}}}
   }
   // sort boxes by sendRank(==my rank) then by sendBoxID... ensures the sends and receive buffers are always sorted by sendBoxID...
@@ -550,10 +568,24 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       int       myBox_i = level->my_boxes[recvBox].low.i / level->box_dim;
       int       myBox_j = level->my_boxes[recvBox].low.j / level->box_dim;
       int       myBox_k = level->my_boxes[recvBox].low.k / level->box_dim;
-      int neighborBox_i = (  myBox_i + di + level->boxes_in.i) % level->boxes_in.i;
-      int neighborBox_j = (  myBox_j + dj + level->boxes_in.j) % level->boxes_in.j;
-      int neighborBox_k = (  myBox_k + dk + level->boxes_in.k) % level->boxes_in.k;
-      int neighborBoxID =  neighborBox_i + neighborBox_j*level->boxes_in.i + neighborBox_k*level->boxes_in.i*level->boxes_in.j;
+      int neighborBoxID = -1;
+      //if(1){
+      if(level->domain_boundary_condition == BC_PERIODIC){
+        int neighborBox_i = (  myBox_i + di + level->boxes_in.i) % level->boxes_in.i;
+        int neighborBox_j = (  myBox_j + dj + level->boxes_in.j) % level->boxes_in.j;
+        int neighborBox_k = (  myBox_k + dk + level->boxes_in.k) % level->boxes_in.k;
+            neighborBoxID =  neighborBox_i + neighborBox_j*level->boxes_in.i + neighborBox_k*level->boxes_in.i*level->boxes_in.j;
+      }else{
+        int neighborBox_i = (  myBox_i + di );
+        int neighborBox_j = (  myBox_j + dj );
+        int neighborBox_k = (  myBox_k + dk );
+        if( (neighborBox_i>=0) && (neighborBox_i<level->boxes_in.i) && 
+            (neighborBox_j>=0) && (neighborBox_j<level->boxes_in.j) && 
+            (neighborBox_k>=0) && (neighborBox_k<level->boxes_in.k) ){  // i.e. the neighbor is a valid box
+            neighborBoxID =  neighborBox_i + neighborBox_j*level->boxes_in.i + neighborBox_k*level->boxes_in.i*level->boxes_in.j;
+        }
+      }
+      if(neighborBoxID>=0){
       if( (level->rank_of_box[neighborBoxID] != -1) && (level->rank_of_box[neighborBoxID] != level->my_rank)  ){
         ghostsToRecv[numGhosts].sendRank  = level->rank_of_box[neighborBoxID];
         ghostsToRecv[numGhosts].sendBoxID = neighborBoxID;
@@ -564,7 +596,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         ghostsToRecv[numGhosts].recvBox   = recvBox;
                      numGhosts++;
         recvRanks[numGhostsRemote++] = level->rank_of_box[neighborBoxID];
-      }
+      }}
     }}}}
   }
   // sort boxes by sendRank then by sendBoxID... ensures the recvs and receive buffers are always sorted by sendBoxID...
