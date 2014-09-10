@@ -13,7 +13,9 @@
 #ifdef USE_MPI
 #include <mpi.h>
 #endif
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 //------------------------------------------------------------------------------------------------------------------------------
 #include "timers.h"
 #include "defines.h"

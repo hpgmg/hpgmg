@@ -12,7 +12,9 @@
 #ifdef USE_MPI
 #include <mpi.h>
 #endif
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 //------------------------------------------------------------------------------------------------------------------------------
 #include "level.h"
 #include "operators.h"
@@ -196,19 +198,18 @@ void decompose_level_lex(int *rank_of_box, int idim, int jdim, int kdim, int ran
   for(j=0;j<jdim;j++){
   for(i=0;i<idim;i++){
       int b = k*jdim*idim + j*idim + i;
-    //int b = k*jdim*idim + i*jdim + j;
-    //int b = i*jdim*kdim + j*kdim + k;
     int rank = (ranks*b)/boxes;
     rank_of_box[b] = rank;
   }}} 
 }
 //---------------------------------------------------------------------------------------------------------------------------------------------------
-void decompose_level_kd_tree(int *rank_of_box, int jStride, int kStride, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int rank_lo, int ranks){
+void decompose_level_bisection_special(int *rank_of_box, int jStride, int kStride, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int rank_lo, int ranks){
   // recursive bisection (or prime-section) of the domain
   // can lead to imbalance unless the number of processes and number of boxes per process are chosen well
 
   #define numPrimes 13
-  int primes[numPrimes] = {41,37,31,29,23,19,17,13,11,7,5,3,2};
+  //int primes[numPrimes] = {41,37,31,29,23,19,17,13,11,7,5,3,2};
+  int primes[numPrimes] = {2,3,5,7,11,13,17,19,23,29,31,37,41};
   int i,j,k,p,f,ff;
 
 
@@ -224,11 +225,12 @@ void decompose_level_kd_tree(int *rank_of_box, int jStride, int kStride, int ilo
   }
 
 
-  for(p=0;p<numPrimes;p++){f=primes[p];
-    // don't partition if the aspect ratio would be extreme
-    if( (1.5*kdim>=idim)&&(1.5*kdim>=jdim) )if( (kdim%f==0) && (ranks%f==0) ){for(ff=0;ff<f;ff++)decompose_level_kd_tree(rank_of_box,jStride,kStride,ilo,jlo,klo+ff*kdim/f,idim,jdim,kdim/f,rank_lo+ff*ranks/f,ranks/f);return;}
-    if( (1.5*jdim>=idim)&&(1.5*jdim>=kdim) )if( (jdim%f==0) && (ranks%f==0) ){for(ff=0;ff<f;ff++)decompose_level_kd_tree(rank_of_box,jStride,kStride,ilo,jlo+ff*jdim/f,klo,idim,jdim/f,kdim,rank_lo+ff*ranks/f,ranks/f);return;}
-    if( (1.5*idim>=jdim)&&(1.5*idim>=kdim) )if( (idim%f==0) && (ranks%f==0) ){for(ff=0;ff<f;ff++)decompose_level_kd_tree(rank_of_box,jStride,kStride,ilo+ff*idim/f,jlo,klo,idim/f,jdim,kdim,rank_lo+ff*ranks/f,ranks/f);return;}
+  // special cases for perfectly matched problem sizes with numbers of processes (but not powers of 2)...
+  for(p=0;p<numPrimes;p++){
+    f=primes[p];
+    if( (kdim>=idim)&&(kdim>=jdim) ){if( (kdim%f==0) && (ranks%f==0) ){for(ff=0;ff<f;ff++)decompose_level_bisection_special(rank_of_box,jStride,kStride,ilo,jlo,klo+ff*kdim/f,idim,jdim,kdim/f,rank_lo+ff*ranks/f,ranks/f);return;}}
+    if( (jdim>=idim)&&(jdim>=kdim) ){if( (jdim%f==0) && (ranks%f==0) ){for(ff=0;ff<f;ff++)decompose_level_bisection_special(rank_of_box,jStride,kStride,ilo,jlo+ff*jdim/f,klo,idim,jdim/f,kdim,rank_lo+ff*ranks/f,ranks/f);return;}}
+    if( (idim>=jdim)&&(idim>=kdim) ){if( (idim%f==0) && (ranks%f==0) ){for(ff=0;ff<f;ff++)decompose_level_bisection_special(rank_of_box,jStride,kStride,ilo+ff*idim/f,jlo,klo,idim/f,jdim,kdim,rank_lo+ff*ranks/f,ranks/f);return;}}
   }
 
 
@@ -238,8 +240,8 @@ void decompose_level_kd_tree(int *rank_of_box, int jStride, int kStride, int ilo
     int dim1 = idim-dim0;
     int r0 = (int)( 0.5 + (double)ranks*(double)dim0/(double)idim );
     int r1 = ranks-r0;
-    decompose_level_kd_tree(rank_of_box,jStride,kStride,ilo     ,jlo,klo,dim0,jdim,kdim,rank_lo   ,r0); // lo
-    decompose_level_kd_tree(rank_of_box,jStride,kStride,ilo+dim0,jlo,klo,dim1,jdim,kdim,rank_lo+r0,r1); // hi
+    decompose_level_bisection_special(rank_of_box,jStride,kStride,ilo     ,jlo,klo,dim0,jdim,kdim,rank_lo   ,r0); // lo
+    decompose_level_bisection_special(rank_of_box,jStride,kStride,ilo+dim0,jlo,klo,dim1,jdim,kdim,rank_lo+r0,r1); // hi
     return;
   }
   // try and bisect the domain in the j-dimension
@@ -248,8 +250,8 @@ void decompose_level_kd_tree(int *rank_of_box, int jStride, int kStride, int ilo
     int dim1 = jdim-dim0;
     int r0 = (int)( 0.5 + (double)ranks*(double)dim0/(double)jdim );
     int r1 = ranks-r0;
-    decompose_level_kd_tree(rank_of_box,jStride,kStride,ilo,jlo     ,klo,idim,dim0,kdim,rank_lo   ,r0); // lo
-    decompose_level_kd_tree(rank_of_box,jStride,kStride,ilo,jlo+dim0,klo,idim,dim1,kdim,rank_lo+r0,r1); // hi
+    decompose_level_bisection_special(rank_of_box,jStride,kStride,ilo,jlo     ,klo,idim,dim0,kdim,rank_lo   ,r0); // lo
+    decompose_level_bisection_special(rank_of_box,jStride,kStride,ilo,jlo+dim0,klo,idim,dim1,kdim,rank_lo+r0,r1); // hi
     return;
   }
   // try and bisect the domain in the k-dimension
@@ -258,13 +260,57 @@ void decompose_level_kd_tree(int *rank_of_box, int jStride, int kStride, int ilo
     int dim1 = kdim-dim0;
     int r0 = (int)( 0.5 + (double)ranks*(double)dim0/(double)kdim );
     int r1 = ranks-r0;
-    decompose_level_kd_tree(rank_of_box,jStride,kStride,ilo,jlo,klo     ,idim,jdim,dim0,rank_lo   ,r0); // lo
-    decompose_level_kd_tree(rank_of_box,jStride,kStride,ilo,jlo,klo+dim0,idim,jdim,dim1,rank_lo+r0,r1); // hi
+    decompose_level_bisection_special(rank_of_box,jStride,kStride,ilo,jlo,klo     ,idim,jdim,dim0,rank_lo   ,r0); // lo
+    decompose_level_bisection_special(rank_of_box,jStride,kStride,ilo,jlo,klo+dim0,idim,jdim,dim1,rank_lo+r0,r1); // hi
     return;
   }
-  fprintf(stderr,"decompose_level_kd_tree failed !!!\n");exit(0);
+  fprintf(stderr,"decompose_level_bisection_special failed !!!\n");exit(0);
 }
 
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------
+void decompose_level_bisection(int *rank_of_box, int jStride, int kStride, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int ranks, int sfc_offset, int sfc_max_length){
+
+  // base case... 
+  if( (idim==1) && (jdim==1) && (kdim==1) ){
+    int b = ilo + jlo*jStride + klo*kStride;
+    rank_of_box[b] = ranks*sfc_offset/sfc_max_length; // sfc_max_length is the precomputed maximum length
+    return;
+  }
+
+  // try and bisect the domain in the i-dimension
+  if( (idim>=jdim)&&(idim>=kdim) ){
+    int dim0 = (int)(0.5*(double)idim + 0.50);
+    int dim1 = idim-dim0;
+    int sfc_delta = dim0*jdim*kdim;
+    decompose_level_bisection(rank_of_box,jStride,kStride,ilo     ,jlo,klo,dim0,jdim,kdim,ranks,sfc_offset          ,sfc_max_length); // lo
+    decompose_level_bisection(rank_of_box,jStride,kStride,ilo+dim0,jlo,klo,dim1,jdim,kdim,ranks,sfc_offset+sfc_delta,sfc_max_length); // hi
+    return;
+  }
+
+  // try and bisect the domain in the j-dimension
+  if( (jdim>=idim)&&(jdim>=kdim) ){
+    int dim0 = (int)(0.5*(double)jdim + 0.50);
+    int dim1 = jdim-dim0;
+    int sfc_delta = idim*dim0*kdim;
+    decompose_level_bisection(rank_of_box,jStride,kStride,ilo,jlo     ,klo,idim,dim0,kdim,ranks,sfc_offset          ,sfc_max_length); // lo
+    decompose_level_bisection(rank_of_box,jStride,kStride,ilo,jlo+dim0,klo,idim,dim1,kdim,ranks,sfc_offset+sfc_delta,sfc_max_length); // hi
+    return;
+  }
+
+  // try and bisect the domain in the k-dimension
+  if( (kdim>=idim)&&(kdim>=jdim) ){
+    int dim0 = (int)(0.5*(double)kdim + 0.50);
+    int dim1 = kdim-dim0;
+    int sfc_delta = idim*jdim*dim0;
+    decompose_level_bisection(rank_of_box,jStride,kStride,ilo,jlo,klo     ,idim,jdim,dim0,ranks,sfc_offset          ,sfc_max_length); // lo
+    decompose_level_bisection(rank_of_box,jStride,kStride,ilo,jlo,klo+dim0,idim,jdim,dim1,ranks,sfc_offset+sfc_delta,sfc_max_length); // hi
+    return;
+  }
+
+  // failure...
+  fprintf(stderr,"decompose_level_bisection failed !!!\n");exit(0);
+}
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
 void print_decomposition(level_type *level){
@@ -762,9 +808,14 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   for(box=0;box<level->boxes_in.i*level->boxes_in.j*level->boxes_in.k;box++){level->rank_of_box[box]=-1;}  // -1 denotes that there is no actual box assigned to this region
 
   // parallelize the grid...
-  decompose_level_kd_tree(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,num_ranks);
-//decompose_level_lex(level->rank_of_box,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,num_ranks);
-  //print_decomposition(level);// for debug purposes only
+  #ifdef DECOMPOSE_LEX
+  decompose_level_lex(level->rank_of_box,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,num_ranks);
+  #elif DECOMPOSE_BISECTION_SPECIAL
+  decompose_level_bisection_special(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,num_ranks);
+  #else
+  decompose_level_bisection(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,num_ranks,0,level->boxes_in.i*level->boxes_in.j*level->boxes_in.k);
+  #endif
+//print_decomposition(level);// for debug purposes only
 
 
   // build my list of boxes...
@@ -869,9 +920,9 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   #endif
     
   // report on potential load imbalance
-  uint64_t BoxesPerProcess = level->num_my_boxes;
+  int BoxesPerProcess = level->num_my_boxes;
   #ifdef USE_MPI
-  uint64_t BoxesPerProcessSend = level->num_my_boxes;
+  int BoxesPerProcessSend = level->num_my_boxes;
   MPI_Allreduce(&BoxesPerProcessSend,&BoxesPerProcess,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
   #endif
   if(my_rank==0){fprintf(stdout,"  Calculating boxes per process... target=%0.3f, max=%ld\n\n",(double)TotalBoxes/(double)num_ranks,BoxesPerProcess);}
