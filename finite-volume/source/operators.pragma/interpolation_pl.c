@@ -77,8 +77,6 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
   uint64_t _timeStart,_timeEnd;
   int buffer=0;
   int n;
-  int my_tag = (level_f->tag<<4) | 0x7;
-
 
   #ifdef USE_MPI
   // by convention, level_f allocates a combined array of requests for both level_f recvs and level_c sends...
@@ -97,7 +95,7 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
               level_f->interpolation.recv_sizes[n],
               MPI_DOUBLE,
               level_f->interpolation.recv_ranks[n],
-              my_tag,
+              7, // by convention, piecewise linear interpolation uses tag=7
               MPI_COMM_WORLD,
               &recv_requests[n]
     );
@@ -108,7 +106,7 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
 
   // pack MPI send buffers...
   _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[0])
+  #pragma omp parallel for private(buffer) if(level_c->interpolation.num_blocks[0]>1) schedule(static,1)
   for(buffer=0;buffer<level_c->interpolation.num_blocks[0];buffer++){InterpolateBlock_PL(level_f,id_f,0.0,level_c,id_c,&level_c->interpolation.blocks[0][buffer]);} // !!! prescale==0 because you don't want to increment the MPI buffer
   _timeEnd = CycleTime();
   level_f->cycles.interpolation_pack += (_timeEnd-_timeStart);
@@ -124,7 +122,7 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
               level_c->interpolation.send_sizes[n],
               MPI_DOUBLE,
               level_c->interpolation.send_ranks[n],
-              my_tag,
+              7, // by convention, piecewise linear interpolation uses tag=7
               MPI_COMM_WORLD,
               &send_requests[n]
     );
@@ -136,7 +134,7 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
 
   // perform local interpolation... try and hide within Isend latency... 
   _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[1])
+  #pragma omp parallel for private(buffer) if(level_c->interpolation.num_blocks[1]>1) schedule(static,1)
   for(buffer=0;buffer<level_c->interpolation.num_blocks[1];buffer++){InterpolateBlock_PL(level_f,id_f,prescale_f,level_c,id_c,&level_c->interpolation.blocks[1][buffer]);}
   _timeEnd = CycleTime();
   level_f->cycles.interpolation_local += (_timeEnd-_timeStart);
@@ -152,7 +150,7 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
 
   // unpack MPI receive buffers 
   _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->interpolation.num_blocks[2])
+  #pragma omp parallel for private(buffer) if(level_f->interpolation.num_blocks[2]>1) schedule(static,1)
   for(buffer=0;buffer<level_f->interpolation.num_blocks[2];buffer++){IncrementBlock(level_f,id_f,prescale_f,&level_f->interpolation.blocks[2][buffer]);}
   _timeEnd = CycleTime();
   level_f->cycles.interpolation_unpack += (_timeEnd-_timeStart);

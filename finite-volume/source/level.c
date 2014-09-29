@@ -336,18 +336,23 @@ void print_decomposition(level_type *level){
 void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *num_blocks,
                           int dim_i, int dim_j, int dim_k,
                           int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride, int  read_scale,
-                          int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride, int write_scale
+                          int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride, int write_scale,
+                          int blockcopy_tile_i, int blockcopy_tile_j, int blockcopy_tile_k
                          ){
   int jj,kk;
-  // Take a dim_j x dim_k iteration space and tile it into smaller faces of size BLOCKCOPY_TILE_J x BLOCKCOPY_TILE_K
+  // Take a dim_j x dim_k iteration space and tile it into smaller faces of size blockcopy_tile_j x blockcopy_tile_k
   // This increases the number of blockCopies in the ghost zone exchange and thereby increases the thread-level parallelism
+  // FIX... move from lexicographical ordering of tiles to recursive (e.g. z-mort)
+
+  // read_/write_scale are used to stride appropriately when read and write loop iterations spaces are different 
   // ghostZone:     read_scale=1, write_scale=1
   // interpolation: read_scale=1, write_scale=2
   // restriction:   read_scale=2, write_scale=1
-  for(kk=0;kk<dim_k;kk+=BLOCKCOPY_TILE_K){
-  for(jj=0;jj<dim_j;jj+=BLOCKCOPY_TILE_J){
-    int dim_k_mod = dim_k-kk;if(dim_k_mod>BLOCKCOPY_TILE_K)dim_k_mod=BLOCKCOPY_TILE_K;
-    int dim_j_mod = dim_j-jj;if(dim_j_mod>BLOCKCOPY_TILE_J)dim_j_mod=BLOCKCOPY_TILE_J;
+  // FIX... dim_i,j,k -> read_dim_i,j,k, write_dim_i,j,k
+  for(kk=0;kk<dim_k;kk+=blockcopy_tile_k){
+  for(jj=0;jj<dim_j;jj+=blockcopy_tile_j){
+    int dim_k_mod = dim_k-kk;if(dim_k_mod>blockcopy_tile_k)dim_k_mod=blockcopy_tile_k;
+    int dim_j_mod = dim_j-jj;if(dim_j_mod>blockcopy_tile_j)dim_j_mod=blockcopy_tile_j;
     if(*num_blocks >= *allocated_blocks){
       *allocated_blocks = *allocated_blocks + 100;
       *blocks = (blockCopy_type *)realloc((void*)(*blocks),(*allocated_blocks)*sizeof(blockCopy_type));
@@ -559,7 +564,10 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* write.k       = */ recv_k,
         /* write.jStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].jStride,
         /* write.kStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].kStride,
-        /* write.scale   = */ 1
+        /* write.scale   = */ 1,
+        /* blockcopy_i   = */ 10000, // don't tile i dimension
+        /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
+        /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
       );
       else // append to the MPI pack list...
       append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[0]),&(level->exchange_ghosts[justFaces].allocated_blocks[0]),&(level->exchange_ghosts[justFaces].num_blocks[0]),
@@ -581,7 +589,10 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* write.k       = */ 0,
         /* write.jStride = */ dim_i,       // contiguous block
         /* write.kStride = */ dim_i*dim_j, // contiguous block
-        /* write.scale   = */ 1
+        /* write.scale   = */ 1,
+        /* blockcopy_i   = */ 10000, // don't tile i dimension
+        /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
+        /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
       );}
       if(neighbor>=0)level->exchange_ghosts[justFaces].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
     } // ghost for-loop
@@ -726,7 +737,10 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       /*write.k       = */ recv_k,
       /*write.jStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].jStride,
       /*write.kStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].kStride,
-      /*write.scale   = */ 1
+      /*write.scale   = */ 1,
+      /* blockcopy_i  = */ 10000, // don't tile i dimension
+      /* blockcopy_j  = */ BLOCKCOPY_TILE_J, // default
+      /* blockcopy_k  = */ BLOCKCOPY_TILE_K  // default
       );
       if(neighbor>=0)level->exchange_ghosts[justFaces].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
     } // ghost for-loop
@@ -800,14 +814,20 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   // inter-box threading...
   //level->threads_per_box  = 1;
   //level->concurrent_boxes = omp_threads;
+  level->my_blocks        = NULL;
+  level->num_my_blocks    = 0;
+  level->allocated_blocks = 0;
+  level->tag              = level->dim.i; // FIX
 
-  // allocate 3D array of integers to hold the MPI rank of the corresponding box
+
+  // allocate 3D array of integers to hold the MPI rank of the corresponding box and initialize to -1 (unassigned)
      level->rank_of_box = (int*)malloc(level->boxes_in.i*level->boxes_in.j*level->boxes_in.k*sizeof(int));
   if(level->rank_of_box==NULL){fprintf(stderr,"malloc of level->rank_of_box failed\n");exit(0);}
   level->memory_allocated +=       (level->boxes_in.i*level->boxes_in.j*level->boxes_in.k*sizeof(int));
   for(box=0;box<level->boxes_in.i*level->boxes_in.j*level->boxes_in.k;box++){level->rank_of_box[box]=-1;}  // -1 denotes that there is no actual box assigned to this region
 
-  // parallelize the grid...
+
+  // parallelize the grid (i.e. assign a process rank to each box)...
   #ifdef DECOMPOSE_LEX
   decompose_level_lex(level->rank_of_box,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,num_ranks);
   #elif DECOMPOSE_BISECTION_SPECIAL
@@ -839,8 +859,35 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
       level->my_boxes[box].global_box_id = b;
       box++;
   }}}}
-  initialize_valid_region(level); // define which cells are within the domain
 
+
+  // Build and auxilarlly data structure that flattens boxes into blocks...
+  for(box=0;box<level->num_my_boxes;box++){
+    append_block_to_list(&(level->my_blocks),&(level->allocated_blocks),&(level->num_my_blocks),
+      /* dim.i         = */ level->my_boxes[box].dim,
+      /* dim.j         = */ level->my_boxes[box].dim,
+      /* dim.k         = */ level->my_boxes[box].dim,
+      /* read.box      = */ box,
+      /* read.ptr      = */ NULL,
+      /* read.i        = */ 0,
+      /* read.j        = */ 0,
+      /* read.k        = */ 0,
+      /* read.jStride  = */ level->my_boxes[box].jStride,
+      /* read.kStride  = */ level->my_boxes[box].kStride,
+      /* read.scale    = */ 1,
+      /* write.box     = */ box,
+      /* write.ptr     = */ NULL,
+      /* write.i       = */ 0,
+      /* write.j       = */ 0,
+      /* write.k       = */ 0,
+      /* write.jStride = */ level->my_boxes[box].jStride,
+      /* write.kStride = */ level->my_boxes[box].kStride,
+      /* write.scale   = */ 1,
+      /* blockcopy_i   = */ 10000, // don't tile i dimension
+      /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
+      /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
+    );
+  }
 
   // Tune the OpenMP style of parallelism...
   if(omp_nested){
@@ -859,12 +906,14 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   }else{
     if(level->num_my_boxes>8){level->concurrent_boxes=omp_threads;level->threads_per_box=1;}
   }
-
-
   if(my_rank==0){
     if(omp_nested)fprintf(stdout,"  OMP_NESTED=TRUE  OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
              else fprintf(stdout,"  OMP_NESTED=FALSE OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
   }
+
+
+  // build an assists data structure which specifies which cells are within the domain (used with STENCIL_FUSE_BC)
+  initialize_valid_region(level);
 
 
   // build an assist structure for Gauss Seidel Red Black that would facilitate unrolling and SIMDization...
@@ -891,8 +940,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
       if((i^j^1)&0x1)level->RedBlack_FP[  1][ij]=0.0;else level->RedBlack_FP[  1][ij]=1.0;
     }}
   }
-
-
 
 
   // create mini programs that affect ghost zone exchanges
@@ -925,7 +972,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   int BoxesPerProcessSend = level->num_my_boxes;
   MPI_Allreduce(&BoxesPerProcessSend,&BoxesPerProcess,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
   #endif
-  if(my_rank==0){fprintf(stdout,"  Calculating boxes per process... target=%0.3f, max=%ld\n\n",(double)TotalBoxes/(double)num_ranks,BoxesPerProcess);}
+  if(my_rank==0){fprintf(stdout,"  Calculating boxes per process... target=%0.3f, max=%d\n\n",(double)TotalBoxes/(double)num_ranks,BoxesPerProcess);}
 }
 
 

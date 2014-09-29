@@ -12,16 +12,23 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
 
   // now do residual/restriction proper...
   uint64_t _timeStart = CycleTime();
-  int box;
+  int block;
 
-  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
-  for(box=0;box<level->num_my_boxes;box++){
+  PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
+  for(block=0;block<level->num_my_blocks;block++){
+    const int box = level->my_blocks[block].read.box;
+    const int ilo = level->my_blocks[block].read.i;
+    const int jlo = level->my_blocks[block].read.j;
+    const int klo = level->my_blocks[block].read.k;
+    const int ihi = level->my_blocks[block].dim.i + ilo;
+    const int jhi = level->my_blocks[block].dim.j + jlo;
+    const int khi = level->my_blocks[block].dim.k + klo;
     int i,j,k;
-    int jStride = level->my_boxes[box].jStride;
-    int kStride = level->my_boxes[box].kStride;
-    int  ghosts = level->my_boxes[box].ghosts;
-    int     dim = level->my_boxes[box].dim;
-    double h2inv = 1.0/(level->h*level->h);
+    const int jStride = level->my_boxes[box].jStride;
+    const int kStride = level->my_boxes[box].kStride;
+    const int  ghosts = level->my_boxes[box].ghosts;
+    const int     dim = level->my_boxes[box].dim;
+    const double h2inv = 1.0/(level->h*level->h);
     const double * __restrict__ x      = level->my_boxes[box].vectors[         x_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     const double * __restrict__ rhs    = level->my_boxes[box].vectors[       rhs_id] + ghosts*(1+jStride+kStride);
     const double * __restrict__ alpha  = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);
@@ -31,10 +38,9 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
     const double * __restrict__ valid  = level->my_boxes[box].vectors[VECTOR_VALID ] + ghosts*(1+jStride+kStride); // cell is inside the domain
           double * __restrict__ res    = level->my_boxes[box].vectors[       res_id] + ghosts*(1+jStride+kStride);
 
-    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
-    for(k=0;k<dim;k++){
-    for(j=0;j<dim;j++){
-    for(i=0;i<dim;i++){
+    for(k=klo;k<khi;k++){
+    for(j=jlo;j<jhi;j++){
+    for(i=ilo;i<ihi;i++){
       int ijk = i + j*jStride + k*kStride;
       double Ax = apply_op_ijk(x);
       res[ijk] = rhs[ijk]-Ax;

@@ -17,7 +17,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   double weight = 2.0/3.0;
   #endif
  
-  int box,s;
+  int block,s;
   for(s=0;s<NUM_SMOOTHS;s++){
     // exchange ghost zone data... Jacobi ping pongs between x_id and VECTOR_TEMP
     if((s&1)==0){exchange_boundary(level,       x_id,stencil_is_star_shaped());apply_BCs(level,       x_id);}
@@ -25,10 +25,18 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
 
     // apply the smoother... Jacobi ping pongs between x_id and VECTOR_TEMP
     uint64_t _timeStart = CycleTime();
-    #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
-    for(box=0;box<level->num_my_boxes;box++){
+
+    PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
+    for(block=0;block<level->num_my_blocks;block++){
+      const int box = level->my_blocks[block].read.box;
+      const int ilo = level->my_blocks[block].read.i;
+      const int jlo = level->my_blocks[block].read.j;
+      const int klo = level->my_blocks[block].read.k;
+      const int ihi = level->my_blocks[block].dim.i + ilo;
+      const int jhi = level->my_blocks[block].dim.j + jlo;
+      const int khi = level->my_blocks[block].dim.k + klo;
       int i,j,k;
-      int ghosts = level->box_ghosts;
+      const int ghosts = level->box_ghosts;
       const int jStride = level->my_boxes[box].jStride;
       const int kStride = level->my_boxes[box].kStride;
       const int     dim = level->my_boxes[box].dim;
@@ -50,14 +58,15 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
                                    x_np1 = level->my_boxes[box].vectors[VECTOR_TEMP  ] + ghosts*(1+jStride+kStride);}
                               else{x_n   = level->my_boxes[box].vectors[VECTOR_TEMP  ] + ghosts*(1+jStride+kStride);
                                    x_np1 = level->my_boxes[box].vectors[         x_id] + ghosts*(1+jStride+kStride);}
-      #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
-      for(k=0;k<dim;k++){
-      for(j=0;j<dim;j++){
-      for(i=0;i<dim;i++){
+
+      for(k=klo;k<khi;k++){
+      for(j=jlo;j<jhi;j++){
+      for(i=ilo;i<ihi;i++){
         int ijk = i + j*jStride + k*kStride;
         double Ax_n = apply_op_ijk(x_n);
         x_np1[ijk] = x_n[ijk] + weight*lambda[ijk]*(rhs[ijk]-Ax_n);
       }}}
+
     } // box-loop
     level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
   } // s-loop

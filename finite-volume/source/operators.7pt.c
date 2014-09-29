@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
-//#include<instrinsics.h>
 //------------------------------------------------------------------------------------------------------------------------------
 #include "timers.h"
 #include "defines.h"
@@ -17,12 +16,30 @@
 //------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_VARIABLE_COEFFICIENT
 //------------------------------------------------------------------------------------------------------------------------------
-#define OMP_THREAD_ACROSS_BOXES(thread_teams    ) if(thread_teams    >1) num_threads(thread_teams    )
-#define OMP_THREAD_WITHIN_A_BOX(threads_per_team) if(threads_per_team>1) num_threads(threads_per_team) collapse(2)
-//#define OMP_THREAD_ACROSS_BOXES(thread_teams    ) if(0)
-//#define OMP_THREAD_WITHIN_A_BOX(threads_per_team) if(1) collapse(2)
-//#define OMP_THREAD_ACROSS_BOXES(thread_teams    ) if(1)
-//#define OMP_THREAD_WITHIN_A_BOX(threads_per_team) if(0)
+#define MyPragma(a) _Pragma(#a)
+//------------------------------------------------------------------------------------------------------------------------------
+#if (_OPENMP>=201107) // OpenMP 3.1 supports max reductions...
+  // KNC does not like the num_threads() clause...
+  #define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1)                     )
+  #define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1) reduction(  +:bsum) )
+  #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1) reduction(max:bmax) )
+  // MIC doesn't like num_threads()
+  //#define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1)                     )
+  //#define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1) reduction(  +:bsum) )
+  //#define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1) reduction(max:bmax) )
+#elif _OPENMP // older OpenMP versions don't support the max reduction clause
+  #define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1)                     )
+  #define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1) reduction(  +:bsum) )
+  #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    #warning Threading max reductions requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.                                                           
+  // MIC doesn't like num_threads()
+  //#define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1)                     )
+  //#define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1) reduction(  +:bsum) )
+  //#define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    #warning Threading max reductions requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.                                                           
+#else // flat MPI should not define any threading...
+  #define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    
+  #define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    
+  #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
+#endif
 //------------------------------------------------------------------------------------------------------------------------------
 // fix... make #define...
 void apply_BCs(level_type * level, int x_id){
@@ -159,23 +176,24 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // calculate Dinv, L1inv, and estimate the dominant Eigenvalue
   uint64_t _timeStart = CycleTime();
-  int box;
+  int block;
 
   double dominant_eigenvalue = -1e9;
-  #if (_OPENMP>=201107)
-  #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes) reduction(max:dominant_eigenvalue) schedule(static)
-  #else
-  #warning Threading rebuild_operator() requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.
-  #endif
-  for(box=0;box<level->num_my_boxes;box++){
+
+  PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,block,level->num_my_blocks,dominant_eigenvalue)
+  for(block=0;block<level->num_my_blocks;block++){
+    const int box = level->my_blocks[block].read.box;
+    const int ilo = level->my_blocks[block].read.i;
+    const int jlo = level->my_blocks[block].read.j;
+    const int klo = level->my_blocks[block].read.k;
+    const int ihi = level->my_blocks[block].dim.i + ilo;
+    const int jhi = level->my_blocks[block].dim.j + jlo;
+    const int khi = level->my_blocks[block].dim.k + klo;
     int i,j,k;
-  //int lowi    = level->my_boxes[box].low.i;
-  //int lowj    = level->my_boxes[box].low.j;
-  //int lowk    = level->my_boxes[box].low.k;
-    int jStride = level->my_boxes[box].jStride;
-    int kStride = level->my_boxes[box].kStride;
-    int  ghosts = level->my_boxes[box].ghosts;
-    int     dim = level->my_boxes[box].dim;
+    const int jStride = level->my_boxes[box].jStride;
+    const int kStride = level->my_boxes[box].kStride;
+    const int  ghosts = level->my_boxes[box].ghosts;
+    const int     dim = level->my_boxes[box].dim;
     double h2inv = 1.0/(level->h*level->h);
     double * __restrict__ alpha  = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);
     double * __restrict__ beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride);
@@ -184,18 +202,15 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     double * __restrict__   Dinv = level->my_boxes[box].vectors[VECTOR_DINV  ] + ghosts*(1+jStride+kStride);
     double * __restrict__  L1inv = level->my_boxes[box].vectors[VECTOR_L1INV ] + ghosts*(1+jStride+kStride);
     double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID ] + ghosts*(1+jStride+kStride);
-    double box_eigenvalue = -1e9;
-    #if (_OPENMP>=201107)
-    #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box) reduction(max:box_eigenvalue) schedule(static)
-    #else
-    #warning Threading rebuild_operator() requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.
-    #endif
-    for(k=0;k<dim;k++){
-    for(j=0;j<dim;j++){
-    for(i=0;i<dim;i++){
+    double block_eigenvalue = -1e9;
+
+    for(k=klo;k<khi;k++){
+    for(j=jlo;j<jhi;j++){
+    for(i=ilo;i<ihi;i++){ 
       int ijk = i + j*jStride + k*kStride;
       #if 0
       // FIX This looks wrong, but is faster... theory is because its doing something akin to SOR
+      // assumes periodic boundary conditions...
       // radius of Gershgorin disc is the sum of the absolute values of the off-diagonal elements...
       double sumAbsAij = fabs(b*h2inv*beta_i[ijk]) + fabs(b*h2inv*beta_i[ijk+      1]) +
                          fabs(b*h2inv*beta_j[ijk]) + fabs(b*h2inv*beta_j[ijk+jStride]) +
@@ -218,7 +233,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
                       fabs( beta_k[ijk+kStride]*valid[ijk+kStride] )
                       );
 
-      // centr of Gershgorin disc is the diagonal element...
+      // center of Gershgorin disc is the diagonal element...
       double    Aii = a*alpha[ijk] - b*h2inv*(
                                        beta_i[ijk        ]*( valid[ijk-1      ]-2.0 )+
                                        beta_j[ijk        ]*( valid[ijk-jStride]-2.0 )+
@@ -235,9 +250,9 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
       // as suggested by eq 6.5 in Baker et al, "Multigrid smoothers for ultra-parallel computing: additional theory and discussion"...
       if(Aii>=1.5*sumAbsAij)L1inv[ijk] = 1.0/(Aii              ); 		//
                        else L1inv[ijk] = 1.0/(Aii+0.5*sumAbsAij);		// 
-      double Di = (Aii + sumAbsAij)/Aii;if(Di>box_eigenvalue)box_eigenvalue=Di;	// upper limit to Gershgorin disc == bound on dominant eigenvalue
+      double Di = (Aii + sumAbsAij)/Aii;if(Di>block_eigenvalue)block_eigenvalue=Di;	// upper limit to Gershgorin disc == bound on dominant eigenvalue
     }}}
-    if(box_eigenvalue>dominant_eigenvalue){dominant_eigenvalue = box_eigenvalue;}
+    if(block_eigenvalue>dominant_eigenvalue){dominant_eigenvalue = block_eigenvalue;}
   }
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 
@@ -264,6 +279,8 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+//#include "operators/interators.c"
+//------------------------------------------------------------------------------------------------------------------------------
 #ifdef  USE_GSRB
 #define NUM_SMOOTHS      2 // RBRB
 #include "operators/gsrb.c"
@@ -289,7 +306,6 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #include "operators/blockCopy.c"
 #include "operators/misc.c"
 #include "operators/exchange_boundary.c"
-//#include "operators/exchange_boundary_chunk.c"
 #include "operators/boundary_conditions.c"
 #include "operators/matmul.c"
 #include "operators/restriction.c"

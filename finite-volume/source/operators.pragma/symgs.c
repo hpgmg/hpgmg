@@ -10,9 +10,10 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
     exchange_boundary(level,phi_id,stencil_is_star_shaped());
             apply_BCs(level,phi_id);
 
+    // now do ghosts communication-avoiding smooths on each box...
     uint64_t _timeStart = CycleTime();
     #ifdef _OPENMP
-    #pragma omp parallel for private(box)
+    #pragma omp parallel for
     #endif
     for(box=0;box<level->num_my_boxes;box++){
       int i,j,k;

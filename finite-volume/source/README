@@ -81,21 +81,28 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 -DSTENCIL_FUSE_DINV		// recompute the inverse of the diagonal on the fly (more flops including a divide, but eliminates an array)
 -DSTENCIL_FUSE_BC  		// fuse the boundary conditions on the fly (more flops, but eliminates a difficult to efficiently thread traversal over the surface)
 
--DMG_AGGLOMERATION_START=#	// controls the point at which agglomeration (the distribute v-cycle) is initiated.  MG_AGGLOMERATION_START=4 initiates agglomeration when the local box dimension falls below 4^3 cells
+-DBLOCKCOPY_TILE_I=###		// parallelism for all ghost zone, restriction, interpolation, and (now) operators (and eventually BC's) is organized the (cache/thread) block concept.  
+-DBLOCKCOPY_TILE_J=###		// That is, boxes are decomposed into tiles of size BLOCKCOPY_TILE_I x BLOCKCOPY_TILE_J x BLOCKCOPY_TILE_J.  Users may tune to find the optimal block size.
+-DBLOCKCOPY_TILE_K=###		// Smaller blocks fit in cache and express more TLP (good for MIC/BGQ/GPUs/...).  However, the unit stride for small blocks is reduced (bad for CPUs which rely on prefetchers)
+				// If these are ommited, the code relies on its defaults.
 
 
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
-cc -O3 -fno-alias -fno-fnalias -xAVX -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.avx
+cc -Ofast -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.edison
+Conversely, true flat MPI should omit the -openmp flag.
+cc -Ofast         level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.edison.flat
+
 
 On Mira (an IBM BlueGene/Q), one can use the following...
 soft add +mpiwrapper-xl
-mpixlc_r -O5 -qsmp=omp:noauto                level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.bgq
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV -o run.bgq
 In order to compile with IBM's HPM counters...
-mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.bgq \
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV -o run.bgq \
   -DUSE_HPM -I/bgsys/drivers/ppcfloor/bgpm/include -L/soft/perftools/hpctw/lib -L/bgsys/drivers/ppcfloor/bgpm/lib /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a  -lbgpm  -lmpihpm_smp -lmpitrace
 
-On Babbage (Xeon Phi cluster at NERSC), one can use
-mpiicc -O3 -fno-alias -fno-fnalias -mmic -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -o run.babbage
+On Babbage (Xeon Phi cluster at NERSC), one can use the following for native mode compilation...
+mpiicc -mmic -Ofast -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.babbage
+
 
 
 Running the benchmark
