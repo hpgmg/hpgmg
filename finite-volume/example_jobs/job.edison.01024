@@ -8,10 +8,7 @@
 
 set -x
 cd $PBS_O_WORKDIR
-
-#export MPICH_GNI_MDD_SHARING=disabled
-#export UGNI_CDM_MDD_DEDICATED=2
-#module load craype-hugepages2M
+#module load craype-hugepages8M
 
 export OMP_NUM_THREADS=8
 export OMP_NESTED=true

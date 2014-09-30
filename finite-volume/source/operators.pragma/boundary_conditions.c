@@ -25,9 +25,7 @@ void apply_BCs_linear(level_type * level, int x_id){
   uint64_t _timeStart = CycleTime();
   int box;
 
-  #ifdef _OPENMP
-  #pragma omp parallel for private(box)
-  #endif
+  PRAGMA_THREAD_ACROSS_BOXES(level,box)
   for(box=0;box<level->num_my_boxes;box++){
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;

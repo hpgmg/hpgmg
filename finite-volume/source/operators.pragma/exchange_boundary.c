@@ -10,7 +10,6 @@
 void exchange_boundary(level_type * level, int id, int justFaces){
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;
-  int my_tag = (level->tag<<4) | justFaces;
   int buffer=0;
   int n;
 
@@ -31,7 +30,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
               level->exchange_ghosts[justFaces].recv_sizes[n],
               MPI_DOUBLE,
               level->exchange_ghosts[justFaces].recv_ranks[n],
-              my_tag,
+              0, // by convention, ghost zone exchanges use tag=0
               MPI_COMM_WORLD,
               //&level->exchange_ghosts[justFaces].requests[n]
               &recv_requests[n]
@@ -43,7 +42,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
 
   // pack MPI send buffers...
   _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[justFaces].num_blocks[0])
+  #pragma omp parallel for if(level->exchange_ghosts[justFaces].num_blocks[0]>1) schedule(static,1)
   for(buffer=0;buffer<level->exchange_ghosts[justFaces].num_blocks[0];buffer++){CopyBlock(level,id,&level->exchange_ghosts[justFaces].blocks[0][buffer]);}
   _timeEnd = CycleTime();
   level->cycles.ghostZone_pack += (_timeEnd-_timeStart);
@@ -59,7 +58,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
               level->exchange_ghosts[justFaces].send_sizes[n],
               MPI_DOUBLE,
               level->exchange_ghosts[justFaces].send_ranks[n],
-              my_tag,
+              0, // by convention, ghost zone exchanges use tag=0
               MPI_COMM_WORLD,
               &send_requests[n]
               //&level->exchange_ghosts[justFaces].requests[n+level->exchange_ghosts[justFaces].num_recvs]
@@ -73,7 +72,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
 
   // exchange locally... try and hide within Isend latency... 
   _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[justFaces].num_blocks[1])
+  #pragma omp parallel for if(level->exchange_ghosts[justFaces].num_blocks[1]>1) schedule(static,1)
   for(buffer=0;buffer<level->exchange_ghosts[justFaces].num_blocks[1];buffer++){CopyBlock(level,id,&level->exchange_ghosts[justFaces].blocks[1][buffer]);}
   _timeEnd = CycleTime();
   level->cycles.ghostZone_local += (_timeEnd-_timeStart);
@@ -89,7 +88,7 @@ void exchange_boundary(level_type * level, int id, int justFaces){
 
   // unpack MPI receive buffers 
   _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[justFaces].num_blocks[2])
+  #pragma omp parallel for if(level->exchange_ghosts[justFaces].num_blocks[2]>1) schedule(static,1)
   for(buffer=0;buffer<level->exchange_ghosts[justFaces].num_blocks[2];buffer++){CopyBlock(level,id,&level->exchange_ghosts[justFaces].blocks[2][buffer]);}
   _timeEnd = CycleTime();
   level->cycles.ghostZone_unpack += (_timeEnd-_timeStart);

@@ -14,7 +14,8 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  int box,s;
+  int s;
+  int block;
 
 
   // compute the Chebyshev coefficients...
@@ -46,13 +47,20 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
    
     // apply the smoother... Chebyshev ping pongs between x_id and VECTOR_TEMP
     uint64_t _timeStart = CycleTime();
-    #pragma omp parallel for private(box) OMP_THREAD_ACROSS_BOXES(level->concurrent_boxes)
-    for(box=0;box<level->num_my_boxes;box++){
+
+    PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
+    for(block=0;block<level->num_my_blocks;block++){
+      const int box = level->my_blocks[block].read.box;
+      const int ilo = level->my_blocks[block].read.i;
+      const int jlo = level->my_blocks[block].read.j;
+      const int klo = level->my_blocks[block].read.k;
+      const int ihi = level->my_blocks[block].dim.i + ilo;
+      const int jhi = level->my_blocks[block].dim.j + jlo;
+      const int khi = level->my_blocks[block].dim.k + klo;
       int i,j,k;
-      int ghosts = level->box_ghosts;
+      const int ghosts = level->box_ghosts;
       const int jStride = level->my_boxes[box].jStride;
       const int kStride = level->my_boxes[box].kStride;
-      const int     dim = level->my_boxes[box].dim;
       const double h2inv = 1.0/(level->h*level->h);
       const double * __restrict__ rhs      = level->my_boxes[box].vectors[       rhs_id] + ghosts*(1+jStride+kStride);
       const double * __restrict__ alpha    = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);
@@ -73,18 +81,19 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
                                     x_np1  = level->my_boxes[box].vectors[         x_id] + ghosts*(1+jStride+kStride);}
       const double c1 = chebyshev_c1[s%CHEBYSHEV_DEGREE]; // limit polynomial to degree CHEBYSHEV_DEGREE.
       const double c2 = chebyshev_c2[s%CHEBYSHEV_DEGREE]; // limit polynomial to degree CHEBYSHEV_DEGREE.
-      #pragma omp parallel for private(k,j,i) OMP_THREAD_WITHIN_A_BOX(level->threads_per_box)
-      for(k=0;k<dim;k++){
-      for(j=0;j<dim;j++){
-      for(i=0;i<dim;i++){
-        int ijk = i + j*jStride + k*kStride;
+
+      for(k=klo;k<khi;k++){
+      for(j=jlo;j<jhi;j++){
+      for(i=ilo;i<ihi;i++){
+        const int ijk = i + j*jStride + k*kStride;
         // According to Saad... but his was missing a Dinv[ijk] == D^{-1} !!!
         //  x_{n+1} = x_{n} + rho_{n} [ rho_{n-1}(x_{n} - x_{n-1}) + (2/delta)(b-Ax_{n}) ]
         //  x_temp[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_temp[ijk]) + c2*Dinv[ijk]*(rhs[ijk]-Ax_n);
-        double Ax_n   = apply_op_ijk(x_n);
-        double lambda =     Dinv_ijk();
+        const double Ax_n   = apply_op_ijk(x_n);
+        const double lambda =     Dinv_ijk();
         x_np1[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_nm1[ijk]) + c2*lambda*(rhs[ijk]-Ax_n);
       }}}
+
     } // box-loop
     level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
   } // s-loop

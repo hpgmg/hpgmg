@@ -85,7 +85,7 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
     const int   dim_j = level->my_boxes[box].dim;
     const int   dim_k = level->my_boxes[box].dim;
     #ifdef _OPENMP
-    #pragma omp parallel for private(k,j,i) collapse(3)
+    #pragma omp parallel for private(k,j,i) collapse(2)
     #endif
     for(k=0;k<=dim_k;k++){ // include high face
     for(j=0;j<=dim_j;j++){ // include high face

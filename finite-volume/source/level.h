@@ -19,6 +19,11 @@
 #define BC_PERIODIC  0
 #define BC_DIRICHLET 1
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef BLOCKCOPY_TILE_I
+#define BLOCKCOPY_TILE_I 10000
+#else
+#warning By overriding BLOCKCOPY_TILE_I, you are tiling in the unit stride.  I hope you know what you are doing.
+#endif
 #ifndef BLOCKCOPY_TILE_J
 #define BLOCKCOPY_TILE_J 8
 #endif
@@ -78,12 +83,16 @@ typedef struct {
   int box_dim;					// dimension of each cubical box (not counting ghost zones)
   int box_ghosts;				// ghost zone depth for each box
   int box_vectors;				// number of vectors stored in each box
+  int tag;					// tag each level uniquely... FIX... replace with sub commuicator
   struct {int i, j, k;}boxes_in;		// total number of boxes in i,j,k across this level
   struct {int i, j, k;}dim;			// global dimensions at this level (NOTE: dim.i == boxes_in.i * box_dim)
   int domain_boundary_condition;		//
   int * rank_of_box;				// 3D array containing rank of each box.  i-major ordering
-  int    num_my_boxes;				// number of boxes owned by this rank
-  box_type * my_boxes;				// pointer to array of pointers to boxes owned by this rank
+  int    num_my_boxes;				//           number of boxes owned by this rank
+  box_type * my_boxes;				// pointer to array of boxes owned by this rank
+  int       allocated_blocks;			//       number of blocks allocated by this rank (note, this represents a flattening of the box/cell hierarchy to facilitate threading)
+  int          num_my_blocks;			//       number of blocks     owned by this rank (note, this represents a flattening of the box/cell hierarchy to facilitate threading)
+  blockCopy_type * my_blocks;			// pointer to array of blocks owned by this rank (note, this represents a flattening of the box/cell hierarchy to facilitate threading)
   communicator_type exchange_ghosts[2];		// mini program that performs a neighbor ghost zone exchange for [0=all,1=justFaces]
   communicator_type restriction[4];		// mini program that performs restriction and agglomeration for [0=cell centered, 1=i-face, 2=j-face, 3-k-face]
   communicator_type interpolation;		// mini program that performs interpolation and dissemination...
@@ -153,7 +162,8 @@ int qsortInt(const void *a, const void *b);
 void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *num_blocks,
                           int dim_i, int dim_j, int dim_k,
                           int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride, int  read_scale,
-                          int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride, int write_scale
+                          int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride, int write_scale,
+                          int my_blockcopy_tile_i, int my_blockcopy_tile_j, int my_blockcopy_tile_k
                          );
 //------------------------------------------------------------------------------------------------------------------------------
 #endif

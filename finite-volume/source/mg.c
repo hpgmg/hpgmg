@@ -242,7 +242,10 @@ void build_interpolation(mg_type *all_grids){
           /* write.k       = */ 0,
           /* write.jStride = */ all_grids->levels[level-1]->box_dim,
           /* write.kStride = */ all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim,
-          /* write.scale   = */ 2
+          /* write.scale   = */ 2,
+          /* blockcopy_i   = */ 10000, // don't tile i dimension
+          /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
+          /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
         );
         offset+=elementSize;
       }
@@ -273,7 +276,10 @@ void build_interpolation(mg_type *all_grids){
           /* write.k       = */ 0,
           /* write.jStride = */ all_grids->levels[level-1]->my_boxes[fineBoxes[fineBox].recvBox].jStride,
           /* write.kStride = */ all_grids->levels[level-1]->my_boxes[fineBoxes[fineBox].recvBox].kStride,
-          /* write.scale   = */ 2
+          /* write.scale   = */ 2,
+          /* blockcopy_i   = */ 10000, // don't tile i dimension
+          /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
+          /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
         );
       }
     } // local to local interpolation
@@ -367,7 +373,10 @@ void build_interpolation(mg_type *all_grids){
           /* write.k       = */ 0,
           /* write.jStride = */ all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].recvBox].jStride,
           /* write.kStride = */ all_grids->levels[level]->my_boxes[coarseBoxes[coarseBox].recvBox].kStride,
-          /* write.scale   = */ 1
+          /* write.scale   = */ 1,
+          /* blockcopy_i   = */ 10000, // don't tile i dimension
+          /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
+          /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
         );
         offset+=elementSize;
       }
@@ -483,7 +492,7 @@ void build_restriction(mg_type *all_grids, int restrictionType){
     }
 
     int elementSize;
-    int restrict_dim_i,restrict_dim_j,restrict_dim_k;
+    int restrict_dim_i=-1,restrict_dim_j=-1,restrict_dim_k=-1;
     switch(restrictionType){
       case RESTRICT_CELL   : restrict_dim_i = (  all_grids->levels[level]->box_dim/2);
                              restrict_dim_j = (  all_grids->levels[level]->box_dim/2);
@@ -533,7 +542,10 @@ void build_restriction(mg_type *all_grids, int restrictionType){
           /* write.k       = */ 0,
           /* write.jStride = */ restrict_dim_i,
           /* write.kStride = */ restrict_dim_i*restrict_dim_j, 
-          /* write.scale   = */ 1
+          /* write.scale   = */ 1,
+          /* blockcopy_i   = */ 10000, // don't tile i dimension
+          /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
+          /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
         );
         offset+=elementSize;
       }
@@ -567,7 +579,10 @@ void build_restriction(mg_type *all_grids, int restrictionType){
           /* write.k       = */ coarseBoxes[coarseBox].k,
           /* write.jStride = */ all_grids->levels[level+1]->my_boxes[coarseBoxes[coarseBox].recvBox].jStride,
           /* write.kStride = */ all_grids->levels[level+1]->my_boxes[coarseBoxes[coarseBox].recvBox].kStride,
-          /* write.scale   = */ 1
+          /* write.scale   = */ 1,
+          /* blockcopy_i   = */ 10000, // don't tile i dimension
+          /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
+          /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
         );
       }
     } // local to local
@@ -691,7 +706,10 @@ void build_restriction(mg_type *all_grids, int restrictionType){
           /* write.k       = */ fineBoxes[fineBox].k,
           /* write.jStride = */ all_grids->levels[level]->my_boxes[fineBoxes[fineBox].recvBox].jStride,
           /* write.kStride = */ all_grids->levels[level]->my_boxes[fineBoxes[fineBox].recvBox].kStride,
-          /* write.scale   = */ 1
+          /* write.scale   = */ 1,
+          /* blockcopy_i   = */ 10000, // don't tile i dimension
+          /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
+          /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
         );
         offset+=elementSize;
       }
