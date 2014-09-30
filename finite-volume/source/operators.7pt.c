@@ -28,13 +28,14 @@
   //#define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1) reduction(  +:bsum) )
   //#define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1) reduction(max:bmax) )
 #elif _OPENMP // older OpenMP versions don't support the max reduction clause
+  #warning Threading max reductions requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.                                                           
   #define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1)                     )
   #define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1) reduction(  +:bsum) )
-  #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    #warning Threading max reductions requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.                                                           
+  #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
   // MIC doesn't like num_threads()
   //#define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1)                     )
   //#define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1) reduction(  +:bsum) )
-  //#define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    #warning Threading max reductions requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.                                                           
+  //#define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
 #else // flat MPI should not define any threading...
   #define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    
   #define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    
