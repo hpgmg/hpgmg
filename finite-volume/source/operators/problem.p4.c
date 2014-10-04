@@ -144,18 +144,6 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       shift_vector(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_u);
       shift_vector(level,VECTOR_F,VECTOR_F,-average_value_of_f);
     }
-    //}else{ // helmholtz...
-    // FIX... for helmoltz, does the fine grid RHS have to sum to zero ???
-    //double average_value_of_f = mean(level,VECTOR_F);
-    //if(level->my_rank==0){fprintf(stdout,"\n");}
-    //if(level->my_rank==0){fprintf(stdout,"  average value of f = %20.12e... shifting to ensure f sums to zero...\n",average_value_of_f);}
-    //if(a!=0){
-    //  shift_vector(level,VECTOR_F      ,VECTOR_F      ,-average_value_of_f);
-    //  shift_vector(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_f/a);
-    //}
-    //average_value_of_f = mean(level,VECTOR_F);
-    //if(level->my_rank==0){fprintf(stdout,"  average value of f = %20.12e after shifting\n",average_value_of_f);}
-    //}
   }
 }
 //------------------------------------------------------------------------------------------------------------------------------

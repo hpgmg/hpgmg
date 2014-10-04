@@ -813,7 +813,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if( (fine_box_dim % 2 == 0) && (fine_box_dim > MG_AGGLOMERATION_START) ){ // Boxes are too big to agglomerate
           nProcs[level] = fine_nProcs;
            dim_i[level] = fine_dim_i/2;
-         box_dim[level] = fine_box_dim/2;
+         box_dim[level] = fine_box_dim/2; // FIX, verify its not less than the stencil radius
       boxes_in_i[level] = fine_boxes_in_i;
       box_ghosts[level] = stencil_radius;
              doRestrict = 1;
@@ -829,7 +829,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if( (coarse_dim != 1) && (fine_dim_i == 2*coarse_dim) ){ // agglomerate everything
           nProcs[level] = 1;
            dim_i[level] = fine_dim_i/2;
-         box_dim[level] = fine_dim_i/2;
+         box_dim[level] = fine_dim_i/2; // FIX, verify its not less than the stencil radius
       boxes_in_i[level] = 1;
       box_ghosts[level] = stencil_radius;
              doRestrict = 1;
@@ -837,7 +837,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if( (coarse_dim != 1) && (fine_dim_i == 4*coarse_dim) ){ // restrict box dimension, and run on fewer ranks
           nProcs[level] = coarse_dim<fine_nProcs ? coarse_dim : fine_nProcs;
            dim_i[level] = fine_dim_i/2;
-         box_dim[level] = fine_box_dim/2;
+         box_dim[level] = fine_box_dim/2; // FIX, verify its not less than the stencil radius
       boxes_in_i[level] = fine_boxes_in_i;
       box_ghosts[level] = stencil_radius;
              doRestrict = 1;
@@ -845,7 +845,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if( (coarse_dim != 1) && (fine_dim_i == 8*coarse_dim) ){ // restrict box dimension, and run on fewer ranks
           nProcs[level] = coarse_dim*coarse_dim<fine_nProcs ? coarse_dim*coarse_dim : fine_nProcs;
            dim_i[level] = fine_dim_i/2;
-         box_dim[level] = fine_box_dim/2;
+         box_dim[level] = fine_box_dim/2; // FIX, verify its not less than the stencil radius
       boxes_in_i[level] = fine_boxes_in_i;
       box_ghosts[level] = stencil_radius;
              doRestrict = 1;
@@ -853,7 +853,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if( (fine_box_dim % 2 == 0) ){ // restrict box dimension, and run on the same number of ranks
           nProcs[level] = fine_nProcs;
            dim_i[level] = fine_dim_i/2;
-         box_dim[level] = fine_box_dim/2;
+         box_dim[level] = fine_box_dim/2; // FIX, verify its not less than the stencil radius
       boxes_in_i[level] = fine_boxes_in_i;
       box_ghosts[level] = stencil_radius;
              doRestrict = 1;

@@ -274,7 +274,7 @@ void decompose_level_bisection(int *rank_of_box, int jStride, int kStride, int i
   // base case... 
   if( (idim==1) && (jdim==1) && (kdim==1) ){
     int b = ilo + jlo*jStride + klo*kStride;
-    rank_of_box[b] = ranks*sfc_offset/sfc_max_length; // sfc_max_length is the precomputed maximum length
+    rank_of_box[b] = ((uint64_t)ranks*(uint64_t)sfc_offset)/(uint64_t)sfc_max_length; // sfc_max_length is the precomputed maximum length
     return;
   }
 
