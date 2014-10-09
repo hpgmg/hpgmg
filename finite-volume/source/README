@@ -86,6 +86,8 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 -DBLOCKCOPY_TILE_K=###		// Smaller blocks fit in cache and express more TLP (good for MIC/BGQ/GPUs/...).  However, the unit stride for small blocks is reduced (bad for CPUs which rely on prefetchers)
 				// If these are ommited, the code relies on its defaults.
 
+-DMAX_COARSE_DIM=###		// provides a means of constraining the maximum coarse dimension.  By default, the maximum is 11
+
 
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
 cc -Ofast -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.edison

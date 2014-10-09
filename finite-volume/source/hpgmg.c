@@ -133,20 +133,35 @@ int main(int argc, char **argv){
   }
 
   if(my_rank==0){
-    if(OMP_Nested)printf("%d MPI Tasks of %d threads (OMP_NESTED=TRUE)\n\n" ,num_tasks,OMP_Threads);
-             else printf("%d MPI Tasks of %d threads (OMP_NESTED=FALSE)\n\n",num_tasks,OMP_Threads);
+    if(OMP_Nested)fprintf(stdout,"%d MPI Tasks of %d threads (OMP_NESTED=TRUE)\n\n" ,num_tasks,OMP_Threads);
+             else fprintf(stdout,"%d MPI Tasks of %d threads (OMP_NESTED=FALSE)\n\n",num_tasks,OMP_Threads);
   }
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   // calculate the problem size...
-  int box_dim=1<<log2_box_dim;
-  int target_boxes = target_boxes_per_rank*num_tasks;
-  int boxes_in_i = 1000; // FIX, int64_t?  could we really have >2e9 boxes?
-  int total_boxes = boxes_in_i*boxes_in_i*boxes_in_i;
-  while(total_boxes>target_boxes){
-    boxes_in_i--;
-    total_boxes = boxes_in_i*boxes_in_i*boxes_in_i;
+  #ifndef MAX_COARSE_DIM
+  #define MAX_COARSE_DIM 11
+  #endif
+  int64_t box_dim=1<<log2_box_dim;
+  int64_t target_boxes = (int64_t)target_boxes_per_rank*(int64_t)num_tasks;
+  int64_t boxes_in_i = -1;
+  int64_t bi;
+  for(bi=1;bi<1000;bi++){ // all possible problem sizes
+    int64_t total_boxes = bi*bi*bi;
+    if(total_boxes<=target_boxes){
+      int64_t coarse_grid_dim = box_dim*bi;
+      while( (coarse_grid_dim%2) == 0){coarse_grid_dim=coarse_grid_dim/2;}
+      if(coarse_grid_dim<=MAX_COARSE_DIM){
+        boxes_in_i = bi;
+      }
+    }
   }
-
+  if(boxes_in_i<1){
+    if(my_rank==0){printf("failed to find an acceptable problem size\n");}
+    #ifdef USE_MPI
+    MPI_Finalize();
+    #endif
+    exit(0);
+  }
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // create the fine level...
   int ghosts=1;
@@ -161,24 +176,34 @@ int main(int argc, char **argv){
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   mg_type all_grids;
   int minCoarseDim = 1;
-  MGBuild(&all_grids,&fine_grid,a,b,minCoarseDim);
-  fflush(stdout);
+  MGBuild(&all_grids,&fine_grid,a,b,minCoarseDim); // build the Multigrid Hierarchy 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  int doTiming;
+     int     doTiming;
+     int    minSolves = 10; // do at least minSolves MGSolves
+  double timePerSolve = 0;
   for(doTiming=0;doTiming<=1;doTiming++){ // first pass warms up, second pass times
-    MGResetTimers(&all_grids);
+
     #ifdef USE_HPM // IBM performance counters for BGQ...
     if(doTiming)HPM_Start("FMGSolve()");
     #endif
-       int numSolves = 0; // solves completed
-       int minSolves = 5; // do at least minSolves MGSolves
+
     #ifdef USE_MPI
-    double minTime   = 10.0; // minimum time in seconds that the benchmark should run
+    double minTime   = 20.0; // minimum time in seconds that the benchmark should run
     double startTime = MPI_Wtime();
-    while( (numSolves<minSolves) || ((MPI_Wtime()-startTime)<minTime) ){
-    #else
-    while( (numSolves<minSolves)                                      ){
+    if(doTiming==1){
+      if((minTime/timePerSolve)>minSolves)minSolves=(minTime/timePerSolve); // if one needs to do more than minSolves to run for minTime, change minSolves
+    }
     #endif
+
+    if(my_rank==0){
+      if(doTiming==0){fprintf(stdout,"\n\n===== warming up by running %d solves ===============================\n",minSolves);}
+                 else{fprintf(stdout,"\n\n===== running %d solves =============================================\n",minSolves);}
+      fflush(stdout);
+    }
+
+    int numSolves =  0; // solves completed
+    MGResetTimers(&all_grids);
+    while( (numSolves<minSolves) ){
       zero_vector(all_grids.levels[0],VECTOR_U);
       #ifdef USE_FCYCLES
       FMGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);
@@ -187,14 +212,24 @@ int main(int argc, char **argv){
       #endif
       numSolves++;
     }
+
+    #ifdef USE_MPI
+    if(doTiming==0){
+      double endTime = MPI_Wtime();
+      timePerSolve = (endTime-startTime)/numSolves;
+      MPI_Bcast(&timePerSolve,1,MPI_DOUBLE,0,MPI_COMM_WORLD); // after warmup, process 0 broadcasts the average time per solve (consensus)
+    }
+    #endif
+
     #ifdef USE_HPM // IBM performance counters for BGQ...
     if(doTiming)HPM_Stop("FMGSolve()");
     #endif
   }
   MGPrintTiming(&all_grids); // don't include the error check in the timing results
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(my_rank==0){printf("calculating error...\n");}
-  double fine_error = error(&fine_grid,VECTOR_U,VECTOR_UTRUE);if(my_rank==0){printf(" h = %22.15e  ||error|| = %22.15e\n\n",h0,fine_error);fflush(stdout);}
+  if(my_rank==0){fprintf(stdout,"calculating error...\n");}
+  double fine_error = error(&fine_grid,VECTOR_U,VECTOR_UTRUE);
+  if(my_rank==0){fprintf(stdout," h = %22.15e  ||error|| = %22.15e\n\n",h0,fine_error);fflush(stdout);}
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // MGDestroy()
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

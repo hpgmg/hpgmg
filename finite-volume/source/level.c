@@ -776,7 +776,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   int box;
   int TotalBoxes = boxes_in_i*boxes_in_i*boxes_in_i;
 
-  if(my_rank==0){fprintf(stdout,"attempting to create a %d^3 level using a %d^3 grid of %d^3 boxes and %d tasks...\n",box_dim*boxes_in_i,boxes_in_i,box_dim,num_ranks);}
+  if(my_rank==0){fprintf(stdout,"\nattempting to create a %d^3 level using a %d^3 grid of %d^3 boxes and %d tasks...\n",box_dim*boxes_in_i,boxes_in_i,box_dim,num_ranks);}
 
   int omp_threads = 1;
   int omp_nested  = 0;
@@ -817,7 +817,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->my_blocks        = NULL;
   level->num_my_blocks    = 0;
   level->allocated_blocks = 0;
-  level->tag              = level->dim.i; // FIX
+  level->tag              = log2(level->dim.i);
 
 
   // allocate 3D array of integers to hold the MPI rank of the corresponding box and initialize to -1 (unassigned)
@@ -972,7 +972,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   int BoxesPerProcessSend = level->num_my_boxes;
   MPI_Allreduce(&BoxesPerProcessSend,&BoxesPerProcess,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
   #endif
-  if(my_rank==0){fprintf(stdout,"  Calculating boxes per process... target=%0.3f, max=%d\n\n",(double)TotalBoxes/(double)num_ranks,BoxesPerProcess);}
+  if(my_rank==0){fprintf(stdout,"  Calculating boxes per process... target=%0.3f, max=%d\n",(double)TotalBoxes/(double)num_ranks,BoxesPerProcess);}
 }
 
 

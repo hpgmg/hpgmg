@@ -33,7 +33,6 @@ void exchange_boundary(level_type * level, int id, int justFaces){
               level->exchange_ghosts[justFaces].recv_ranks[n],
               my_tag,
               MPI_COMM_WORLD,
-              //&level->exchange_ghosts[justFaces].requests[n]
               &recv_requests[n]
     );
   }
@@ -62,8 +61,6 @@ void exchange_boundary(level_type * level, int id, int justFaces){
               my_tag,
               MPI_COMM_WORLD,
               &send_requests[n]
-              //&level->exchange_ghosts[justFaces].requests[n+level->exchange_ghosts[justFaces].num_recvs]
-                                              // requests[0..num_recvs-1] were used by recvs.  So sends start at num_recvs
     ); 
   }
   _timeEnd = CycleTime();
