@@ -62,6 +62,7 @@ void MGPrintTiming(mg_type *all_grids){
 
   if(all_grids->my_rank!=0)return;
   double this,total;
+          printf("\n\n");
           printf("                          ");for(level=0;level<(num_levels  );level++){printf("%12d ",level);}printf("\n");
         //printf("v-cycles initiated        ");for(level=0;level<(num_levels  );level++){printf("%12d ",all_grids->levels[level]->vcycles_from_this_level/all_grids->MGSolves_performed);}printf("\n");
           printf("box dimension             ");for(level=0;level<(num_levels  );level++){printf("%10d^3 ",all_grids->levels[level]->box_dim);}printf("       total\n");
@@ -981,7 +982,7 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
   #ifdef USE_MPI
   double MG_Start_Time = MPI_Wtime();
   #endif
-  if(all_grids->levels[0]->my_rank==0){fprintf(stdout,"MGSolve...\n");}
+  if(all_grids->levels[0]->my_rank==0){fprintf(stdout,"MGSolve... ");}
   uint64_t _timeStartMGSolve = CycleTime();
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1018,7 +1019,10 @@ void MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double 
     //norm_of_residual = norm_of_residual / norm_of_r0;
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
-    if(all_grids->levels[level]->my_rank==0){fprintf(stdout,"v-cycle=%2d, norm=%22.20f (%1.15e)\n",v+1,norm_of_residual,norm_of_residual);}
+    if(all_grids->levels[level]->my_rank==0){
+      if(v>0)fprintf(stdout,"\n           ");
+             fprintf(stdout,"v-cycle=%2d  norm=%22.20f (%1.15e)  ",v+1,norm_of_residual,norm_of_residual);
+    }
     if(norm_of_residual<desired_mg_norm)break;
   } // maxVCycles
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1046,7 +1050,7 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
   #ifdef USE_MPI
   double FMG_Start_Time = MPI_Wtime();
   #endif
-  if(all_grids->levels[0]->my_rank==0){fprintf(stdout,"FMGSolve...\n");}
+  if(all_grids->levels[0]->my_rank==0){fprintf(stdout,"FMGSolve... ");}
   uint64_t _timeStartMGSolve = CycleTime();
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   //double norm_of_r0 = norm(all_grids->levels[0],F_id);
@@ -1112,8 +1116,11 @@ void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double
     //norm_of_residual = norm_of_residual / norm_of_r0;
     uint64_t _timeNorm = CycleTime();
     all_grids->levels[level]->cycles.Total += (uint64_t)(_timeNorm-_timeStart);
-    if(all_grids->levels[level]->my_rank==0){if(v>=0)fprintf(stdout,"v-cycle=%2d, norm=%22.20f (%1.15e)\n",v+1,norm_of_residual,norm_of_residual);else
-                                                     fprintf(stdout,"f-cycle,    norm=%22.20f (%1.15e)\n",norm_of_residual,norm_of_residual);}
+    if(all_grids->levels[level]->my_rank==0){
+      if(v>=0)fprintf(stdout,"\n            ");
+      if(v>=0)fprintf(stdout,"v-cycle=%2d  norm=%22.20f (%1.15e)  ",v+1,norm_of_residual,norm_of_residual);else
+              fprintf(stdout,"f-cycle     norm=%22.20f (%1.15e)  ",norm_of_residual,norm_of_residual);
+    }
     if(norm_of_residual<desired_mg_norm)break;
   }
 

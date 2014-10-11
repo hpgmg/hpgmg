@@ -227,9 +227,9 @@ int main(int argc, char **argv){
   }
   MGPrintTiming(&all_grids); // don't include the error check in the timing results
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(my_rank==0){fprintf(stdout,"calculating error...\n");}
+  if(my_rank==0){fprintf(stdout,"calculating error...  ");}
   double fine_error = error(&fine_grid,VECTOR_U,VECTOR_UTRUE);
-  if(my_rank==0){fprintf(stdout," h = %22.15e  ||error|| = %22.15e\n\n",h0,fine_error);fflush(stdout);}
+  if(my_rank==0){fprintf(stdout,"h = %22.15e  ||error|| = %22.15e\n\n",h0,fine_error);fflush(stdout);}
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // MGDestroy()
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
