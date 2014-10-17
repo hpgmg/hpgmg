@@ -197,9 +197,8 @@ void decompose_level_lex(int *rank_of_box, int idim, int jdim, int kdim, int ran
   for(k=0;k<kdim;k++){
   for(j=0;j<jdim;j++){
   for(i=0;i<idim;i++){
-      int b = k*jdim*idim + j*idim + i;
-    int rank = (ranks*b)/boxes;
-    rank_of_box[b] = rank;
+    int b = k*jdim*idim + j*idim + i;
+    rank_of_box[b] = ((uint64_t)ranks*(uint64_t)b)/(uint64_t)boxes; // ranks*b can be as larger than ranks^2... can over flow int
   }}} 
 }
 //---------------------------------------------------------------------------------------------------------------------------------------------------
@@ -791,6 +790,11 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
     }
   }
   #endif
+
+  if(box_ghosts < stencil_get_radius() ){
+    if(my_rank==0)fprintf(stderr,"ghosts(%d) must be >= stencil_get_radius(%d)\n",box_ghosts,stencil_get_radius());
+    exit(0);
+  }
 
   level->memory_allocated = 0;
   level->box_dim        = box_dim;
