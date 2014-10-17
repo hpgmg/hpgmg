@@ -858,6 +858,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
       box_ghosts[level] = box_ghosts[level-1];
              doRestrict = 1;
     }
+    if(dim_i[level]<minCoarseGridDim)doRestrict=0;
     if(doRestrict)all_grids->num_levels++;
   }
   #endif
