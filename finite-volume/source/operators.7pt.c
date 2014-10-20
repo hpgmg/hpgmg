@@ -253,8 +253,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
       #endif
                              Dinv[ijk] = 1.0/Aii;				// inverse of the diagonal Aii
-                          //L1inv[ijk] = 1.0/(Aii+sumAbsAij);			// inverse of the L1 row norm
-      // L1inv = ( D+D^{L1} )^{-1}
+                          //L1inv[ijk] = 1.0/(Aii+sumAbsAij);			// inverse of the L1 row norm... L1inv = ( D+D^{L1} )^{-1}
       // as suggested by eq 6.5 in Baker et al, "Multigrid smoothers for ultra-parallel computing: additional theory and discussion"...
       if(Aii>=1.5*sumAbsAij)L1inv[ijk] = 1.0/(Aii              ); 		//
                        else L1inv[ijk] = 1.0/(Aii+0.5*sumAbsAij);		// 

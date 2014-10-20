@@ -164,13 +164,27 @@ int main(int argc, char **argv){
   }
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // create the fine level...
-  int ghosts=stencil_get_radius();
+  #ifdef USE_PERIODIC_BC
+  int bc = BC_PERIODIC;
+  #else
+  int bc = BC_DIRICHLET;
+  #endif
   level_type fine_grid;
+  int ghosts=stencil_get_radius();
+  create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,bc,my_rank,num_tasks);
   //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,BC_PERIODIC ,my_rank,num_tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Periodic
   //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,BC_PERIODIC ,my_rank,num_tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Periodic
   //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,BC_DIRICHLET,my_rank,num_tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=2.0;double b=1.0; // Helmholtz w/Dirichlet
-    create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,BC_DIRICHLET,my_rank,num_tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Dirichlet
+  //create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,BC_DIRICHLET,my_rank,num_tasks);double h0=1.0/( (double)boxes_in_i*(double)box_dim );double a=0.0;double b=1.0; //   Poisson w/Dirichlet
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  #ifdef USE_HELMHOLTZ
+  double a=2.0;double b=1.0; // Helmholtz
+  if(my_rank==0)fprintf(stdout,"  Creating Helmholtz (a=%f, b=%f) test problem\n",a,b);
+  #else
+  double a=0.0;double b=1.0; // Poisson
+  if(my_rank==0)fprintf(stdout,"  Creating Poisson (a=%f, b=%f) test problem\n",a,b);
+  #endif
+  double h0=1.0/( (double)boxes_in_i*(double)box_dim );
   initialize_problem(&fine_grid,h0,a,b);
   rebuild_operator(&fine_grid,NULL,a,b); // i.e. calculate Dinv and lambda_max
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

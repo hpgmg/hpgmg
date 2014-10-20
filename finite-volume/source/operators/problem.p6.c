@@ -37,31 +37,48 @@ void evaluateBeta(double x, double y, double z, double *B, double *Bx, double *B
 
 //------------------------------------------------------------------------------------------------------------------------------
 void evaluateU(double x, double y, double z, double *U, double *Ux, double *Uy, double *Uz, double *Uxx, double *Uyy, double *Uzz, int isPeriodic){
-  // should be continuous in u, u', and u''
-  // v(w) = w^4 - 2w^3 + w^2 + c
+  // should be continuous in u, u', u'', u''', and u'''' to guarantee high order and periodic boundaries
+  // v(w) = ???
   // u(x,y,z) = v(x)v(y)v(z)
   // If Periodic, then the integral of the RHS should sum to zero.
-  //   Setting shift=1/30 should ensure that the integrals of X, Y, or Z should sum to zero... 
+  //   Setting shift=1.0 should ensure that the integrals of X, Y, or Z should sum to zero... 
   //   That should(?) make the integrals of u,ux,uy,uz,uxx,uyy,uzz sum to zero and thus make the integral of f sum to zero
   // If dirichlet, then w(0)=w(1) = 0.0
   //   Setting shift to 0 should ensure that U(x,y,z) = 0 on boundary
-  double shift = 0.0;if(isPeriodic)shift= -1.0/30.0;
-  double X   =  1.0*pow(x,4) -  2.0*pow(x,3) + 1.0*pow(x,2) + shift;
-  double Y   =  1.0*pow(y,4) -  2.0*pow(y,3) + 1.0*pow(y,2) + shift;
-  double Z   =  1.0*pow(z,4) -  2.0*pow(z,3) + 1.0*pow(z,2) + shift;
-  double Xx  =  4.0*pow(x,3) -  6.0*pow(x,2) + 2.0*x;
-  double Yy  =  4.0*pow(y,3) -  6.0*pow(y,2) + 2.0*y;
-  double Zz  =  4.0*pow(z,3) -  6.0*pow(z,2) + 2.0*z;
-  double Xxx = 12.0*pow(x,2) - 12.0*x        + 2.0;
-  double Yyy = 12.0*pow(y,2) - 12.0*y        + 2.0;
-  double Zzz = 12.0*pow(z,2) - 12.0*z        + 2.0;
-        *U   = X*Y*Z;
-        *Ux  = Xx*Y*Z;
-        *Uy  = X*Yy*Z;
-        *Uz  = X*Y*Zz;
-        *Uxx = Xxx*Y*Z;
-        *Uyy = X*Yyy*Z;
-        *Uzz = X*Y*Zzz;
+  //    u =    ax^6 +    bx^5 +   cx^4 +  dx^3 +  ex^2 + fx + g
+  //   ux =   6ax^5 +   5bx^4 +  4cx^3 + 3dx^2 + 2ex   + f
+  //  uxx =  30ax^4 +  20bx^3 + 12cx^2 + 6dx   + 2e
+  // a =   42.0
+  // b = -126.0
+  // c =  105.0
+  // d =    0.0
+  // e =  -21.0
+  // f =    0.0
+  // g =    1.0
+  double shift = 0.0;if(isPeriodic)shift= 1.0/21.0;
+  double X     =  2.0*pow(x,6) -   6.0*pow(x,5) +  5.0*pow(x,4) - 1.0*pow(x,2) + shift;
+  double Y     =  2.0*pow(y,6) -   6.0*pow(y,5) +  5.0*pow(y,4) - 1.0*pow(y,2) + shift;
+  double Z     =  2.0*pow(z,6) -   6.0*pow(z,5) +  5.0*pow(z,4) - 1.0*pow(z,2) + shift;
+  double Xx    = 12.0*pow(x,5) -  30.0*pow(x,4) + 20.0*pow(x,3) - 2.0*x;
+  double Yy    = 12.0*pow(y,5) -  30.0*pow(y,4) + 20.0*pow(y,3) - 2.0*y;
+  double Zz    = 12.0*pow(z,5) -  30.0*pow(z,4) + 20.0*pow(z,3) - 2.0*z;
+  double Xxx   = 60.0*pow(x,4) - 120.0*pow(x,3) + 60.0*pow(x,2) - 2.0;
+  double Yyy   = 60.0*pow(y,4) - 120.0*pow(y,3) + 60.0*pow(y,2) - 2.0;
+  double Zzz   = 60.0*pow(z,4) - 120.0*pow(z,3) + 60.0*pow(z,2) - 2.0;
+  double u     = X  *Y  *Z  ;
+  double ux    = Xx *Y  *Z  ;
+  double uy    = X  *Yy *Z  ;
+  double uz    = X  *Y  *Zz ;
+  double uxx   = Xxx*Y  *Z  ;
+  double uyy   = X  *Yyy*Z  ;
+  double uzz   = X  *Y  *Zzz;
+        *U     = X*Y*Z;
+        *Ux    = Xx*Y*Z;
+        *Uy    = X*Yy*Z;
+        *Uz    = X*Y*Zz;
+        *Uxx   = Xxx*Y*Z;
+        *Uyy   = X*Yyy*Z;
+        *Uzz   = X*Y*Zzz;
 }
 
 
