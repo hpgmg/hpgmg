@@ -59,6 +59,7 @@ void apply_BCs(level_type * level, int x_id){
 //------------------------------------------------------------------------------------------------------------------------------
 // calculate Dinv?
 #ifdef STENCIL_VARIABLE_COEFFICIENT
+  #ifdef USE_HELMHOLTZ // variable coefficient Helmholtz ...
   #define calculate_Dinv()                                      \
   (                                                             \
     1.0 / (a*alpha[ijk] - b*h2inv*(                             \
@@ -70,6 +71,19 @@ void apply_BCs(level_type * level, int x_id){
              + beta_k[ijk+kStride]*( valid[ijk+kStride] - 2.0 ) \
           ))                                                    \
   )
+  #else // variable coefficient Poisson ...
+  #define calculate_Dinv()                                      \
+  (                                                             \
+    1.0 / ( -b*h2inv*(                                          \
+             + beta_i[ijk        ]*( valid[ijk-1      ] - 2.0 ) \
+             + beta_j[ijk        ]*( valid[ijk-jStride] - 2.0 ) \
+             + beta_k[ijk        ]*( valid[ijk-kStride] - 2.0 ) \
+             + beta_i[ijk+1      ]*( valid[ijk+1      ] - 2.0 ) \
+             + beta_j[ijk+jStride]*( valid[ijk+jStride] - 2.0 ) \
+             + beta_k[ijk+kStride]*( valid[ijk+kStride] - 2.0 ) \
+          ))                                                    \
+  )
+  #endif
 #else // constant coefficient case... 
   #define calculate_Dinv()          \
   (                                 \
@@ -94,9 +108,11 @@ void apply_BCs(level_type * level, int x_id){
 #ifdef STENCIL_FUSE_BC
 
   #ifdef STENCIL_VARIABLE_COEFFICIENT
-    #define apply_op_ijk(x)                                                                     \
+    #ifdef USE_HELMHOLTZ // variable coefficient Helmholtz ...
+    #define apply_op_ijk(x)                                                                   \
     (                                                                                         \
-      a*alpha[ijk]*x[ijk] - b*h2inv*(                                                         \
+      a*alpha[ijk]*x[ijk]                                                                     \
+      -b*h2inv*(                                                                              \
         + beta_i[ijk        ]*( valid[ijk-1      ]*( x[ijk] + x[ijk-1      ] ) - 2.0*x[ijk] ) \
         + beta_j[ijk        ]*( valid[ijk-jStride]*( x[ijk] + x[ijk-jStride] ) - 2.0*x[ijk] ) \
         + beta_k[ijk        ]*( valid[ijk-kStride]*( x[ijk] + x[ijk-kStride] ) - 2.0*x[ijk] ) \
@@ -105,6 +121,19 @@ void apply_BCs(level_type * level, int x_id){
         + beta_k[ijk+kStride]*( valid[ijk+kStride]*( x[ijk] + x[ijk+kStride] ) - 2.0*x[ijk] ) \
       )                                                                                       \
     )
+    #else // variable coefficient Poisson ...
+    #define apply_op_ijk(x)                                                                   \
+    (                                                                                         \
+      -b*h2inv*(                                                                              \
+        + beta_i[ijk        ]*( valid[ijk-1      ]*( x[ijk] + x[ijk-1      ] ) - 2.0*x[ijk] ) \
+        + beta_j[ijk        ]*( valid[ijk-jStride]*( x[ijk] + x[ijk-jStride] ) - 2.0*x[ijk] ) \
+        + beta_k[ijk        ]*( valid[ijk-kStride]*( x[ijk] + x[ijk-kStride] ) - 2.0*x[ijk] ) \
+        + beta_i[ijk+1      ]*( valid[ijk+1      ]*( x[ijk] + x[ijk+1      ] ) - 2.0*x[ijk] ) \
+        + beta_j[ijk+jStride]*( valid[ijk+jStride]*( x[ijk] + x[ijk+jStride] ) - 2.0*x[ijk] ) \
+        + beta_k[ijk+kStride]*( valid[ijk+kStride]*( x[ijk] + x[ijk+kStride] ) - 2.0*x[ijk] ) \
+      )                                                                                       \
+    )
+    #endif
   #else  // constant coefficient case...  
     #define apply_op_ijk(x)                                \
     (                                                    \
@@ -127,9 +156,11 @@ void apply_BCs(level_type * level, int x_id){
 #ifndef STENCIL_FUSE_BC
 
   #ifdef STENCIL_VARIABLE_COEFFICIENT
-    #define apply_op_ijk(x)                                 \
+    #ifdef USE_HELMHOLTZ // variable coefficient Helmholtz...
+    #define apply_op_ijk(x)                               \
     (                                                     \
-      a*alpha[ijk]*x[ijk] - b*h2inv*(                     \
+      a*alpha[ijk]*x[ijk]                                 \
+     -b*h2inv*(                                           \
         + beta_i[ijk+1      ]*( x[ijk+1      ] - x[ijk] ) \
         + beta_i[ijk        ]*( x[ijk-1      ] - x[ijk] ) \
         + beta_j[ijk+jStride]*( x[ijk+jStride] - x[ijk] ) \
@@ -138,6 +169,19 @@ void apply_BCs(level_type * level, int x_id){
         + beta_k[ijk        ]*( x[ijk-kStride] - x[ijk] ) \
       )                                                   \
     )
+    #else // variable coefficient Poisson...
+    #define apply_op_ijk(x)                               \
+    (                                                     \
+      -b*h2inv*(                                          \
+        + beta_i[ijk+1      ]*( x[ijk+1      ] - x[ijk] ) \
+        + beta_i[ijk        ]*( x[ijk-1      ] - x[ijk] ) \
+        + beta_j[ijk+jStride]*( x[ijk+jStride] - x[ijk] ) \
+        + beta_j[ijk        ]*( x[ijk-jStride] - x[ijk] ) \
+        + beta_k[ijk+kStride]*( x[ijk+kStride] - x[ijk] ) \
+        + beta_k[ijk        ]*( x[ijk-kStride] - x[ijk] ) \
+      )                                                   \
+    )
+    #endif
   #else  // constant coefficient case...  
     #define apply_op_ijk(x)            \
     (                                \
