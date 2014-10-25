@@ -353,9 +353,11 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
     int dim_k_mod = dim_k-kk;if(dim_k_mod>blockcopy_tile_k)dim_k_mod=blockcopy_tile_k;
     int dim_j_mod = dim_j-jj;if(dim_j_mod>blockcopy_tile_j)dim_j_mod=blockcopy_tile_j;
     if(*num_blocks >= *allocated_blocks){
-      *allocated_blocks = *allocated_blocks + 100;
+      int oldSize = *allocated_blocks;
+      if(*allocated_blocks == 0){*allocated_blocks=64;}
+                            else{*allocated_blocks*=2;}
       *blocks = (blockCopy_type *)realloc((void*)(*blocks),(*allocated_blocks)*sizeof(blockCopy_type));
-      if(*blocks == NULL){fprintf(stderr,"realloc failed - append_block_to_list\n");exit(0);}
+      if(*blocks == NULL){fprintf(stderr,"realloc failed - append_block_to_list (%d -> %d)\n",oldSize,*allocated_blocks);exit(0);}
     }
     (*blocks)[*num_blocks].dim.i         = dim_i;
     (*blocks)[*num_blocks].dim.j         = dim_j_mod;
