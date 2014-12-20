@@ -35,6 +35,24 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
       int write_ijk = (write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
       write[write_ijk] = read[read_ijk];
     }}
+  }else if(dim_i==2){ // be smart and don't have an inner loop from 0 to 1
+    for(k=0;k<dim_k;k++){
+    for(j=0;j<dim_j;j++){
+      int  read_ijk = ( read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
+      int write_ijk = (write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
+      write[write_ijk+0] = read[read_ijk+0];
+      write[write_ijk+1] = read[read_ijk+1];
+    }}
+  }else if(dim_i==4){ // be smart and don't have an inner loop from 0 to 3
+    for(k=0;k<dim_k;k++){
+    for(j=0;j<dim_j;j++){
+      int  read_ijk = ( read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
+      int write_ijk = (write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
+      write[write_ijk+0] = read[read_ijk+0];
+      write[write_ijk+1] = read[read_ijk+1];
+      write[write_ijk+2] = read[read_ijk+2];
+      write[write_ijk+3] = read[read_ijk+3];
+    }}
   }else if(dim_j==1){ // don't have a 0..0 loop
     for(k=0;k<dim_k;k++){
     for(i=0;i<dim_i;i++){
@@ -49,17 +67,7 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
       int write_ijk = (i+write_i) + (j+write_j)*write_jStride + (write_k)*write_kStride;
       write[write_ijk] = read[read_ijk];
     }}
-  }else if(dim_i==4){ // be smart and don't have an inner loop from 0 to 3
-    for(k=0;k<dim_k;k++){
-    for(j=0;j<dim_j;j++){
-      int  read_ijk = ( read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
-      int write_ijk = (write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
-      write[write_ijk+0] = read[read_ijk+0];
-      write[write_ijk+1] = read[read_ijk+1];
-      write[write_ijk+2] = read[read_ijk+2];
-      write[write_ijk+3] = read[read_ijk+3];
-    }}
-  }else{
+  }else{ // general case...
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
     for(i=0;i<dim_i;i++){

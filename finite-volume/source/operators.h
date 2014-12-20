@@ -24,7 +24,8 @@ int stencil_is_star_shaped();
   void      interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c); // interpolation used in the f-cycle to create a new initial guess for the next finner v-cycle
 //------------------------------------------------------------------------------------------------------------------------------
   void         exchange_boundary(level_type * level, int id_a, int justFaces);
-  void          apply_BCs_linear(level_type * level, int x_id);
+  void          apply_BCs_linear(level_type * level, int x_id, int justFaces);
+  void       apply_BCs_quadratic(level_type * level, int x_id, int justFaces);
 //------------------------------------------------------------------------------------------------------------------------------
 double                       dot(level_type * level, int id_a, int id_b);
 double                      norm(level_type * level, int id_a);

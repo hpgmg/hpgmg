@@ -8,7 +8,7 @@
 void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, double b){
   // exchange the boundary for x in prep for Ax...
   exchange_boundary(level,x_id,stencil_is_star_shaped());
-          apply_BCs(level,x_id);
+          apply_BCs(level,x_id,stencil_is_star_shaped());
 
   // now do residual/restriction proper...
   uint64_t _timeStart = CycleTime();

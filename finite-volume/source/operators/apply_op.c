@@ -6,7 +6,7 @@
 void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // y=Ax
   // exchange the boundary of x in preparation for Ax
   exchange_boundary(level,x_id,stencil_is_star_shaped());
-          apply_BCs(level,x_id);
+          apply_BCs(level,x_id,stencil_is_star_shaped());
 
   // now do Ax proper...
   uint64_t _timeStart = CycleTime();

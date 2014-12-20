@@ -4,7 +4,7 @@
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
 void apply_BCs_linear(level_type * level, int x_id){
-  if(level->domain_boundary_condition == BC_PERIODIC)return; // no BC's to apply !
+  if(level->boundary_condition.type == BC_PERIODIC)return; // no BC's to apply !
 
   // for cell-centered, we need to fill in the ghost zones to apply any BC's
   // this code does a simple linear interpolation for homogeneous dirichlet
@@ -41,7 +41,7 @@ void apply_BCs_linear(level_type * level, int x_id){
     int box_on_high_j = (level->my_boxes[box].low.j+dim == level->dim.j);
     int box_on_high_k = (level->my_boxes[box].low.k+dim == level->dim.k);
 
-    if(level->domain_boundary_condition == BC_DIRICHLET){
+    if(level->boundary_condition.type == BC_DIRICHLET){
       int i,j,k,normal;
       double s;
 

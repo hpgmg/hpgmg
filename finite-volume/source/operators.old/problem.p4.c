@@ -116,7 +116,7 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       evaluateBeta(x           ,y           ,z           ,&B ,&Bx,&By,&Bz); // cell-centered value of Beta
       #endif
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-      evaluateU(x,y,z,&U,&Ux,&Uy,&Uz,&Uxx,&Uyy,&Uzz, (level->domain_boundary_condition == BC_PERIODIC) );
+      evaluateU(x,y,z,&U,&Ux,&Uy,&Uz,&Uxx,&Uyy,&Uzz, (level->boundary_condition.type == BC_PERIODIC) );
       double F = a*A*U - b*( (Bx*Ux + By*Uy + Bz*Uz)  +  B*(Uxx + Uyy + Uzz) );
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
       level->my_boxes[box].vectors[VECTOR_BETA_I][ijk] = Bi;
@@ -134,7 +134,7 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
 
 
   // FIX... Periodic Boundary Conditions...
-  if(level->domain_boundary_condition == BC_PERIODIC){
+  if(level->boundary_condition.type == BC_PERIODIC){
     double average_value_of_f = mean(level,VECTOR_F);
     if(average_value_of_f!=0.0)if(level->my_rank==0){fprintf(stderr,"\n  WARNING... Periodic boundary conditions, but f does not sum to zero... mean(f)=%e\n",average_value_of_f);}
    

@@ -3,139 +3,201 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs_linear(level_type * level, int x_id){
-  if(level->domain_boundary_condition == BC_PERIODIC)return; // no BC's to apply !
-
-  // for cell-centered, we need to fill in the ghost zones to apply any BC's
-  // this code does a simple linear interpolation for homogeneous dirichlet
+void apply_BCs_linear(level_type * level, int x_id, int justFaces){
+  // For cell-centered, we need to fill in the ghost zones to apply any BC's
+  // This code does a simple linear interpolation for homogeneous dirichlet (0 on boundary)
+  // Nominally, this is first performed across faces, then to edges, then to corners.  
+  // In this implementation, these three steps are fused
   //
-  //   . . . . . . . . .          . . . . . . . . .
+  //   . . . . . . . . . .        . . . . . . . . . .
   //   .       .       .          .       .       .
   //   .   ?   .   ?   .          .+x(0,0).-x(0,0).
   //   .       .       .          .       .       .
-  //   . . . . +-------+          . . . . +-------+
+  //   . . . . +---0---+--        . . . . +-------+--
   //   .       |       |          .       |       |
-  //   .   ?   | x(0,0)|          .-x(0,0)| x(0,0)|
+  //   .   ?   0 x(0,0)|          .-x(0,0)| x(0,0)|
   //   .       |       |          .       |       |
-  //   . . . . +-------+          . . . . +-------+
-  //           ^
-  //           domain boundary is the face... i.e. between two array indices !!! 
+  //   . . . . +-------+--        . . . . +-------+--
+  //   .       |       |          .       |       |
   //
+  //
+  if(level->boundary_condition.type == BC_PERIODIC)return; // no BC's to apply !
 
+  const int   faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
+  const int   edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
+  const int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
+
+  int buffer;
   uint64_t _timeStart = CycleTime();
-  int box;
+  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[justFaces])
+  for(buffer=0;buffer<level->boundary_condition.num_blocks[justFaces];buffer++){
+    double scale = 1.0;
+    if(  faces[level->boundary_condition.blocks[justFaces][buffer].subtype])scale=-1.0;
+    if(  edges[level->boundary_condition.blocks[justFaces][buffer].subtype])scale= 1.0;
+    if(corners[level->boundary_condition.blocks[justFaces][buffer].subtype])scale=-1.0;
 
-  #ifdef _OPENMP
-  #pragma omp parallel for private(box)
-  #endif
-  for(box=0;box<level->num_my_boxes;box++){
+    int i,j,k;
+    const int       box = level->boundary_condition.blocks[justFaces][buffer].read.box; 
+    const int     dim_i = level->boundary_condition.blocks[justFaces][buffer].dim.i;
+    const int     dim_j = level->boundary_condition.blocks[justFaces][buffer].dim.j;
+    const int     dim_k = level->boundary_condition.blocks[justFaces][buffer].dim.k;
+    const int       ilo = level->boundary_condition.blocks[justFaces][buffer].read.i;
+    const int       jlo = level->boundary_condition.blocks[justFaces][buffer].read.j;
+    const int       klo = level->boundary_condition.blocks[justFaces][buffer].read.k;
+    const int normal = 26-level->boundary_condition.blocks[justFaces][buffer].subtype; // invert the normal vector
+ 
+    // hard code for box to box BC's 
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
-    const int  ghosts = level->my_boxes[box].ghosts;
-    const int     dim = level->my_boxes[box].dim;
-    double * __restrict__ x      = level->my_boxes[box].vectors[        x_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
-  //double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID] + ghosts*(1+jStride+kStride);
+    double * __restrict__  x = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride);
 
-    int box_on_low_i  = (level->my_boxes[box].low.i     ==            0);
-    int box_on_low_j  = (level->my_boxes[box].low.j     ==            0);
-    int box_on_low_k  = (level->my_boxes[box].low.k     ==            0);
-    int box_on_high_i = (level->my_boxes[box].low.i+dim == level->dim.i);
-    int box_on_high_j = (level->my_boxes[box].low.j+dim == level->dim.j);
-    int box_on_high_k = (level->my_boxes[box].low.k+dim == level->dim.k);
+    // convert normal vector into pointer offsets...
+    const int di = (((normal % 3)  )-1);
+    const int dj = (((normal % 9)/3)-1);
+    const int dk = (((normal / 9)  )-1);
+    const int stride = di + dj*jStride + dk*kStride;
 
-    if(level->domain_boundary_condition == BC_DIRICHLET){
-      int i,j,k,normal;
-      double s;
-
-      // note, just because you are in a corner ghost zone, doesn't mean you are on the corner of the domain.
-      // thus, one needs to calculate the normal to the domain (not normal to box) in each ghost zone region
-      // depending on whether this normal is on a domain face, edge, or corner, one needs to choose 's' appropriately
-
-      // calculate a normal vector for this face                                                              // if face is on a domain boundary, impose the boundary condition using the calculated normal
-      s=1;if(box_on_low_i ){normal= 1+      0+      0;s*=-1;}                                                           if(box_on_low_i ){i= -1;j  =0;k  =0;for(j=0;j<dim;j++)for(k=0;k<dim;k++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;if(box_on_low_j ){normal= 0+jStride+      0;s*=-1;}                                                           if(box_on_low_j ){i=  0;j= -1;k  =0;for(k=0;k<dim;k++)for(i=0;i<dim;i++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;if(box_on_low_k ){normal= 0+      0+kStride;s*=-1;}                                                           if(box_on_low_k ){i=  0;j  =0;k= -1;for(j=0;j<dim;j++)for(i=0;i<dim;i++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;if(box_on_high_i){normal=-1+      0+      0;s*=-1;}                                                           if(box_on_high_i){i=dim;j  =0;k  =0;for(j=0;j<dim;j++)for(k=0;k<dim;k++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;if(box_on_high_j){normal= 0-jStride+      0;s*=-1;}                                                           if(box_on_high_j){i=  0;j=dim;k  =0;for(k=0;k<dim;k++)for(i=0;i<dim;i++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;if(box_on_high_k){normal= 0+      0-kStride;s*=-1;}                                                           if(box_on_high_k){i=  0;j  =0;k=dim;for(j=0;j<dim;j++)for(i=0;i<dim;i++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-
-      // calculate a normal vector for this edge                                                                                              // if edge is on a domain boundary, impose the boundary condition using the calculated normal
-      s=1;normal=0;if(box_on_low_j ){normal+=jStride;s*=-1;}if(box_on_low_k ){normal+=kStride;s*=-1;}                                         if(box_on_low_j ||box_on_low_k ){i=  0;j= -1;k= -1;for(i=0;i<dim;i++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_high_j){normal-=jStride;s*=-1;}if(box_on_low_k ){normal+=kStride;s*=-1;}                                         if(box_on_high_j||box_on_low_k ){i=  0;j=dim;k= -1;for(i=0;i<dim;i++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_low_j ){normal+=jStride;s*=-1;}if(box_on_high_k){normal-=kStride;s*=-1;}                                         if(box_on_low_j ||box_on_high_k){i=  0;j= -1;k=dim;for(i=0;i<dim;i++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_high_j){normal-=jStride;s*=-1;}if(box_on_high_k){normal-=kStride;s*=-1;}                                         if(box_on_high_j||box_on_high_k){i=  0;j=dim;k=dim;for(i=0;i<dim;i++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_low_i ){normal+=      1;s*=-1;}if(box_on_low_k ){normal+=kStride;s*=-1;}                                         if(box_on_low_i ||box_on_low_k ){i= -1;j=  0;k= -1;for(j=0;j<dim;j++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_high_i){normal-=      1;s*=-1;}if(box_on_low_k ){normal+=kStride;s*=-1;}                                         if(box_on_high_i||box_on_low_k ){i=dim;j=  0;k= -1;for(j=0;j<dim;j++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_low_i ){normal+=      1;s*=-1;}if(box_on_high_k){normal-=kStride;s*=-1;}                                         if(box_on_low_i ||box_on_high_k){i= -1;j=  0;k=dim;for(j=0;j<dim;j++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_high_i){normal-=      1;s*=-1;}if(box_on_high_k){normal-=kStride;s*=-1;}                                         if(box_on_high_i||box_on_high_k){i=dim;j=  0;k=dim;for(j=0;j<dim;j++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_low_i ){normal+=      1;s*=-1;}if(box_on_low_j ){normal+=jStride;s*=-1;}                                         if(box_on_low_i ||box_on_low_j ){i= -1;j= -1;k=  0;for(k=0;k<dim;k++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_high_i){normal-=      1;s*=-1;}if(box_on_low_j ){normal+=jStride;s*=-1;}                                         if(box_on_high_i||box_on_low_j ){i=dim;j= -1;k=  0;for(k=0;k<dim;k++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_low_i ){normal+=      1;s*=-1;}if(box_on_high_j){normal-=jStride;s*=-1;}                                         if(box_on_low_i ||box_on_high_j){i= -1;j=dim;k=  0;for(k=0;k<dim;k++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_high_i){normal-=      1;s*=-1;}if(box_on_high_j){normal-=jStride;s*=-1;}                                         if(box_on_high_i||box_on_high_j){i=dim;j=dim;k=  0;for(k=0;k<dim;k++){int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      
-      // calculate a normal vector for this corner                                                                                            // if corner is on a domain boundary, impose the boundary condition using the calculated normal
-      s=1;normal=0;if(box_on_low_i ){normal+=      1;s*=-1;}if(box_on_low_j ){normal+=jStride;s*=-1;}if(box_on_low_k ){normal+=kStride;s*=-1;}if(box_on_low_i || box_on_low_j || box_on_low_k ){i= -1;j= -1;k= -1;{int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_high_i){normal-=      1;s*=-1;}if(box_on_low_j ){normal+=jStride;s*=-1;}if(box_on_low_k ){normal+=kStride;s*=-1;}if(box_on_high_i|| box_on_low_j || box_on_low_k ){i=dim;j= -1;k= -1;{int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_low_i ){normal+=      1;s*=-1;}if(box_on_high_j){normal-=jStride;s*=-1;}if(box_on_low_k ){normal+=kStride;s*=-1;}if(box_on_low_i || box_on_high_j|| box_on_low_k ){i= -1;j=dim;k= -1;{int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_high_i){normal-=      1;s*=-1;}if(box_on_high_j){normal-=jStride;s*=-1;}if(box_on_low_k ){normal+=kStride;s*=-1;}if(box_on_high_i|| box_on_high_j|| box_on_low_k ){i=dim;j=dim;k= -1;{int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_low_i ){normal+=      1;s*=-1;}if(box_on_low_j ){normal+=jStride;s*=-1;}if(box_on_high_k){normal-=kStride;s*=-1;}if(box_on_low_i || box_on_low_j || box_on_high_k){i= -1;j= -1;k=dim;{int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_high_i){normal-=      1;s*=-1;}if(box_on_low_j ){normal+=jStride;s*=-1;}if(box_on_high_k){normal-=kStride;s*=-1;}if(box_on_high_i|| box_on_low_j || box_on_high_k){i=dim;j= -1;k=dim;{int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_low_i ){normal+=      1;s*=-1;}if(box_on_high_j){normal-=jStride;s*=-1;}if(box_on_high_k){normal-=kStride;s*=-1;}if(box_on_low_i || box_on_high_j|| box_on_high_k){i= -1;j=dim;k=dim;{int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-      s=1;normal=0;if(box_on_high_i){normal-=      1;s*=-1;}if(box_on_high_j){normal-=jStride;s*=-1;}if(box_on_high_k){normal-=kStride;s*=-1;}if(box_on_high_i|| box_on_high_j|| box_on_high_k){i=dim;j=dim;k=dim;{int ijk=i+j*jStride+k*kStride;x[ijk]=s*x[ijk+normal];}}
-
+    if(dim_i==1){
+      for(k=0;k<dim_k;k++){
+      for(j=0;j<dim_j;j++){
+        int ijk = (  ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+        x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
+      }}
+    }else if(dim_j==1){
+      for(k=0;k<dim_k;k++){
+      for(i=0;i<dim_i;i++){
+        int ijk = (i+ilo) + (  jlo)*jStride + (k+klo)*kStride;
+        x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
+      }}
+    }else if(dim_k==1){
+      for(j=0;j<dim_j;j++){
+      for(i=0;i<dim_i;i++){
+        int ijk = (i+ilo) + (j+jlo)*jStride + (  klo)*kStride;
+        x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
+      }}
+    }else{
+      for(k=0;k<dim_k;k++){
+      for(j=0;j<dim_j;j++){
+      for(i=0;i<dim_i;i++){
+        int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+        x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
+      }}}
     }
+
   }
   level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
 }
 
-
 //------------------------------------------------------------------------------------------------------------------------------
-  // for cell-centered, we need to fill in the ghost zones to apply any BC's
-  // this code does a 4th order scheme for homogeneous dirichlet
+void apply_BCs_quadratic(level_type * level, int x_id, int justFaces){
+  // For cell-centered, we need to fill in the ghost zones to apply any BC's
+  // This code does a simple linear interpolation for homogeneous dirichlet (0 on boundary)
+  // Nominally, this is first performed across faces, then to edges, then to corners.  
   //
-  //   .       |       |       |       |       |
-  //   . . . . +-------+-------+-------+-------+--
-  //   .       |       |       |       |       |
-  //   .       | x(0,3)| x(1,3)| x(2,3)| x(3,3)|
-  //   .       |       |       |       |       |
-  //   . . . . +-------+-------+-------+-------+--
-  //   .       |       |       |       |       |
-  //   .       | x(0,2)| x(1,2)| x(2,2)| x(3,2)|
-  //   .       |       |       |       |       |
-  //   . . . . +-------+-------+-------+-------+--
-  //   .       |       |       |       |       |
-  //   . (-1,1)| x(0,1)| x(1,1)| x(2,1)| x(3,1)|
-  //   .       |       |       |       |       |
-  //   . . . . +-------+-------+-------+-------+--
-  //   .       |       |       |       |       |
-  //   .       | x(0,0)| x(1,0)| x(2,0)| x(3,0)|
-  //   .       |       |       |       |       |
-  //   . . . . +-------+-------+-------+-------+-- <<< domain boundary is the face... i.e. between two array indices !!! 
-  //   .       .       .       .       .       .
-  //   .(-1,-1).       . (1,-1).       .       .
-  //   .       .       .       .       .       .
-  //   . . . . . . . . . . . . . . . . . . . . . .
-  //
+  if(level->boundary_condition.type == BC_PERIODIC)return; // no BC's to apply !
+  if(level->box_dim<2){apply_BCs_linear(level,x_id,justFaces);return;}
 
-//------------------------------------------------------------------------------------------------------------------------------
+  const int   faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
+  const int   edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
+  const int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
-  // for cell-centered, we need to fill in the ghost zones to apply any BC's
-  // this code does a 2nd order scheme for homogeneous dirichlet
-  //
-  //   .       |       |       |
-  //   . . . . +-------+-------+--
-  //   .       |       |       | 
-  //   . (-1,1)| x(0,1)| x(1,1)| 
-  //   .       |       |       | 
-  //   . . . . +-------+-------+--
-  //   .       |       |       | 
-  //   .       | x(0,0)| x(1,0)| 
-  //   .       |       |       | 
-  //   . . . . +-------+-------+-- <<< domain boundary is the face... i.e. between two array indices !!! 
-  //   .       .       .       .
-  //   .(-1,-1).       . (1,-1).
-  //   .       .       .       .
-  //   . . . . . . . . . . . . . .
-  //
+  int buffer;
+  uint64_t _timeStart = CycleTime();
+  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[justFaces])
+  for(buffer=0;buffer<level->boundary_condition.num_blocks[justFaces];buffer++){
+    int i,j,k;
+    const int       box = level->boundary_condition.blocks[justFaces][buffer].read.box; 
+    const int     dim_i = level->boundary_condition.blocks[justFaces][buffer].dim.i;
+    const int     dim_j = level->boundary_condition.blocks[justFaces][buffer].dim.j;
+    const int     dim_k = level->boundary_condition.blocks[justFaces][buffer].dim.k;
+    const int       ilo = level->boundary_condition.blocks[justFaces][buffer].read.i;
+    const int       jlo = level->boundary_condition.blocks[justFaces][buffer].read.j;
+    const int       klo = level->boundary_condition.blocks[justFaces][buffer].read.k;
+    const int normal = 26-level->boundary_condition.blocks[justFaces][buffer].subtype; // invert the normal vector
+ 
+    // hard code for box to box BC's 
+    const int jStride = level->my_boxes[box].jStride;
+    const int kStride = level->my_boxes[box].kStride;
+    double * __restrict__  x = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride);
 
-//------------------------------------------------------------------------------------------------------------------------------
+    // convert normal vector into pointer offsets...
+    const int di = (((normal % 3)  )-1)*1;
+    const int dj = (((normal % 9)/3)-1)*jStride;
+    const int dk = (((normal / 9)  )-1)*kStride;
+
+    if(faces[normal]){
+      //
+      //      /------/------/------/
+      //     /  ??  /  -2  /  1/3 /
+      //    /------/------/------/
+      //
+      const int stride = di+dj+dk;
+      const int stride2 = stride*2;
+      for(k=0;k<dim_k;k++){
+      for(j=0;j<dim_j;j++){
+      for(i=0;i<dim_i;i++){
+        int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+        x[ijk] = -2.0*x[ijk+stride] + 0.333333333333333333*x[ijk+stride2]; // 2pt stencil
+      }}}
+    }else if(edges[normal]){
+      //
+      //                 /------/------/
+      //                / -2/3 /  1/9 /
+      //               /------/------/
+      //              /   4  / -2/3 /
+      //      /------/------/------/
+      //     /  ??  /
+      //    /------/
+      //
+      int dr,ds;
+      if(di==0){dr=dj;ds=dk;}
+      if(dj==0){dr=di;ds=dk;}
+      if(dk==0){dr=di;ds=dj;}
+      for(k=0;k<dim_k;k++){
+      for(j=0;j<dim_j;j++){
+      for(i=0;i<dim_i;i++){
+        // 4pt stencil...
+        int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+        x[ijk] =   4.000000000000000000*x[ijk+  dr+  ds] 
+                 - 0.666666666666666667*x[ijk+2*dr+  ds]
+                 - 0.666666666666666667*x[ijk+  dr+2*ds]
+                 + 0.111111111111111111*x[ijk+2*dr+2*ds];
+      }}}
+    }else if(corners[normal]){
+      //
+      //              /------/------/
+      //             / -2/9 / 1/27 /.
+      //            /------/------/ .
+      //           /  4/3 / -2/9 /  .
+      //          /------/------/   .
+      //          .                 .
+      //          .   /------/------/
+      //          .  /  4/3 / -2/9 /.
+      //          . /------/------/ .
+      //          ./  -8  /  4/3 /  .
+      //          /------/------/   .
+      //          .                 .
+      //          .   /------/------/
+      //          .  /   0  /   0  /
+      //          . /------/------/
+      //          ./   0  /   0  /
+      //   /------/------/------/
+      //  /  ??  /
+      // /------/
+      //
+      // 4pt stencil...
+      int ijk = (ilo) + (jlo)*jStride + (klo)*kStride;
+      x[ijk] =  -8.000000000000000000*x[ijk+  di+  dj+  dk] 
+                +1.333333333333333333*x[ijk+2*di+  dj+  dk] 
+                +1.333333333333333333*x[ijk+  di+2*dj+  dk] 
+                +1.333333333333333333*x[ijk+  di+  dj+2*dk] 
+                -0.222222222222222222*x[ijk+2*di+2*dj+  dk] 
+                -0.222222222222222222*x[ijk+  di+2*dj+2*dk] 
+                -0.222222222222222222*x[ijk+2*di+  dj+2*dk] 
+                +0.037037037037037037*x[ijk+2*di+2*dj+2*dk];
+    }
+
+  }
+  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
+}
+

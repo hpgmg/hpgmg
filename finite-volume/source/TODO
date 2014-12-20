@@ -1,9 +1,5 @@
-- generalized/optimized boundary condition enforcement... block copies like ghost zones?
+- black box calculation of D^{-1}
 - cubical problem size -> rectahedral problem size ... init problem, restriction rules, etc...
+- move removal of constants from solution for poisson w/periodic to end of solver (instead of per v-cycle)
 - cycleTime:  uint64_t nanoseconds to double seconds.  cycles.* convert to double
-- communication-avoiding smoothers (wavefront, simdized)
 - more efficient ghost zone exchange (box intersection algebra) when communicating edges and corners
-- high-order (4th order) operators
-  - 13pt constant coefficient
-  - 27pt constant coefficient + Mehrstellen
-  - 125pt(?) variable coefficient

@@ -21,25 +21,6 @@
 //------------------------------------------------------------------------------------------------------------------------------
 #define BOX_ALIGN_1ST_CELL 4096 // Align to TLB page...
 //------------------------------------------------------------------------------------------------------------------------------
-//
-//    / 24 25 26 /
-//   / 21 22 23 /
-//  / 18 19 20 /
-//
-//    / 15 16 17 /
-//   / 12 13 14 /
-//  /  9 10 11 /
-//
-//    /  6  7  8 /
-//   /  3  4  5 /
-//  /  0  1  2 /
-//
-int    faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
-int    edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
-int  corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
-
-
-//------------------------------------------------------------------------------------------------------------------------------
 void print_communicator(int printSendRecv, int rank, int level, communicator_type *comm){
   int i;
   printf("rank=%2d level=%d ",rank,level);
@@ -332,13 +313,17 @@ void print_decomposition(level_type *level){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef BLOCK_LIST_MIN_SIZE
+#define BLOCK_LIST_MIN_SIZE 1000
+#endif
 void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *num_blocks,
                           int dim_i, int dim_j, int dim_k,
                           int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride, int  read_scale,
                           int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride, int write_scale,
-                          int blockcopy_tile_i, int blockcopy_tile_j, int blockcopy_tile_k
+                          int blockcopy_tile_i, int blockcopy_tile_j, int blockcopy_tile_k, 
+                          int subtype
                          ){
-  int jj,kk;
+  int ii,jj,kk;
   // Take a dim_j x dim_k iteration space and tile it into smaller faces of size blockcopy_tile_j x blockcopy_tile_k
   // This increases the number of blockCopies in the ghost zone exchange and thereby increases the thread-level parallelism
   // FIX... move from lexicographical ordering of tiles to recursive (e.g. z-mort)
@@ -350,36 +335,125 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
   // FIX... dim_i,j,k -> read_dim_i,j,k, write_dim_i,j,k
   for(kk=0;kk<dim_k;kk+=blockcopy_tile_k){
   for(jj=0;jj<dim_j;jj+=blockcopy_tile_j){
+  for(ii=0;ii<dim_i;ii+=blockcopy_tile_i){
     int dim_k_mod = dim_k-kk;if(dim_k_mod>blockcopy_tile_k)dim_k_mod=blockcopy_tile_k;
     int dim_j_mod = dim_j-jj;if(dim_j_mod>blockcopy_tile_j)dim_j_mod=blockcopy_tile_j;
+    int dim_i_mod = dim_i-ii;if(dim_i_mod>blockcopy_tile_i)dim_i_mod=blockcopy_tile_i;
     if(*num_blocks >= *allocated_blocks){
       int oldSize = *allocated_blocks;
-      if(*allocated_blocks == 0){*allocated_blocks=64;}
-                            else{*allocated_blocks*=2;}
-      *blocks = (blockCopy_type *)realloc((void*)(*blocks),(*allocated_blocks)*sizeof(blockCopy_type));
+      if(*allocated_blocks == 0){*allocated_blocks=BLOCK_LIST_MIN_SIZE;*blocks=(blockCopy_type*) malloc(                 (*allocated_blocks)*sizeof(blockCopy_type));}
+                            else{*allocated_blocks*=2;                 *blocks=(blockCopy_type*)realloc((void*)(*blocks),(*allocated_blocks)*sizeof(blockCopy_type));}
       if(*blocks == NULL){fprintf(stderr,"realloc failed - append_block_to_list (%d -> %d)\n",oldSize,*allocated_blocks);exit(0);}
     }
-    (*blocks)[*num_blocks].dim.i         = dim_i;
+    (*blocks)[*num_blocks].subtype       = subtype;
+    (*blocks)[*num_blocks].dim.i         = dim_i_mod;
     (*blocks)[*num_blocks].dim.j         = dim_j_mod;
     (*blocks)[*num_blocks].dim.k         = dim_k_mod;
     (*blocks)[*num_blocks].read.box      = read_box;
     (*blocks)[*num_blocks].read.ptr      = read_ptr;
-    (*blocks)[*num_blocks].read.i        = read_i;
+    (*blocks)[*num_blocks].read.i        = read_i + read_scale*ii;
     (*blocks)[*num_blocks].read.j        = read_j + read_scale*jj;
     (*blocks)[*num_blocks].read.k        = read_k + read_scale*kk;
     (*blocks)[*num_blocks].read.jStride  = read_jStride;
     (*blocks)[*num_blocks].read.kStride  = read_kStride;
     (*blocks)[*num_blocks].write.box     = write_box;
     (*blocks)[*num_blocks].write.ptr     = write_ptr;
-    (*blocks)[*num_blocks].write.i       = write_i;
+    (*blocks)[*num_blocks].write.i       = write_i + write_scale*ii;
     (*blocks)[*num_blocks].write.j       = write_j + write_scale*jj;
     (*blocks)[*num_blocks].write.k       = write_k + write_scale*kk;
     (*blocks)[*num_blocks].write.jStride = write_jStride;
     (*blocks)[*num_blocks].write.kStride = write_kStride;
              (*num_blocks)++;
-  }}
+  }}}
 }
 
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+// create a mini program that traverses the domain boundary intersecting with this process's boxes
+// This includes faces, corners, and edges
+void build_boundary_conditions(level_type *level, int justFaces){
+  level->boundary_condition.blocks[justFaces]           = NULL;	// default for periodic (i.e. no BC's)
+  level->boundary_condition.num_blocks[justFaces]       = 0;	// default for periodic (i.e. no BC's)
+  level->boundary_condition.allocated_blocks[justFaces] = 0;	// default for periodic (i.e. no BC's)
+  if(level->boundary_condition.type == BC_PERIODIC)return;
+
+  int    faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
+  int    edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
+  int  corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
+
+  int box, di,dj,dk;
+  for(box=0;box<level->num_my_boxes;box++){	// traverse my list of boxes...
+  for(dk=-1;dk<=1;dk++){			// for each box, examine its 26 neighbors...
+  for(dj=-1;dj<=1;dj++){
+  for(di=-1;di<=1;di++){
+    int dir = 13+di+3*dj+9*dk;
+
+    // determine if this region (box's di,dj,dk ghost zone) is outside of the domain
+    int regionIsOutside=0;
+    int normal = 13; // normal effectively defines the normal vector to the domain for this region... 
+                     // this addition is necessary for linearly interpolated BC's as a box's corner is not necessarily a domain's corner
+    int myBox_i = level->my_boxes[box].low.i / level->box_dim;
+    int myBox_j = level->my_boxes[box].low.j / level->box_dim;
+    int myBox_k = level->my_boxes[box].low.k / level->box_dim;
+    int neighborBox_i = (  myBox_i + di );
+    int neighborBox_j = (  myBox_j + dj );
+    int neighborBox_k = (  myBox_k + dk );
+    if( neighborBox_i < 0                 ){regionIsOutside=1;normal-=1;}
+    if( neighborBox_j < 0                 ){regionIsOutside=1;normal-=3;}
+    if( neighborBox_k < 0                 ){regionIsOutside=1;normal-=9;}
+    if( neighborBox_i >=level->boxes_in.i ){regionIsOutside=1;normal+=1;}
+    if( neighborBox_j >=level->boxes_in.j ){regionIsOutside=1;normal+=3;}
+    if( neighborBox_k >=level->boxes_in.k ){regionIsOutside=1;normal+=9;}
+
+    // calculate ghost zone region size and coordinates relative to the first non-ghost zone element (0,0,0)
+    int block_i=-1,block_j=-1,block_k=-1;
+    int   dim_i=-1,  dim_j=-1,  dim_k=-1;
+    switch(di){
+      case -1:dim_i=level->box_ghosts;block_i=0-level->box_ghosts;break;
+      case  0:dim_i=level->box_dim;   block_i=0;                  break;
+      case  1:dim_i=level->box_ghosts;block_i=0+level->box_dim;   break;
+    }
+    switch(dj){
+      case -1:dim_j=level->box_ghosts;block_j=0-level->box_ghosts;break;
+      case  0:dim_j=level->box_dim;   block_j=0;                  break;
+      case  1:dim_j=level->box_ghosts;block_j=0+level->box_dim;   break;
+    }
+    switch(dk){
+      case -1:dim_k=level->box_ghosts;block_k=0-level->box_ghosts;break;
+      case  0:dim_k=level->box_dim;   block_k=0;                  break;
+      case  1:dim_k=level->box_ghosts;block_k=0+level->box_dim;   break;
+    }
+
+    if(justFaces && (faces[dir]==0))regionIsOutside=0;
+    if(regionIsOutside){
+    append_block_to_list(&(level->boundary_condition.blocks[justFaces]),&(level->boundary_condition.allocated_blocks[justFaces]),&(level->boundary_condition.num_blocks[justFaces]),
+      /* dim.i         = */ dim_i,
+      /* dim.j         = */ dim_j,
+      /* dim.k         = */ dim_k,
+      /* read.box      = */ box,
+      /* read.ptr      = */ NULL,
+      /* read.i        = */ block_i,
+      /* read.j        = */ block_j,
+      /* read.k        = */ block_k,
+      /* read.jStride  = */ level->my_boxes[box].jStride,
+      /* read.kStride  = */ level->my_boxes[box].kStride,
+      /* read.scale    = */ 1,
+      /* write.box     = */ box,
+      /* write.ptr     = */ NULL,
+      /* write.i       = */ block_i,
+      /* write.j       = */ block_j,
+      /* write.k       = */ block_k,
+      /* write.jStride = */ level->my_boxes[box].jStride,
+      /* write.kStride = */ level->my_boxes[box].kStride,
+      /* write.scale   = */ 1,
+      /* blockcopy_i   = */ BLOCKCOPY_TILE_I < level->box_ghosts ? level->box_ghosts : BLOCKCOPY_TILE_I,  // BC's may never tile smaller than the ghost zone depth
+      /* blockcopy_j   = */ BLOCKCOPY_TILE_J < level->box_ghosts ? level->box_ghosts : BLOCKCOPY_TILE_J,  // BC's may never tile smaller than the ghost zone depth
+      /* blockcopy_k   = */ BLOCKCOPY_TILE_K < level->box_ghosts ? level->box_ghosts : BLOCKCOPY_TILE_K,  // BC's may never tile smaller than the ghost zone depth
+      /* subtype       = */ normal
+    );
+  }}}}}
+
+}
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 // create a mini program that packs data into MPI recv buffers, exchanges local data, and unpacks the MPI send buffers
@@ -399,12 +473,35 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
 //   4. traverse the local copy list
 //   5. waitall
 //   6. traverse the unpack list
+//
+//     / 24 25 26 /
+//    / 21 22 23 /	(k+1)
+//   / 18 19 20 /
+//
+//     / 15 16 17 /
+//    / 12 13 14 /	(k)
+//   /  9 10 11 /
+//
+//     /  6  7  8 /
+//    /  3  4  5 /	(k-1)
+//   /  0  1  2 /
+//
 void build_exchange_ghosts(level_type *level, int justFaces){
-  level->exchange_ghosts[justFaces].num_recvs     = 0;
-  level->exchange_ghosts[justFaces].num_sends     = 0;
-  level->exchange_ghosts[justFaces].num_blocks[0] = 0;
-  level->exchange_ghosts[justFaces].num_blocks[1] = 0;
-  level->exchange_ghosts[justFaces].num_blocks[2] = 0;
+  int    faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
+  int    edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
+  int  corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
+
+  level->exchange_ghosts[justFaces].num_recvs           = 0;
+  level->exchange_ghosts[justFaces].num_sends           = 0;
+  level->exchange_ghosts[justFaces].blocks[0]           = NULL;
+  level->exchange_ghosts[justFaces].blocks[1]           = NULL;
+  level->exchange_ghosts[justFaces].blocks[2]           = NULL;
+  level->exchange_ghosts[justFaces].num_blocks[0]       = 0;
+  level->exchange_ghosts[justFaces].num_blocks[1]       = 0;
+  level->exchange_ghosts[justFaces].num_blocks[2]       = 0;
+  level->exchange_ghosts[justFaces].allocated_blocks[0] = 0;
+  level->exchange_ghosts[justFaces].allocated_blocks[1] = 0;
+  level->exchange_ghosts[justFaces].allocated_blocks[2] = 0;
 
   int CommunicateThisDir[27];
          int n;for(n=0;n<27;n++)CommunicateThisDir[n]=1;CommunicateThisDir[13]=0;
@@ -436,8 +533,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       int       myBox_j = level->my_boxes[sendBox].low.j / level->box_dim;
       int       myBox_k = level->my_boxes[sendBox].low.k / level->box_dim;
       int neighborBoxID = -1;
-      //if(1){
-      if(level->domain_boundary_condition == BC_PERIODIC){
+      if(level->boundary_condition.type == BC_PERIODIC){
         int neighborBox_i = (  myBox_i + di + level->boxes_in.i) % level->boxes_in.i;
         int neighborBox_j = (  myBox_j + dj + level->boxes_in.j) % level->boxes_in.j;
         int neighborBox_k = (  myBox_k + dk + level->boxes_in.k) % level->boxes_in.k;
@@ -566,9 +662,10 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* write.jStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].jStride,
         /* write.kStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].kStride,
         /* write.scale   = */ 1,
-        /* blockcopy_i   = */ 10000, // don't tile i dimension
+        /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
         /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
-        /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
+        /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
+        /* subtype       = */ 0  
       );
       else // append to the MPI pack list...
       append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[0]),&(level->exchange_ghosts[justFaces].allocated_blocks[0]),&(level->exchange_ghosts[justFaces].num_blocks[0]),
@@ -591,9 +688,10 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* write.jStride = */ dim_i,       // contiguous block
         /* write.kStride = */ dim_i*dim_j, // contiguous block
         /* write.scale   = */ 1,
-        /* blockcopy_i   = */ 10000, // don't tile i dimension
+        /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
         /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
-        /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
+        /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
+        /* subtype       = */ 0  
       );}
       if(neighbor>=0)level->exchange_ghosts[justFaces].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
     } // ghost for-loop
@@ -627,8 +725,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       int       myBox_j = level->my_boxes[recvBox].low.j / level->box_dim;
       int       myBox_k = level->my_boxes[recvBox].low.k / level->box_dim;
       int neighborBoxID = -1;
-      //if(1){
-      if(level->domain_boundary_condition == BC_PERIODIC){
+      if(level->boundary_condition.type == BC_PERIODIC){
         int neighborBox_i = (  myBox_i + di + level->boxes_in.i) % level->boxes_in.i;
         int neighborBox_j = (  myBox_j + dj + level->boxes_in.j) % level->boxes_in.j;
         int neighborBox_k = (  myBox_k + dk + level->boxes_in.k) % level->boxes_in.k;
@@ -739,9 +836,10 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       /*write.jStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].jStride,
       /*write.kStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].kStride,
       /*write.scale   = */ 1,
-      /* blockcopy_i  = */ 10000, // don't tile i dimension
+      /* blockcopy_i  = */ BLOCKCOPY_TILE_I, // default
       /* blockcopy_j  = */ BLOCKCOPY_TILE_J, // default
-      /* blockcopy_k  = */ BLOCKCOPY_TILE_K  // default
+      /* blockcopy_k  = */ BLOCKCOPY_TILE_K, // default
+      /* subtype      = */ 0  
       );
       if(neighbor>=0)level->exchange_ghosts[justFaces].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
     } // ghost for-loop
@@ -814,7 +912,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->active         = 1;
   level->my_rank        = my_rank;
   level->num_ranks      = num_ranks;
-  level->domain_boundary_condition = domain_boundary_condition;
+  level->boundary_condition.type = domain_boundary_condition;
   level->alpha_is_zero  = -1;
   level->num_threads      = omp_threads;
   // intra-box threading...
@@ -892,9 +990,10 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
       /* write.jStride = */ level->my_boxes[box].jStride,
       /* write.kStride = */ level->my_boxes[box].kStride,
       /* write.scale   = */ 1,
-      /* blockcopy_i   = */ 10000, // don't tile i dimension
+      /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
       /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
-      /* blockcopy_k   = */ BLOCKCOPY_TILE_K  // default
+      /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
+      /* subtype       = */ 0  
     );
   }
 
@@ -961,6 +1060,8 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   }
   build_exchange_ghosts(level,0); // faces, edges, corners
   build_exchange_ghosts(level,1); // justFaces
+  build_boundary_conditions(level,0); // faces, edges, corners
+  build_boundary_conditions(level,1); // just faces
 
 
   // duplicate MPI_COMM_WORLD to be the communicator for each level

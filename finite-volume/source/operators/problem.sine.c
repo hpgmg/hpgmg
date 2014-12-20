@@ -49,9 +49,9 @@ void evaluateU(double x, double y, double z, double *U, double *Ux, double *Uy, 
         *Uzz  = c1*c1*p*( (p-1)*pow(sin(c1*z),p-2)*pow(cos(c1*z),2) - pow(sin(c1*z),p) )*pow(sin(c1*x),p)*pow(sin(c1*y),p);
 
         *U   +=                                                       pow(sin(c2*x),p  )*pow(sin(c2*y),p)*pow(sin(c2*z),p);
-        *Ux  +=                                        c1*p*cos(c1*x)*pow(sin(c1*x),p-1)*pow(sin(c1*y),p)*pow(sin(c1*z),p);
-        *Uy  +=                                        c1*p*cos(c1*y)*pow(sin(c1*y),p-1)*pow(sin(c1*x),p)*pow(sin(c1*z),p);
-        *Uz  +=                                        c1*p*cos(c1*z)*pow(sin(c1*z),p-1)*pow(sin(c1*x),p)*pow(sin(c1*y),p);
+        *Ux  +=                                        c2*p*cos(c2*x)*pow(sin(c2*x),p-1)*pow(sin(c2*y),p)*pow(sin(c2*z),p);
+        *Uy  +=                                        c2*p*cos(c2*y)*pow(sin(c2*y),p-1)*pow(sin(c2*x),p)*pow(sin(c2*z),p);
+        *Uz  +=                                        c2*p*cos(c2*z)*pow(sin(c2*z),p-1)*pow(sin(c2*x),p)*pow(sin(c2*y),p);
         *Uxx += c2*c2*p*( (p-1)*pow(sin(c2*x),p-2)*pow(cos(c2*x),2) - pow(sin(c2*x),p) )*pow(sin(c2*y),p)*pow(sin(c2*z),p);
         *Uyy += c2*c2*p*( (p-1)*pow(sin(c2*y),p-2)*pow(cos(c2*y),2) - pow(sin(c2*y),p) )*pow(sin(c2*x),p)*pow(sin(c2*z),p);
         *Uzz += c2*c2*p*( (p-1)*pow(sin(c2*z),p-2)*pow(cos(c2*z),2) - pow(sin(c2*z),p) )*pow(sin(c2*x),p)*pow(sin(c2*y),p);
@@ -109,7 +109,7 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       evaluateBeta(x           ,y           ,z           ,&B ,&Bx,&By,&Bz); // cell-centered value of Beta
       #endif
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-      evaluateU(x,y,z,&U,&Ux,&Uy,&Uz,&Uxx,&Uyy,&Uzz, (level->domain_boundary_condition == BC_PERIODIC) );
+      evaluateU(x,y,z,&U,&Ux,&Uy,&Uz,&Uxx,&Uyy,&Uzz, (level->boundary_condition.type == BC_PERIODIC) );
       double F = a*A*U - b*( (Bx*Ux + By*Uy + Bz*Uz)  +  B*(Uxx + Uyy + Uzz) );
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
       level->my_boxes[box].vectors[VECTOR_BETA_I][ijk] = Bi;
@@ -122,21 +122,8 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
     }}}
   }
 
-
+  // quick test for Poisson...
   if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
 
-
-  // FIX... Periodic Boundary Conditions...
-  if(level->domain_boundary_condition == BC_PERIODIC){
-    double average_value_of_f = mean(level,VECTOR_F);
-    if(average_value_of_f!=0.0)if(level->my_rank==0){fprintf(stderr,"  WARNING... Periodic boundary conditions, but f does not sum to zero... mean(f)=%e\n",average_value_of_f);}
-   
-    if((a==0.0) || (level->alpha_is_zero==1) ){ // poisson... by convention, we assume u sums to zero...
-      double average_value_of_u = mean(level,VECTOR_UTRUE);
-      if(level->my_rank==0){fprintf(stdout,"  average value of u = %20.12e... shifting u to ensure it sums to zero...\n",average_value_of_u);}
-      shift_vector(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_u);
-      shift_vector(level,VECTOR_F,VECTOR_F,-average_value_of_f);
-    }
-  }
 }
 //------------------------------------------------------------------------------------------------------------------------------

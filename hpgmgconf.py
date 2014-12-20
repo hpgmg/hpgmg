@@ -109,5 +109,5 @@ def hpgmg_fv_cflags(args):
     defines.append('USE_%sCYCLES' % args.fv_cycle.upper())
     defines.append('USE_%s' % args.fv_smoother.upper())
     #defines.append('STENCIL_FUSE_DINV') # generally only good on compute-intensive architectures with good compilers
-    defines.append('STENCIL_FUSE_BC')
+    #defines.append('STENCIL_FUSE_BC')
     return ' '.join('-D%s=1'%d for d in defines)

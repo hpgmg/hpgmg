@@ -24,25 +24,17 @@
   #define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1)                     )
   #define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1) reduction(  +:bsum) )
   #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
-  #warning not threading norm()
+  #warning not threading norm() calculations due to issue with XL/C, _Pragma, and reduction(max:bmax)
   #else
   #define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1)                     )
   #define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1) reduction(  +:bsum) )
   #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1) reduction(max:bmax) )
   #endif
-  // MIC doesn't like num_threads()
-  //#define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1)                     )
-  //#define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1) reduction(  +:bsum) )
-  //#define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1) reduction(max:bmax) )
 #elif _OPENMP // older OpenMP versions don't support the max reduction clause
   #warning Threading max reductions requires OpenMP 3.1 (July 2011).  Please upgrade your compiler.                                                           
   #define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1)                     )
   #define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) schedule(static,1) reduction(  +:bsum) )
   #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
-  // MIC doesn't like num_threads()
-  //#define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1)                     )
-  //#define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    MyPragma(omp parallel for private(b) if(nb>1) num_threads(nb > level->num_threads ? level->num_threads : nb) schedule(static,1) reduction(  +:bsum) )
-  //#define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
 #else // flat MPI should not define any threading...
   #define PRAGMA_THREAD_ACROSS_BLOCKS(    level,b,nb     )    
   #define PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,b,nb,bsum)    
@@ -50,10 +42,10 @@
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 // fix... make #define...
-void apply_BCs(level_type * level, int x_id){
+void apply_BCs(level_type * level, int x_id, int justFaces){
   #ifndef STENCIL_FUSE_BC
   // This is a failure mode if (trying to do communication-avoiding) && (BC!=BC_PERIODIC)
-  apply_BCs_linear(level,x_id);
+  apply_BCs_linear(level,x_id,justFaces);
   #endif
 }
 //------------------------------------------------------------------------------------------------------------------------------
@@ -330,8 +322,6 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-//#include "operators/interators.c"
-//------------------------------------------------------------------------------------------------------------------------------
 #ifdef  USE_GSRB
 #define NUM_SMOOTHS      2 // RBRB
 #include "operators/gsrb.c"
@@ -362,9 +352,10 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #include "operators/restriction.c"
 #include "operators/interpolation_pc.c"
 #include "operators/interpolation_pl.c"
+//#include "operators/interpolation_pq.c"
 //------------------------------------------------------------------------------------------------------------------------------
 void interpolation_vcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_pc(level_f,id_f,prescale_f,level_c,id_c);}
 void interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_pl(level_f,id_f,prescale_f,level_c,id_c);}
 //------------------------------------------------------------------------------------------------------------------------------
-#include "operators/problem.p4.c"
+#include "operators/problem.p6.c"
 //------------------------------------------------------------------------------------------------------------------------------

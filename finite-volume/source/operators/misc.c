@@ -79,7 +79,7 @@ void initialize_valid_region(level_type * level){
     for(i=ilo;i<ihi;i++){
       int ijk = i + j*jStride + k*kStride;
       valid[ijk] = 1.0; // i.e. all cells including ghosts are valid for periodic BC's
-      if(level->domain_boundary_condition == BC_DIRICHLET){ // cells outside the domain boundaries are not valid
+      if(level->boundary_condition.type == BC_DIRICHLET){ // cells outside the domain boundaries are not valid
         if(i + level->my_boxes[box].low.i <             0)valid[ijk] = 0.0;
         if(j + level->my_boxes[box].low.j <             0)valid[ijk] = 0.0;
         if(k + level->my_boxes[box].low.k <             0)valid[ijk] = 0.0;
