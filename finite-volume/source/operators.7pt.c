@@ -41,7 +41,6 @@
   #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-// fix... make #define...
 void apply_BCs(level_type * level, int x_id, int justFaces){
   #ifndef STENCIL_FUSE_BC
   // This is a failure mode if (trying to do communication-avoiding) && (BC!=BC_PERIODIC)
@@ -237,7 +236,6 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
     const int  ghosts = level->my_boxes[box].ghosts;
-    const int     dim = level->my_boxes[box].dim;
     double h2inv = 1.0/(level->h*level->h);
     double * __restrict__ alpha  = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);
     double * __restrict__ beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride);
@@ -252,46 +250,53 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     for(j=jlo;j<jhi;j++){
     for(i=ilo;i<ihi;i++){ 
       int ijk = i + j*jStride + k*kStride;
-      #if 0
-      // FIX This looks wrong, but is faster... theory is because its doing something akin to SOR
-      // assumes periodic boundary conditions...
-      // radius of Gershgorin disc is the sum of the absolute values of the off-diagonal elements...
-      double sumAbsAij = fabs(b*h2inv*beta_i[ijk]) + fabs(b*h2inv*beta_i[ijk+      1]) +
-                         fabs(b*h2inv*beta_j[ijk]) + fabs(b*h2inv*beta_j[ijk+jStride]) +
-                         fabs(b*h2inv*beta_k[ijk]) + fabs(b*h2inv*beta_k[ijk+kStride]);
-      // centr of Gershgorin disc is the diagonal element...
-      double    Aii = a*alpha[ijk] - b*h2inv*( 
-                                       -beta_i[ijk]-beta_i[ijk+      1] 
-                                       -beta_j[ijk]-beta_j[ijk+jStride] 
-                                       -beta_k[ijk]-beta_k[ijk+kStride] 
-                                     );
-      #endif
-      #if 1
+
+      #ifdef STENCIL_VARIABLE_COEFFICIENT
       // radius of Gershgorin disc is the sum of the absolute values of the off-diagonal elements...
       double sumAbsAij = fabs(b*h2inv) * (
-                      fabs( beta_i[ijk        ]*valid[ijk-1      ] )+
-                      fabs( beta_j[ijk        ]*valid[ijk-jStride] )+
-                      fabs( beta_k[ijk        ]*valid[ijk-kStride] )+
-                      fabs( beta_i[ijk+1      ]*valid[ijk+1      ] )+
-                      fabs( beta_j[ijk+jStride]*valid[ijk+jStride] )+
-                      fabs( beta_k[ijk+kStride]*valid[ijk+kStride] )
-                      );
+                           fabs( beta_i[ijk        ]*valid[ijk-1      ] )+
+                           fabs( beta_j[ijk        ]*valid[ijk-jStride] )+
+                           fabs( beta_k[ijk        ]*valid[ijk-kStride] )+
+                           fabs( beta_i[ijk+1      ]*valid[ijk+1      ] )+
+                           fabs( beta_j[ijk+jStride]*valid[ijk+jStride] )+
+                           fabs( beta_k[ijk+kStride]*valid[ijk+kStride] )
+                         );
 
       // center of Gershgorin disc is the diagonal element...
       double    Aii = a*alpha[ijk] - b*h2inv*(
-                                       beta_i[ijk        ]*( valid[ijk-1      ]-2.0 )+
-                                       beta_j[ijk        ]*( valid[ijk-jStride]-2.0 )+
-                                       beta_k[ijk        ]*( valid[ijk-kStride]-2.0 )+
-                                       beta_i[ijk+1      ]*( valid[ijk+1      ]-2.0 )+
-                                       beta_j[ijk+jStride]*( valid[ijk+jStride]-2.0 )+
-                                       beta_k[ijk+kStride]*( valid[ijk+kStride]-2.0 ) 
-                                     );
+                        beta_i[ijk        ]*( valid[ijk-1      ]-2.0 )+
+                        beta_j[ijk        ]*( valid[ijk-jStride]-2.0 )+
+                        beta_k[ijk        ]*( valid[ijk-kStride]-2.0 )+
+                        beta_i[ijk+1      ]*( valid[ijk+1      ]-2.0 )+
+                        beta_j[ijk+jStride]*( valid[ijk+jStride]-2.0 )+
+                        beta_k[ijk+kStride]*( valid[ijk+kStride]-2.0 ) 
+                      );
+      #else // Constant coefficient versions with fused BC's...
+      // radius of Gershgorin disc is the sum of the absolute values of the off-diagonal elements...
+      double sumAbsAij = fabs(b*h2inv) * (
+                           valid[ijk-1      ] +
+                           valid[ijk-jStride] +
+                           valid[ijk-kStride] +
+                           valid[ijk+1      ] +
+                           valid[ijk+jStride] +
+                           valid[ijk+kStride] 
+                         );
 
+      // center of Gershgorin disc is the diagonal element...
+      double    Aii = a*alpha[ijk] - b*h2inv*(
+                         valid[ijk-1      ] +
+                         valid[ijk-jStride] +
+                         valid[ijk-kStride] +
+                         valid[ijk+1      ] +
+                         valid[ijk+jStride] +
+                         valid[ijk+kStride] - 12.0
+                      );
       #endif
+
+      // calculate Dinv = D^{-1}, L1inv = ( D+D^{L1} )^{-1}, and the dominant eigenvalue...
                              Dinv[ijk] = 1.0/Aii;				// inverse of the diagonal Aii
                           //L1inv[ijk] = 1.0/(Aii+sumAbsAij);			// inverse of the L1 row norm... L1inv = ( D+D^{L1} )^{-1}
-      // as suggested by eq 6.5 in Baker et al, "Multigrid smoothers for ultra-parallel computing: additional theory and discussion"...
-      if(Aii>=1.5*sumAbsAij)L1inv[ijk] = 1.0/(Aii              ); 		//
+      if(Aii>=1.5*sumAbsAij)L1inv[ijk] = 1.0/(Aii              ); 		// as suggested by eq 6.5 in Baker et al, "Multigrid smoothers for ultra-parallel computing: additional theory and discussion"...
                        else L1inv[ijk] = 1.0/(Aii+0.5*sumAbsAij);		// 
       double Di = (Aii + sumAbsAij)/Aii;if(Di>block_eigenvalue)block_eigenvalue=Di;	// upper limit to Gershgorin disc == bound on dominant eigenvalue
     }}}

@@ -31,6 +31,16 @@
 #define BLOCKCOPY_TILE_K 8
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef BOX_ALIGN_JSTRIDE
+#define BOX_ALIGN_JSTRIDE   2  // j-stride(unit stride dimension including ghosts and padding) is a multiple of BOX_ALIGN_JSTRIDE... useful for SIMD in j+/-1
+#endif
+#ifndef BOX_ALIGN_KSTRIDE
+#define BOX_ALIGN_KSTRIDE   8  // k-stride is a multiple of BOX_ALIGN_KSTRIDE ... useful for SIMD in k+/-1
+#endif
+#ifndef BOX_ALIGN_VOLUME
+#define BOX_ALIGN_VOLUME    8  // box volumes are a multiple of BOX_ALIGN_VOLUME ... useful for SIMD on different vectors
+#endif
+//------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
   int subtype;			// e.g. used to calculate normal to domain for BC's
   struct {int i, j, k;}dim;	// dimensions of the block to copy
@@ -70,8 +80,7 @@ typedef struct {
   int                                ghosts;	// ghost zone depth
   int                jStride,kStride,volume;	// useful for offsets
   int                            numVectors;	//
-  double   ** __restrict__          vectors;	// vectors[c] = pointer to 3D array for vector c
-  double    * __restrict__     vectors_base;    // pointer used for malloc/free.  vectors[c] are shifted from this for alignment
+  double   ** __restrict__          vectors;	// vectors[c] = pointer to 3D array for vector c for one box
 } box_type;
 
 
@@ -83,7 +92,8 @@ typedef struct {
   int my_rank;					// my MPI rank
   int box_dim;					// dimension of each cubical box (not counting ghost zones)
   int box_ghosts;				// ghost zone depth for each box
-  int box_vectors;				// number of vectors stored in each box
+  int box_jStride,box_kStride,box_volume;	// useful for offsets
+  int numVectors;				// number of vectors stored in each box
   int tag;					// tag each level uniquely... FIX... replace with sub commuicator
   struct {int i, j, k;}boxes_in;		// total number of boxes in i,j,k across this level
   struct {int i, j, k;}dim;			// global dimensions at this level (NOTE: dim.i == boxes_in.i * box_dim)
@@ -91,6 +101,10 @@ typedef struct {
   int * rank_of_box;				// 3D array containing rank of each box.  i-major ordering
   int    num_my_boxes;				//           number of boxes owned by this rank
   box_type * my_boxes;				// pointer to array of boxes owned by this rank
+
+  // create flattened FP data... useful for CUDA/OpenMP4/OpenACC when you want to copy an entire vector to/from an accelerator
+  double   ** __restrict__          vectors;	// vectors[v][box][k][j][i] = pointer to 5D array for vector v encompasing all boxes on this process... 
+  double    * __restrict__     vectors_base;    // pointer used for malloc/free.  vectors[v] are shifted from this for alignment
 
   int       allocated_blocks;			//       number of blocks allocated by this rank (note, this represents a flattening of the box/cell hierarchy to facilitate threading)
   int          num_my_blocks;			//       number of blocks     owned by this rank (note, this represents a flattening of the box/cell hierarchy to facilitate threading)
@@ -161,11 +175,9 @@ typedef struct {
 
 
 //------------------------------------------------------------------------------------------------------------------------------
- int create_box(box_type *box, int numVectors, int dim, int ghosts);
-void add_vectors_to_box(box_type *box, int numAdditionalVectors);
-void destroy_box(box_type *box);
-void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_vectors, int domain_boundary_condition, int my_rank, int num_ranks);
+void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int numVectors, int domain_boundary_condition, int my_rank, int num_ranks);
 void destroy_level(level_type *level);
+void create_vectors(level_type *level, int numVectors);
 void reset_level_timers(level_type *level);
 void   max_level_timers(level_type *level);
 int qsortInt(const void *a, const void *b);

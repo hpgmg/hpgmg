@@ -192,7 +192,7 @@ int main(int argc, char **argv){
     shift_vector(&fine_grid,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_u);
   }
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  apply_op(&fine_grid,VECTOR_F,VECTOR_UTRUE,a,b); // by construction, f = A(u_true)
+  //apply_op(&fine_grid,VECTOR_F,VECTOR_UTRUE,a,b); // by construction, f = A(u_true)
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   if(fine_grid.boundary_condition.type == BC_PERIODIC){
     double average_value_of_f = mean(&fine_grid,VECTOR_F);
@@ -206,6 +206,8 @@ int main(int argc, char **argv){
   int minCoarseDim = 1;
   rebuild_operator(&fine_grid,NULL,a,b); // i.e. calculate Dinv and lambda_max
   MGBuild(&all_grids,&fine_grid,a,b,minCoarseDim); // build the Multigrid Hierarchy 
+  double dtol=  0.0;double rtol=1e-10; // converged if ||b-Ax|| / ||b|| < rtol
+//double dtol=1e-15;double rtol=  0.0; // converged if ||D^{-1}(b-Ax)|| < dtol
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
      int     doTiming;
      int    minSolves = 10; // do at least minSolves MGSolves
@@ -235,9 +237,9 @@ int main(int argc, char **argv){
     while( (numSolves<minSolves) ){
       zero_vector(all_grids.levels[0],VECTOR_U);
       #ifdef USE_FCYCLES
-      FMGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);
+      FMGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
       #else
-       MGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,1e-15);
+       MGSolve(&all_grids,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
       #endif
       numSolves++;
     }

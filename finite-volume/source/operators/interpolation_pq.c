@@ -5,7 +5,7 @@
 //------------------------------------------------------------------------------------------------------------------------------
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
-static inline void InterpolateBlock_PQ(level_type *level_f, int id_f, double prescale_f, level_type *level_c, int id_c, blockCopy_type *block){
+static inline void interpolation_pq_block(level_type *level_f, int id_f, double prescale_f, level_type *level_c, int id_c, blockCopy_type *block){
   // interpolate 3D array from read_i,j,k of read[] to write_i,j,k in write[]
   int write_dim_i   = block->dim.i<<1; // calculate the dimensions of the resultant fine block
   int write_dim_j   = block->dim.j<<1;
@@ -38,13 +38,17 @@ static inline void InterpolateBlock_PQ(level_type *level_f, int id_f, double pre
  
 
   int i,j,k;
-  double OneOver32Cubed = 1.0/32/32/32;
+  double OneOver32Cubed = 1.0/32768.0;
   for(k=0;k<write_dim_k;k++){int delta_k=-read_kStride;if(k&0x1)delta_k=read_kStride;
   for(j=0;j<write_dim_j;j++){int delta_j=-read_jStride;if(j&0x1)delta_j=read_jStride;
   for(i=0;i<write_dim_i;i++){int delta_i=           -1;if(i&0x1)delta_i=           1; // i.e. even points look backwards while odd points look forward
     int write_ijk = ((i   )+write_i) + (((j   )+write_j)*write_jStride) + (((k   )+write_k)*write_kStride);
     int  read_ijk = ((i>>1)+ read_i) + (((j>>1)+ read_j)* read_jStride) + (((k>>1)+ read_k)* read_kStride);
-
+    //
+    // | -3/32 | 30/32 |  5/32 |
+    // |---+---|---+---|---+---|
+    // |   |   |   | x |   |   |
+    //
     write[write_ijk] = prescale_f*write[write_ijk] +
                        OneOver32Cubed*(
                          -27.0*read[read_ijk-delta_i-delta_j-delta_k] +
@@ -84,7 +88,7 @@ static inline void InterpolateBlock_PQ(level_type *level_f, int id_f, double pre
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-// perform a (inter-level) piecewise linear interpolation
+// perform a (inter-level) piecewise quadratic interpolation
 void interpolation_pq(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){
     exchange_boundary(level_c,id_c,0);
   apply_BCs_quadratic(level_c,id_c,0);
@@ -125,7 +129,10 @@ void interpolation_pq(level_type * level_f, int id_f, double prescale_f, level_t
   // pack MPI send buffers...
   _timeStart = CycleTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[0])
-  for(buffer=0;buffer<level_c->interpolation.num_blocks[0];buffer++){InterpolateBlock_PQ(level_f,id_f,0.0,level_c,id_c,&level_c->interpolation.blocks[0][buffer]);} // !!! prescale==0 because you don't want to increment the MPI buffer
+  for(buffer=0;buffer<level_c->interpolation.num_blocks[0];buffer++){
+    // !!! prescale==0 because you don't want to increment the MPI buffer
+    interpolation_pq_block(level_f,id_f,0.0,level_c,id_c,&level_c->interpolation.blocks[0][buffer]);
+  }
   _timeEnd = CycleTime();
   level_f->cycles.interpolation_pack += (_timeEnd-_timeStart);
 
@@ -153,7 +160,9 @@ void interpolation_pq(level_type * level_f, int id_f, double prescale_f, level_t
   // perform local interpolation... try and hide within Isend latency... 
   _timeStart = CycleTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[1])
-  for(buffer=0;buffer<level_c->interpolation.num_blocks[1];buffer++){InterpolateBlock_PQ(level_f,id_f,prescale_f,level_c,id_c,&level_c->interpolation.blocks[1][buffer]);}
+  for(buffer=0;buffer<level_c->interpolation.num_blocks[1];buffer++){
+    interpolation_pq_block(level_f,id_f,prescale_f,level_c,id_c,&level_c->interpolation.blocks[1][buffer]);
+  }
   _timeEnd = CycleTime();
   level_f->cycles.interpolation_local += (_timeEnd-_timeStart);
 
@@ -169,7 +178,9 @@ void interpolation_pq(level_type * level_f, int id_f, double prescale_f, level_t
   // unpack MPI receive buffers 
   _timeStart = CycleTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->interpolation.num_blocks[2])
-  for(buffer=0;buffer<level_f->interpolation.num_blocks[2];buffer++){IncrementBlock(level_f,id_f,prescale_f,&level_f->interpolation.blocks[2][buffer]);}
+  for(buffer=0;buffer<level_f->interpolation.num_blocks[2];buffer++){
+    IncrementBlock(level_f,id_f,prescale_f,&level_f->interpolation.blocks[2][buffer]);
+  }
   _timeEnd = CycleTime();
   level_f->cycles.interpolation_unpack += (_timeEnd-_timeStart);
 

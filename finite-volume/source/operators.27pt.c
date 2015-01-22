@@ -55,7 +55,7 @@ void apply_BCs(level_type * level, int x_id, int justFaces){
   #error This implementation does not support fusion of the boundary conditions with the operator
 #endif
 #ifndef USE_PERIODIC_BC
-  #warning 27pt SHOULD use -DUSE_PERIODIC_BC as D^{-1} is calculated assuming periodic BC's
+  #warning 27pt SHOULD use -DUSE_PERIODIC_BC as D^{-1} is calculated assuming periodic BCs
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 #define Dinv_ijk() Dinv[ijk]        // simply retriev it rather than recalculating it
@@ -137,7 +137,6 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
     const int  ghosts = level->my_boxes[box].ghosts;
-    const int     dim = level->my_boxes[box].dim;
     double h2inv = 1.0/(level->h*level->h);
     double * __restrict__ alpha  = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);
     double * __restrict__ beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride);
@@ -197,10 +196,10 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #define CHEBYSHEV_DEGREE 4 // i.e. one degree-4 polynomial smoother
 #include "operators/chebyshev.c"
 #elif   USE_JACOBI
-#define NUM_SMOOTHS      4
+#define NUM_SMOOTHS      6
 #include "operators/jacobi.c"
 #elif   USE_L1JACOBI
-#define NUM_SMOOTHS      4
+#define NUM_SMOOTHS      6
 #include "operators/jacobi.c"
 #elif   USE_SYMGS
 #define NUM_SMOOTHS      2
@@ -219,6 +218,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #include "operators/restriction.c"
 #include "operators/interpolation_pc.c"
 #include "operators/interpolation_pl.c"
+//#include "operators/interpolation_pq.c"
 //------------------------------------------------------------------------------------------------------------------------------
 void interpolation_vcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_pc(level_f,id_f,prescale_f,level_c,id_c);}
 void interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_pl(level_f,id_f,prescale_f,level_c,id_c);}

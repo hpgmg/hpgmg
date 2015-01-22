@@ -462,7 +462,7 @@ void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir)
     const int  ghosts = level->my_boxes[box].ghosts;
     double * __restrict__ grid_cell = level->my_boxes[box].vectors[id_cell] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_face = level->my_boxes[box].vectors[id_face] + ghosts*(1+jStride+kStride);
-    int stride;
+    int stride=0;
     switch(dir){
       case 0: stride =       1;break;//i-direction
       case 1: stride = jStride;break;//j-direction

@@ -65,20 +65,13 @@ void evaluateU(double x, double y, double z, double *U, double *Ux, double *Uy, 
   double Xxx   = 60.0*pow(x,4) - 120.0*pow(x,3) + 60.0*pow(x,2) - 2.0;
   double Yyy   = 60.0*pow(y,4) - 120.0*pow(y,3) + 60.0*pow(y,2) - 2.0;
   double Zzz   = 60.0*pow(z,4) - 120.0*pow(z,3) + 60.0*pow(z,2) - 2.0;
-  double u     = X  *Y  *Z  ;
-  double ux    = Xx *Y  *Z  ;
-  double uy    = X  *Yy *Z  ;
-  double uz    = X  *Y  *Zz ;
-  double uxx   = Xxx*Y  *Z  ;
-  double uyy   = X  *Yyy*Z  ;
-  double uzz   = X  *Y  *Zzz;
-        *U     = X*Y*Z;
-        *Ux    = Xx*Y*Z;
-        *Uy    = X*Yy*Z;
-        *Uz    = X*Y*Zz;
-        *Uxx   = Xxx*Y*Z;
-        *Uyy   = X*Yyy*Z;
-        *Uzz   = X*Y*Zzz;
+        *U     = X   * Y   * Z;
+        *Ux    = Xx  * Y   * Z;
+        *Uy    = X   * Yy  * Z;
+        *Uz    = X   * Y   * Zz;
+        *Uxx   = Xxx * Y   * Z;
+        *Uyy   = X   * Yyy * Z;
+        *Uzz   = X   * Y   * Zzz;
 }
 
 

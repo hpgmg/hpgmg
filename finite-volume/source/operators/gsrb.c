@@ -57,7 +57,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
             phi_new[ijk] = phi[ijk] + RedBlack[EvenOdd][ij]*lambda*(rhs[ijk]-Ax); // compiler seems to get confused unless there are disjoint read/write pointers
       }}}
       #elif defined(GSRB_STRIDE2)
-      #warning GSRB using stride-2 accesses to minimie the number of flop's
+      #warning GSRB using stride-2 accesses to minimie the number of flops
       #error verify this still works...
       for(k=klo;k<khi;k++){
       for(j=jlo;j<jhi;j++){

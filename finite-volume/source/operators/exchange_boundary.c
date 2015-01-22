@@ -43,7 +43,9 @@ void exchange_boundary(level_type * level, int id, int justFaces){
   // pack MPI send buffers...
   _timeStart = CycleTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[justFaces].num_blocks[0])
-  for(buffer=0;buffer<level->exchange_ghosts[justFaces].num_blocks[0];buffer++){CopyBlock(level,id,&level->exchange_ghosts[justFaces].blocks[0][buffer]);}
+  for(buffer=0;buffer<level->exchange_ghosts[justFaces].num_blocks[0];buffer++){
+    CopyBlock(level,id,&level->exchange_ghosts[justFaces].blocks[0][buffer]);
+  }
   _timeEnd = CycleTime();
   level->cycles.ghostZone_pack += (_timeEnd-_timeStart);
 
@@ -71,7 +73,9 @@ void exchange_boundary(level_type * level, int id, int justFaces){
   // exchange locally... try and hide within Isend latency... 
   _timeStart = CycleTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[justFaces].num_blocks[1])
-  for(buffer=0;buffer<level->exchange_ghosts[justFaces].num_blocks[1];buffer++){CopyBlock(level,id,&level->exchange_ghosts[justFaces].blocks[1][buffer]);}
+  for(buffer=0;buffer<level->exchange_ghosts[justFaces].num_blocks[1];buffer++){
+    CopyBlock(level,id,&level->exchange_ghosts[justFaces].blocks[1][buffer]);
+  }
   _timeEnd = CycleTime();
   level->cycles.ghostZone_local += (_timeEnd-_timeStart);
 
@@ -87,7 +91,9 @@ void exchange_boundary(level_type * level, int id, int justFaces){
   // unpack MPI receive buffers 
   _timeStart = CycleTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[justFaces].num_blocks[2])
-  for(buffer=0;buffer<level->exchange_ghosts[justFaces].num_blocks[2];buffer++){CopyBlock(level,id,&level->exchange_ghosts[justFaces].blocks[2][buffer]);}
+  for(buffer=0;buffer<level->exchange_ghosts[justFaces].num_blocks[2];buffer++){
+    CopyBlock(level,id,&level->exchange_ghosts[justFaces].blocks[2][buffer]);
+  }
   _timeEnd = CycleTime();
   level->cycles.ghostZone_unpack += (_timeEnd-_timeStart);
   #endif

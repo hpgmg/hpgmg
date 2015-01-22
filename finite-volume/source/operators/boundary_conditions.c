@@ -149,7 +149,8 @@ void apply_BCs_quadratic(level_type * level, int x_id, int justFaces){
       //     /  ??  /
       //    /------/
       //
-      int dr,ds;
+      int dr=-1;
+      int ds=-1;
       if(di==0){dr=dj;ds=dk;}
       if(dj==0){dr=di;ds=dk;}
       if(dk==0){dr=di;ds=dj;}

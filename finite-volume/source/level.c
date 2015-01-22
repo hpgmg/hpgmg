@@ -19,8 +19,6 @@
 #include "level.h"
 #include "operators.h"
 //------------------------------------------------------------------------------------------------------------------------------
-#define BOX_ALIGN_1ST_CELL 4096 // Align to TLB page...
-//------------------------------------------------------------------------------------------------------------------------------
 void print_communicator(int printSendRecv, int rank, int level, communicator_type *comm){
   int i;
   printf("rank=%2d level=%d ",rank,level);
@@ -81,90 +79,6 @@ int qsortInt(const void *a, const void *b){
   if(*ia > *ib)return( 1);
                return( 0);
 }
-
-//------------------------------------------------------------------------------------------------------------------------------
-int create_box(box_type *box, int numVectors, int dim, int ghosts){
-  uint64_t memory_allocated = 0;
-  box->numVectors = numVectors;
-  box->dim = dim;
-  box->ghosts = ghosts;
-  #ifndef BOX_SIMD_ALIGNMENT
-  #define BOX_SIMD_ALIGNMENT 1 // allignment requirement for j+/-1
-  #endif
-  box->jStride = (dim+2*ghosts);while(box->jStride % BOX_SIMD_ALIGNMENT)box->jStride++; // pencil
-  #ifndef BOX_PLANE_PADDING
-  #define BOX_PLANE_PADDING  8 // scratch space to avoid unrolled loop cleanup
-  #endif
-  box->kStride = box->jStride*(dim+2*ghosts); // plane
-  if(box->jStride<BOX_PLANE_PADDING)box->kStride += (BOX_PLANE_PADDING-box->jStride); // allow the ghost zone to be clobbered...
-  while(box->kStride % BOX_SIMD_ALIGNMENT)box->kStride++;
-
-  #if 0
-  // pad each plane such that 
-  //   1. it is greater than a multiple of the maximum unrolling (or vector length)
-  //   2. it carries the same alignement as the plane above/below.   i.e.  if ijk is aligned, ijkk+/-plane is aligned
-//int MaxUnrolling =  8; // 2-way SIMD x unroll by 4 =  8/thread
-  int MaxUnrolling = 16; // 4-way SIMD x unroll by 4 = 16/thread
-//int MaxUnrolling = 32; // 8-way SIMD x unroll by 4 = 32/thread
-  int paddingToAvoidStencilCleanup = 0;
-  if(box->jStride < (MaxUnrolling-1)){paddingToAvoidStencilCleanup = (MaxUnrolling-1)-(box->jStride);} // allows partial clobbering of ghost zone
-//box->kStride  =( ((dim+2*ghosts)*box->jStride)+paddingToAvoidStencilCleanup+0xF) & ~0xF; // multiple of  128 bytes
-  box->kStride  =( ((dim+2*ghosts)*box->jStride)+paddingToAvoidStencilCleanup+0x7) & ~0x7; // multiple of   64 bytes (required for MIC)
-//box->kStride  =( ((dim+2*ghosts)*box->jStride)+paddingToAvoidStencilCleanup+0x3) & ~0x3; // multiple of   32 bytes (required for AVX/QPX)
-//box->kStride  =( ((dim+2*ghosts)*box->jStride)+paddingToAvoidStencilCleanup+0x1) & ~0x1; // multiple of   16 bytes (required for SSE)
-  #endif
-  box->volume = (dim+2*ghosts)*box->kStride;
-
-
-  // allocate an array of pointers to vectors...
-  box->vectors = (double **)malloc(box->numVectors*sizeof(double*));
-               memory_allocated += box->numVectors*sizeof(double*);
-  if((box->numVectors>0)&&(box->vectors==NULL)){fprintf(stderr,"malloc failed - create_box/box->vectors\n");exit(0);}
-  // allocate one aligned, double-precision array and divide it among vectors...
-  uint64_t malloc_size = box->volume*box->numVectors*sizeof(double) + BOX_ALIGN_1ST_CELL; // shift pointer by up to 1 TLB page...
-  box->vectors_base = (double*)malloc(malloc_size);
-                  memory_allocated += malloc_size;
-  if((box->numVectors>0)&&(box->vectors_base==NULL)){fprintf(stderr,"malloc failed - create_box/box->vectors_base\n");exit(0);}
-  double * tmpbuf = box->vectors_base;
-  while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (BOX_ALIGN_1ST_CELL-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
-  memset(tmpbuf,0,box->volume*box->numVectors*sizeof(double)); // zero to avoid 0.0*NaN or 0.0*Inf
-  int c;for(c=0;c<box->numVectors;c++){box->vectors[c] = tmpbuf + c*box->volume;}
-
-
-  // done... return the total amount of memory allocated...
-  return(memory_allocated);
-}
-
-
-//------------------------------------------------------------------------------------------------------------------------------
-void add_vectors_to_box(box_type *box, int numAdditionalVectors){
-  if(numAdditionalVectors<=0)return;									// nothing to do
-  double * old_bp = box->vectors_base;									// save a pointer to the base pointer for subsequent free...
-  double * old_v0 = box->vectors[0];									// save a pointer to the old FP data...
-  double ** old_v = box->vectors;									// save a pointer to the old array of pointers...
-  box->numVectors+=numAdditionalVectors;								//
-  box->vectors = (double **)malloc(box->numVectors*sizeof(double*));				// new array of pointers vectors
-  if((box->numVectors>0)&&(box->vectors==NULL)){fprintf(stderr,"malloc failed - add_vectors_to_box/box->vectors\n");exit(0);}
-  // NOTE !!! realloc() cannot guarantee the same alignment... malloc, allign, copy...
-  uint64_t malloc_size = box->volume*box->numVectors*sizeof(double) + BOX_ALIGN_1ST_CELL; // shift pointer by up to 1 TLB page...
-  box->vectors_base = (double*)malloc(malloc_size);
-  if((box->numVectors>0)&&(box->vectors_base==NULL)){fprintf(stderr,"malloc failed - add_vectors_to_box/box->vectors_base\n");exit(0);}
-  double * tmpbuf = box->vectors_base;
-  while( (uint64_t)(tmpbuf+box->ghosts*(1+box->jStride+box->kStride)) & (BOX_ALIGN_1ST_CELL-1) ){tmpbuf++;} // allign first *non-ghost* zone element of first component to page boundary...
-  memset(tmpbuf,0,box->volume*box->numVectors*sizeof(double));	// zero to avoid 0.0*NaN or 0.0*Inf
-  memcpy(tmpbuf,old_v0,box->volume*(box->numVectors-numAdditionalVectors)*sizeof(double));	// copy any existant data over...
-  int c;for(c=0;c<box->numVectors;c++){box->vectors[c] = tmpbuf + c*box->volume;}			// pointer arithmetic...
-  free(old_bp);												// all vectors were created from one malloc + pointer arithmetic...
-  free(old_v );												// free the list of pointers...
-}
-
-
-//------------------------------------------------------------------------------------------------------------------------------
-void destroy_box(box_type *box){
-  free(box->vectors_base); // single allocate with pointer arithmetic...
-  free(box->vectors);
-}
-
 
 //------------------------------------------------------------------------------------------------------------------------------
 // should implement a 3D hilbert curve on non pow2 (but cubical) domain sizes
@@ -871,7 +785,88 @@ void build_exchange_ghosts(level_type *level, int justFaces){
 
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
-void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_vectors, int domain_boundary_condition, int my_rank, int num_ranks){
+// create the pointers in level_type to the contiguous vector FP data (useful for bulk copies to/from accelerators)
+// create the pointers in each box to their respective segment of the level's vector FP data (useful for box-relative operators)
+// if( (level->numVectors > 0) && (numVectors > level->numVectors) ) then allocate additional space for (numVectors-level->numVectors) and copy old leve->numVectors data
+void create_vectors(level_type *level, int numVectors){
+  if(numVectors <= level->numVectors)return; // already have enough space
+  double          * old_vectors_base = level->vectors_base; // save a pointer to the originally allocated data for subsequent free()
+  double               * old_vector0 = NULL;
+  if(level->numVectors>0)old_vector0 = level->vectors[0];   // save a pointer to old FP data to copy
+
+
+  // calculate the size of each box...
+  level->box_jStride =                    (level->box_dim+2*level->box_ghosts);while(level->box_jStride % BOX_ALIGN_JSTRIDE)level->box_jStride++; // pencil
+  level->box_kStride = level->box_jStride*(level->box_dim+2*level->box_ghosts);while(level->box_kStride % BOX_ALIGN_KSTRIDE)level->box_kStride++; // plane
+  level->box_volume  = level->box_kStride*(level->box_dim+2*level->box_ghosts);while(level->box_volume  % BOX_ALIGN_VOLUME )level->box_volume++;  // volume
+
+
+  #define VECTOR_MALLOC_BULK
+  #ifdef  VECTOR_MALLOC_BULK
+    // allocate one aligned, double-precision array and divide it among vectors...
+    uint64_t malloc_size = (uint64_t)numVectors*level->num_my_boxes*level->box_volume*sizeof(double) + 4096;
+    level->vectors_base = (double*)malloc(malloc_size);
+    level->memory_allocated += malloc_size;
+    if((numVectors>0)&&(level->vectors_base==NULL)){fprintf(stderr,"malloc failed - level->vectors_base\n");exit(0);}
+    double * tmpbuf = level->vectors_base;
+    while( (uint64_t)(tmpbuf+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & 0xff ){tmpbuf++;} // allign first *non-ghost* zone element of first component to a 256-Byte boundary
+    memset(tmpbuf,          0,(uint64_t)(       numVectors)*level->num_my_boxes*level->box_volume*sizeof(double)); // zero to avoid 0.0*NaN or 0.0*Inf // FIX... omp thread ???
+    // if there is existing FP data... copy it, then free old data and pointer array
+    if(level->numVectors>0){
+      memcpy(tmpbuf,old_vector0,(uint64_t)(level->numVectors)*level->num_my_boxes*level->box_volume*sizeof(double)); // FIX... omp thread ???
+      if(old_vectors_base)free(old_vectors_base); // free old data...
+    }
+    // allocate an array of pointers which point to the union of boxes for each vector
+    // NOTE, this requires just one copyin per vector to an accelerator rather than requiring one copyin per box per vector
+    if(level->numVectors>0)free(level->vectors); // free any previously allocated vector array
+    level->vectors = (double **)malloc(numVectors*sizeof(double*));
+    if((numVectors>0)&&(level->vectors==NULL)){fprintf(stderr,"malloc failed - level->vectors\n");exit(0);}
+    int c;for(c=0;c<numVectors;c++){level->vectors[c] = tmpbuf + c*level->num_my_boxes*level->box_volume;}
+  #else
+    // allocate vectors individually (simple, but may cause conflict misses)
+    double ** old_vectors = level->vectors;
+    level->vectors = (double **)malloc(numVectors*sizeof(double*));
+    int c;
+    for(c=                0;c<level->numVectors;c++){level->vectors[c] = old_vectors[c];}
+    for(c=level->numVectors;c<       numVectors;c++){level->vectors[c] = (double*)malloc(level->num_my_boxes*level->box_volume*sizeof(double));}
+    for(c=level->numVectors;c<       numVectors;c++){memset(level->vectors[c],0,level->num_my_boxes*level->box_volume*sizeof(double));}
+    free(old_vectors);
+  #endif
+
+
+  // build the list of boxes...
+  int box=0;
+  int i,j,k;
+  for(k=0;k<level->boxes_in.k;k++){
+  for(j=0;j<level->boxes_in.j;j++){
+  for(i=0;i<level->boxes_in.i;i++){
+    int jStride = level->boxes_in.i;
+    int kStride = level->boxes_in.i*level->boxes_in.j;
+    int b=i + j*jStride + k*kStride;
+    if(level->rank_of_box[b]==level->my_rank){
+      if(level->numVectors>0)free(level->my_boxes[box].vectors); // free previously allocated vector array
+      level->my_boxes[box].vectors = (double **)malloc(numVectors*sizeof(double*));
+      if((numVectors>0)&&(level->my_boxes[box].vectors==NULL)){fprintf(stderr,"malloc failed - level->my_boxes[box].vectors\n");exit(0);}
+      int c;for(c=0;c<numVectors;c++){level->my_boxes[box].vectors[c] = level->vectors[c] + box*level->box_volume;}
+      level->my_boxes[box].numVectors = numVectors;
+      level->my_boxes[box].dim        = level->box_dim;
+      level->my_boxes[box].ghosts     = level->box_ghosts;
+      level->my_boxes[box].jStride    = level->box_jStride;
+      level->my_boxes[box].kStride    = level->box_kStride;
+      level->my_boxes[box].volume     = level->box_volume;
+      level->my_boxes[box].low.i      = i*level->box_dim;
+      level->my_boxes[box].low.j      = j*level->box_dim;
+      level->my_boxes[box].low.k      = k*level->box_dim;
+      level->my_boxes[box].global_box_id = b;
+      box++;
+  }}}}
+
+  // level now has created/initialized vector FP data
+  level->numVectors = numVectors;
+}
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------
+void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int numVectors, int domain_boundary_condition, int my_rank, int num_ranks){
   int box;
   int TotalBoxes = boxes_in_i*boxes_in_i*boxes_in_i;
 
@@ -902,7 +897,9 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->memory_allocated = 0;
   level->box_dim        = box_dim;
   level->box_ghosts     = box_ghosts;
-  level->box_vectors    = box_vectors;
+  level->numVectors     = 0; // no vectors have been allocated yet
+  level->vectors_base   = NULL; // pointer returned by bulk malloc
+  level->vectors        = NULL; // pointers to individual vectors
   level->boxes_in.i     = boxes_in_i;
   level->boxes_in.j     = boxes_in_i;
   level->boxes_in.k     = boxes_in_i;
@@ -945,27 +942,15 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 //print_decomposition(level);// for debug purposes only
 
 
-  // build my list of boxes...
+  // calculate how many boxes I own...
   level->num_my_boxes=0;
   for(box=0;box<level->boxes_in.i*level->boxes_in.j*level->boxes_in.k;box++){if(level->rank_of_box[box]==level->my_rank)level->num_my_boxes++;} 
   level->my_boxes = (box_type*)malloc(level->num_my_boxes*sizeof(box_type));
   if((level->num_my_boxes>0)&&(level->my_boxes==NULL)){fprintf(stderr,"malloc failed - create_level/level->my_boxes\n");exit(0);}
-  box=0;
-  int i,j,k;
-  for(k=0;k<level->boxes_in.k;k++){
-  for(j=0;j<level->boxes_in.j;j++){
-  for(i=0;i<level->boxes_in.i;i++){
-    int jStride = level->boxes_in.i;
-    int kStride = level->boxes_in.i*level->boxes_in.j;
-    int b=i + j*jStride + k*kStride;
-    if(level->rank_of_box[b]==level->my_rank){
-      level->memory_allocated += create_box(&level->my_boxes[box],level->box_vectors,level->box_dim,level->box_ghosts);
-      level->my_boxes[box].low.i = i*level->box_dim;
-      level->my_boxes[box].low.j = j*level->box_dim;
-      level->my_boxes[box].low.k = k*level->box_dim;
-      level->my_boxes[box].global_box_id = b;
-      box++;
-  }}}}
+
+
+  // allocate flattened vector FP data and create pointers...
+  create_vectors(level,numVectors);
 
 
   // Build and auxilarlly data structure that flattens boxes into blocks...
@@ -1051,13 +1036,16 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
 
   // create mini programs that affect ghost zone exchanges
-  for(i=0;i<2;i++){
-    level->exchange_ghosts[i].num_recvs    =0;
-    level->exchange_ghosts[i].num_sends    =0;
-    level->exchange_ghosts[i].num_blocks[0]=0;
-    level->exchange_ghosts[i].num_blocks[1]=0;
-    level->exchange_ghosts[i].num_blocks[2]=0;
-  }
+  level->exchange_ghosts[0].num_recvs    =0;
+  level->exchange_ghosts[0].num_sends    =0;
+  level->exchange_ghosts[0].num_blocks[0]=0;
+  level->exchange_ghosts[0].num_blocks[1]=0;
+  level->exchange_ghosts[0].num_blocks[2]=0;
+  level->exchange_ghosts[1].num_recvs    =0;
+  level->exchange_ghosts[1].num_sends    =0;
+  level->exchange_ghosts[1].num_blocks[0]=0;
+  level->exchange_ghosts[1].num_blocks[1]=0;
+  level->exchange_ghosts[1].num_blocks[2]=0;
   build_exchange_ghosts(level,0); // faces, edges, corners
   build_exchange_ghosts(level,1); // justFaces
   build_boundary_conditions(level,0); // faces, edges, corners
@@ -1163,7 +1151,12 @@ void max_level_timers(level_type *level){
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
 void destroy_level(level_type *level){
-  int box;
-  for(box=0;box<level->num_my_boxes;box++)destroy_box(&level->my_boxes[box]);
-  free(level->rank_of_box);
+  // FIX !!!
+  if(level->rank_of_box)free(level->rank_of_box);
+  #ifdef VECTOR_MALLOC_BULK
+  if(level->vectors_base)free(level->vectors_base);
+  #else
+  int c;for(c=0;c<level->numVectors;c++)if(level->vectors[c])free(level->vectors[c]);
+  #endif
+  if(level->vectors)free(level->vectors);
 }

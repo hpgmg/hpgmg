@@ -3,7 +3,7 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-static inline void RestrictBlock(level_type *level_c, int id_c, level_type *level_f, int id_f, blockCopy_type *block, int restrictionType){
+static inline void restriction_pc_block(level_type *level_c, int id_c, level_type *level_f, int id_f, blockCopy_type *block, int restrictionType){
   // restrict 3D array from read_i,j,k of read[] to write_i,j,k in write[]
   int   dim_i       = block->dim.i; // calculate the dimensions of the resultant coarse block
   int   dim_j       = block->dim.j;
@@ -128,7 +128,9 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // pack MPI send buffers...
   _timeStart = CycleTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[0])
-  for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[0];buffer++){RestrictBlock(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[0][buffer],restrictionType);}
+  for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[0];buffer++){
+    restriction_pc_block(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[0][buffer],restrictionType);
+  }
   _timeEnd = CycleTime();
   level_f->cycles.restriction_pack += (_timeEnd-_timeStart);
 
@@ -156,7 +158,9 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // perform local restriction[restrictionType]... try and hide within Isend latency... 
   _timeStart = CycleTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[1])
-  for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[1];buffer++){RestrictBlock(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[1][buffer],restrictionType);}
+  for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[1];buffer++){
+    restriction_pc_block(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[1][buffer],restrictionType);
+  }
   _timeEnd = CycleTime();
   level_f->cycles.restriction_local += (_timeEnd-_timeStart);
 
@@ -172,11 +176,11 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // unpack MPI receive buffers 
   _timeStart = CycleTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->restriction[restrictionType].num_blocks[2])
-  for(buffer=0;buffer<level_c->restriction[restrictionType].num_blocks[2];buffer++){CopyBlock(level_c,id_c,&level_c->restriction[restrictionType].blocks[2][buffer]);}
+  for(buffer=0;buffer<level_c->restriction[restrictionType].num_blocks[2];buffer++){
+    CopyBlock(level_c,id_c,&level_c->restriction[restrictionType].blocks[2][buffer]);
+  }
   _timeEnd = CycleTime();
   level_f->cycles.restriction_unpack += (_timeEnd-_timeStart);
-
-
   #endif
  
  

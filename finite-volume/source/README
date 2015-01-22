@@ -64,6 +64,7 @@ Although no make file currently exists, compilation is straightforward.
 There are a few basic arguments that should be used.  Most are selfexplanatory.  
 
 -DUSE_MPI			// compiles the distributed (MPI) version
+-DUSE_CG			// use CG as a bottom (coarse grid) solver
 -DUSE_BICGSTAB			// use BiCGStab as a bottom (coarse grid) solver
 -DUSE_CABICGSTAB		// use CABiCGStab as a bottom (coarse grid) solver (makes more sense with U-Cycles)
 -DUSE_SUBCOMM			// build a subcommunicator for each level in the MG v-cycle to minimize the scope of MPI_AllReduce()
@@ -86,7 +87,12 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 -DBLOCKCOPY_TILE_K=###		// Smaller blocks fit in cache and express more TLP (good for MIC/BGQ/GPUs/...).  However, the unit stride for small blocks is reduced (bad for CPUs which rely on prefetchers)
 				// If these are ommited, the code relies on its defaults.
 
--DMAX_COARSE_DIM=###		// provides a means of constraining the maximum coarse dimension.  By default, the maximum is 11
+-DBOX_ALIGN_JSTRIDE=###		// Data allocation is now performed on a level-by-level basis (rather than block-by-block).  
+-DBOX_ALIGN_KSTRIDE=###		// In order to guarantee SIMD alignment, you can pad the unit-stride to a nice round number (e.g. 2, 4, or 8) so that j+/-1 is SIMD-aligned.
+-DBOX_ALIGN_VOLUME=###		// Similarly, you can pad the kStride (or volume) so that k+/-1 (or vector+/-1) is SIMD-aligned
+				// If these are ommited, the code relies on its defaults.
+
+-DMAX_COARSE_DIM=###		// provides a means of constraining the maximum coarse dimension.  By default, the maximum is 11 (i.e. maximum coarse grid is 11^3)
 
 
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
@@ -140,7 +146,7 @@ finest grid.  The resultant problem is thus 256^3 on the finest grid.
 
 On Mira (the IBM Blue Gene/Q at Argonne), one may use qsub to directly queue
 the benchmark.  For example...
-qsub -t 00:10:00 -n  64 --proccount   64 --mode c1  -A [ALLOCATION] --env BG_SHAREDMEMSIZE=32MB:PAMID_VERBOSE=1:BG_COREDUMPDISABLED=1:BG_SMP_FAST_WAKEUP=YES:BG_THREADLAYOUT=2:OMP_PROC_BIND=TRUE:OMP_NUM_THREADS=64:OMP_WAIT_POLICY=active:OMP_NESTED=true ./run.bgq 6 8
+qsub -t 00:10:00 -n  64 --proccount   64 --mode c1  -A [ALLOCATION] --env BG_SHAREDMEMSIZE=32MB:PAMID_VERBOSE=1:BG_COREDUMPDISABLED=1:BG_SMP_FAST_WAKEUP=YES:BG_THREADLAYOUT=1:OMP_PROC_BIND=TRUE:OMP_NUM_THREADS=64:OMP_WAIT_POLICY=active:OMP_NESTED=true ./run.bgq 6 8
 Will run the benchmark on 64 processes spread over 64 nodes with 1 process per 
 node (c1) and 64 threads per process.  Each process is allocated 8 64^3 boxes. 
 At one point, the additional environment variables listed were found to 
