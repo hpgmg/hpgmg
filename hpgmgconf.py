@@ -95,7 +95,14 @@ def makefile(args):
         m.append('CONFIG_FE = y')
     m.append('CONFIG_FV_CPPFLAGS = ' + hpgmg_fv_cflags(args))
     if args.petsc_dir:
-        m.append('include $(PETSC_DIR)/conf/variables')
+        found = False
+        for variables_path in [os.path.join('lib', 'petsc-conf', 'variables'),
+                               os.path.join('conf', 'variables')]:
+            if os.path.exists(os.path.join(args.petsc_dir,variables_path)):
+                m.append('include $(PETSC_DIR)/' + variables_path)
+                found = True
+        if not found:
+            raise RuntimeError('Could not find PETSc variables file in PETSC_DIR=%s' % (args.petsc_dir,))
     m.append('include $(SRCDIR)/base.mk\n')
     return '\n'.join(m)
 
