@@ -1,0 +1,108 @@
+\documentclass[11pt]{amsart}
+%\usepackage{geometry}                % See geometry.pdf to learn the layout options. There are lots.
+%\geometry{letterpaper}                   % ... or a4paper or a5paper or ... 
+%\geometry{landscape}                % Activate for for rotated page geometry
+%\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{epstopdf}
+\usepackage{caption}
+\usepackage{fullpage}
+
+\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+
+\newcommand{\Order}[1]{\ensuremath{\mathcal{O}(#1)}}    % big O notation
+
+\title{HPGMG: a New Computer Architecture Benchmark}
+
+\begin{document}
+\maketitle
+
+\subsection*{Abstract:} 
+The High Performance Linpack (HPL) benchmark (and associated Top-500 List) has been a successful metric for ranking high-performance computing systems since its rise to prominence in the 1990s, but over time has become less reflective of the system performance metrics that matter to contemporary science and engineering applications.
+The mismatch between observed application performance and HPL ranking has become a critical issue. 
+We propose to address this issue with the High Performance Geometric Multigrid (HPGMG) benchmark, which uses an optimal work complexity algorithm like most extreme-scale applications today.
+HPGMG maintains many of HPL's desirable qualities: a well defined global problem (a non-iterative equation solve) with a clear verification criterion, but provides a more balanced measure of machine capabilities.
+We strive to create a benchmark that will promote system design improvements better aligned to science and engineering application performance.
+
+\subsection*{The problem:} 
+The High Performance Linpack (HPL) benchmark is the most widely recognized metric for ranking high-performance computing systems. 
+When HPL gained prominence in the early 1990s there was a strong correlation between its predicted ranking of a system and the efficacy of the system for full-scale applications.
+Computer system vendors pursued designs that would increase HPL performance, which would in turn improve overall application performance.
+This has ceased to be the case and in fact the opposite is now true.
+HPL rankings of computer systems are no longer well correlated to real application performance, which use more work optimal algorithms with high bandwidth and low latency requirements.
+%In fact, we have reached a point where designing a system for good HPL performance can actually lead to design choices that are wrong for the real application mix, or add unnecessary components or complexity to the system, driving up costs.
+Despite this, due to its long accumulated history, the Top500 list continues to offer a wealth of information about HPC industry trends and investments, but the mismatch between observed application performance and HPL ranking has become a critical issue. 
+%The mismatch between observed application performance and HPL ranking has become a critical issue.
+%We expect the gap between HPL measurements and the expectations it sets for real application performance to increase in the future.
+
+In response to this problem the NNSA has funded a project to develop a ``complement" to HPL on the Top500 list -- HPCG.
+HPCG (High Performance Conjugate Gradients) is based on a stored matrix, \Order{1} level, preconditioned CG iterative process (not a solve).
+Its purpose (purportedly) is to form ``bookends" with HPL: HPL stresses the floating point unit and HPCG stresses the memory bandwidth.
+HPGMG is designed to stress both the floating point unit, although not to the degree of HPL, and the memory system, as well as other nodal metrics, but its primary design criterion is to pressure the interconnect.
+The interconnect, and lack of large amounts of work to hide communication costs, is the source of any lack of scaling of modern applications on extreme-scale platforms.
+
+
+Erich Strohmaier defines an extensive metric as one that distinguishes a globally well engineered machine as opposed one that measures nodal performance. 
+HPCG does not have complex global communication, only simple global reductions and nearest neighbor collectives, and is not extensive. 
+Additionally the HPCG stored matrix design has very low arithmetic intensity (AI). % and is a poor proxy for the AI of even current applications.
+Stored matrix solvers are among the lowest AI applications in the HPC community and the peak flop rate attainable on most HPC machines has dropped from as high as 25\% in the early 1990's (IBM's RS6000 33MHz) to a few percent on current IBM and Intel processors.
+This trend is anticipated to continue in the future.
+
+\subsubsection*{Benchmarking and exascale:} 
+
+Based on the example set by Tianhe-2, the fast track to a computer system with the potential to run the first 1 Exaflop HPL will likely to be achieved by massive hardware investment, which may result in a design that is unattractive for applications if care is not taken to understand application demands. 
+Without intervention, such a development will undercut R\&D investments in creating more usable systems due to premature declaration of success on achieving the next 1000x milestone in HPL performance improvement. 
+The highest priority of DOE is scientific impact.
+Consequently, there is a need for a benchmark that more closely reflects metrics that correlate to system features that are necessary for scientific application requirements (the fundamentals for scientific impact).
+We need to demonstrate that US investments in exascale architecture will deliver better machines with respect to metrics that enable science.
+We see HPGMG as a valuable resource to aid vendors and centers to deliver the most cost effective machines for science.
+
+\subsection*{Proposed solution:} 
+We propose a metric that is similar in structure to HPL, the solve of a system of linear equations, but uses a discretized PDE operator, which has structure that can be exploited to solve the system with a few hundred flops per equation.
+Most modern extreme-scale application likewise exploit structure in their problems to achieve similarly optimal algorithms.
+We use one matrix-free application of full multigrid (FMG), which is an asymptotically exact solver and is equipped with a natural verification mechanism. 
+This benchmark is completely agnostic of the kind of parallelism exploited; the solution is independent of the parallel strategy.
+%Our metric is number of equations solved per second, which can be mapped to flops per second as HPL does.
+
+HPL uses flops per second as the metric, which has the problem that an undesirable quality is in the numerator.
+Strohmaier points out about metrics:  ``It multiplies all desired quantities (computing capability) and divides them by undesired quantities...". 
+HPL circumvents this problem by, crucially, defining the flop count (an undesirable quantity) as a function of the the number of equations solved (a desirable quantity). 
+%We prefer the metric of equations solve per second but can map equations to the more familiar flops if need be.
+
+HPGMG is fairly simple and we can deploy implementations that are close to optimal, at least in the high level message passing layer.
+We have deployed two reference implementation using 1) finite volume (FV) and 2) finite element (FE) discretizations of the scalar Laplacian.
+We observe about 10\% of the theoretical peak flop rate with HPGMG-FV implementation and about 30\% of the peak flop rate with HPGMG-FE.
+Flop rates, or AI, can be tuned to match any application pool; we believe that 10-20\% of theoretical peak flop rate is about average for well optimized modern applications.
+Further information can be found at hpgmg.org.
+
+
+\subsubsection*{Modeling and data collection:}
+We have received machine metric data for several (mini) applications and benchmarks, including HPCG, from LLNL, and have combined this data with data that we collected for HPGMG.
+%Figure \ref{fig:scaling} (right) shows that HPCG is similar to STREAMS TRIAD and that HPGMG is fairly representative of the these applications.
+We do not, however, have an active modeling and data collection effort; we see this as important for the future design and development of HPGMG and are seeking partners in this regard.
+Further information can be found at hpgmg.org.
+%We are in contact with qualified colleagues such as Colin Glass at the University of Stuttgart but we do not have activities in this area.
+
+\subsubsection*{Machine spectra:}
+A metric's ability to measure strong scaling is important for an extensive metric because fast turn around time is important for many applications.
+Many applications have hard targets for turnaround time such as number of simulated years per day in climate.
+To this end we feel that ``machine spectra", the range of problem sizes that can use the entire machine effectively, is an important metric; we intend to include this in HPGMG although this is a complex design issue, which we have not yet resolved.
+
+\subsection*{Strategic importance to DOE:} HPGMG has significant strategic consequences for DOE. 
+The Top500 benchmark has driven the nature of HPC platform development and has an oversized influence on hardware vendors and computer science research.
+This puts responsible procurement in DOE at a disadvantage in terms of publicity when due diligence to our user base results in hardware choices that fail to rank highly in the Top500 ranking. 
+The Top500 has very high visibility in the HPC community. 
+%As one of the leading computing centers in the world NERSC would benefit greatly from the recognition participating in the design and development of a new Top500 metric. 
+%HPL has lasted over 20 years -- these opportunities do not come often -- continuity of the metric is highly valued and there is a great deal of institutional inertia. 
+We believe that our proposed design is durable and fixes the deficits of HPL while maintaining its best qualities. 
+%Having LBNL involved and leading this effort is a great opportunity and critical in placing LBNL at the center of international HPC for decades to come.
+%Finally, we need to act now and not later. 
+%If HPCG becomes the de facto standard it will be because alternatives were not given support. 
+We anticipate that with a reputable alternative we are well positioned to offer the community a viable to alternative to HPL in years to come.
+
+%\bibliographystyle{amsalpha}
+
+%\bibliography{hpgmg}
+
+\end{document}  
