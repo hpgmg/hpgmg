@@ -14,7 +14,6 @@
 void BiCGStab(level_type * level, int x_id, int R_id, double a, double b, double desired_reduction_in_norm){
   // Algorithm 7.7 in Iterative Methods for Sparse Linear Systems(Yousef Saad)
   // Algorithm 1 in Analysis and Practical use of Flexible BiCGStab (Jie Chen)
-  // uses "right" preconditioning...  AD^{-1}(Dx) = b ... AD^{-1}y = b ... solve for y, then solve for x = D^{-1}y
   int  r0_id = VECTORS_RESERVED+0;
   int   r_id = VECTORS_RESERVED+1;
   int   p_id = VECTORS_RESERVED+2;

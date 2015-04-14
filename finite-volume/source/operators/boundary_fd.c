@@ -5,7 +5,7 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void apply_BCs_linear(level_type * level, int x_id, int justFaces){
   // For cell-centered, we need to fill in the ghost zones to apply any BC's
-  // This code does a simple linear interpolation for homogeneous dirichlet (0 on boundary)
+  // This code does a simple piecewise linear interpolation for homogeneous dirichlet (0 on boundary)
   // Nominally, this is first performed across faces, then to edges, then to corners.  
   // In this implementation, these three steps are fused
   //
@@ -91,7 +91,7 @@ void apply_BCs_linear(level_type * level, int x_id, int justFaces){
 //------------------------------------------------------------------------------------------------------------------------------
 void apply_BCs_quadratic(level_type * level, int x_id, int justFaces){
   // For cell-centered, we need to fill in the ghost zones to apply any BC's
-  // This code does a simple linear interpolation for homogeneous dirichlet (0 on boundary)
+  // This code does a simple piecewise quadratic interpolation for homogeneous dirichlet (0 on boundary)
   // Nominally, this is first performed across faces, then to edges, then to corners.  
   //
   if(level->boundary_condition.type == BC_PERIODIC)return; // no BC's to apply !
@@ -201,4 +201,3 @@ void apply_BCs_quadratic(level_type * level, int x_id, int justFaces){
   }
   level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
 }
-

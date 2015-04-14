@@ -81,12 +81,12 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
 
   int box;
   for(box=0;box<level->num_my_boxes;box++){
-    memset(level->my_boxes[box].vectors[VECTOR_ALPHA ],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].vectors[VECTOR_BETA_I],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].vectors[VECTOR_BETA_J],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].vectors[VECTOR_BETA_K],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].vectors[VECTOR_UTRUE ],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].vectors[VECTOR_F     ],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_ALPHA ],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_BETA_I],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_BETA_J],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_BETA_K],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_UTRUE ],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_F     ],0,level->my_boxes[box].volume*sizeof(double));
     int i,j,k;
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;

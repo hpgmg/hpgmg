@@ -1,4 +1,3 @@
-- black box calculation of D^{-1}
 - cubical problem size -> rectahedral problem size ... init problem, restriction rules, etc...
 - move removal of constants from solution for poisson w/periodic to end of solver (instead of per v-cycle)
 - cycleTime:  uint64_t nanoseconds to double seconds.  cycles.* convert to double

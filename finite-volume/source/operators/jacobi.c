@@ -39,7 +39,6 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       const int ghosts = level->box_ghosts;
       const int jStride = level->my_boxes[box].jStride;
       const int kStride = level->my_boxes[box].kStride;
-      const int     dim = level->my_boxes[box].dim;
       const double h2inv = 1.0/(level->h*level->h);
       const double * __restrict__ rhs    = level->my_boxes[box].vectors[       rhs_id] + ghosts*(1+jStride+kStride);
       const double * __restrict__ alpha  = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);

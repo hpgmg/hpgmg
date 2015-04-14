@@ -46,12 +46,66 @@
 #include "operators.h"
 #include "solvers.h"
 //------------------------------------------------------------------------------------------------------------------------------
+void bench_hpgmg(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol){
+     int     doTiming;
+     int    minSolves = 10; // do at least minSolves MGSolves
+  double timePerSolve = 0;
+  for(doTiming=0;doTiming<=1;doTiming++){ // first pass warms up, second pass times
+
+    #ifdef USE_HPM // IBM performance counters for BGQ...
+    if(doTiming)HPM_Start("FMGSolve()");
+    #endif
+
+    #ifdef USE_MPI
+    double minTime   = 30.0; // minimum time in seconds that the benchmark should run
+    double startTime = MPI_Wtime();
+    if(doTiming==1){
+      if((minTime/timePerSolve)>minSolves)minSolves=(minTime/timePerSolve); // if one needs to do more than minSolves to run for minTime, change minSolves
+    }
+    #endif
+
+    if(all_grids->levels[onLevel]->my_rank==0){
+      if(doTiming==0){fprintf(stdout,"\n\n===== warming up by running %d solves ===============================\n",minSolves);}
+                 else{fprintf(stdout,"\n\n===== running %d solves =============================================\n",minSolves);}
+      fflush(stdout);
+    }
+
+    int numSolves =  0; // solves completed
+    MGResetTimers(all_grids);
+    while( (numSolves<minSolves) ){
+      zero_vector(all_grids->levels[onLevel],VECTOR_U);
+      #ifdef USE_FCYCLES
+      FMGSolve(all_grids,onLevel,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
+      #else
+       MGSolve(all_grids,onLevel,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
+      #endif
+      numSolves++;
+    }
+
+    #ifdef USE_MPI
+    if(doTiming==0){
+      double endTime = MPI_Wtime();
+      timePerSolve = (endTime-startTime)/numSolves;
+      MPI_Bcast(&timePerSolve,1,MPI_DOUBLE,0,MPI_COMM_WORLD); // after warmup, process 0 broadcasts the average time per solve (consensus)
+    }
+    #endif
+
+    #ifdef USE_HPM // IBM performance counters for BGQ...
+    if(doTiming)HPM_Stop("FMGSolve()");
+    #endif
+  }
+  MGPrintTiming(all_grids); // don't include the error check in the timing results
+}
+
+
+//------------------------------------------------------------------------------------------------------------------------------
 int main(int argc, char **argv){
   int my_rank=0;
   int num_tasks=1;
   int OMP_Threads = 1;
   int OMP_Nested = 0;
 
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   #ifdef _OPENMP
   #pragma omp parallel 
   {
@@ -64,6 +118,7 @@ int main(int argc, char **argv){
   #endif
     
 
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   #ifdef USE_MPI
   int    actual_threading_model = -1;
   int requested_threading_model = -1;
@@ -169,9 +224,10 @@ int main(int argc, char **argv){
   #else
   int bc = BC_DIRICHLET;
   #endif
-  level_type fine_grid;
+  level_type level_h;
+  mg_type MG_h;
   int ghosts=stencil_get_radius();
-  create_level(&fine_grid,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,bc,my_rank,num_tasks);
+  create_level(&level_h,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,bc,my_rank,num_tasks);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef USE_HELMHOLTZ
   double a=1.0;double b=1.0; // Helmholtz
@@ -180,87 +236,44 @@ int main(int argc, char **argv){
   double a=0.0;double b=1.0; // Poisson
   if(my_rank==0)fprintf(stdout,"  Creating Poisson (a=%f, b=%f) test problem\n",a,b);
   #endif
-  double h0=1.0/( (double)boxes_in_i*(double)box_dim );
-  initialize_problem(&fine_grid,h0,a,b); // calculate VECTOR_ALPHA, VECTOR_BETA, and VECTOR_UTRUE
+  double h=1.0/( (double)boxes_in_i*(double)box_dim );
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if( ((a==0.0)||(fine_grid.alpha_is_zero==1)) && (fine_grid.boundary_condition.type == BC_PERIODIC) ){ 
-    // Poisson w/ periodic BC's... 
-    // nominally, u shifted by any constant is still a valid solution.  
-    // However, by convention, we assume u sums to zero.
-    double average_value_of_u = mean(&fine_grid,VECTOR_UTRUE);
-    if(my_rank==0){fprintf(stdout,"  average value of u_true = %20.12e... shifting u_true to ensure it sums to zero...\n",average_value_of_u);}
-    shift_vector(&fine_grid,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_u);
-  }
+  int minCoarseDim = 1; // is this safe??  quartic BC's need 4^3 boxes
+  //int minCoarseDim = 4;
+  initialize_problem(&level_h,h,a,b);        // calculate VECTOR_ALPHA, VECTOR_BETA, and VECTOR_F
+  rebuild_operator(&level_h,NULL,a,b);       // i.e. calculate Dinv and lambda_max
+  MGBuild(&MG_h,&level_h,a,b,minCoarseDim);  // build the Multigrid Hierarchy 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  //apply_op(&fine_grid,VECTOR_F,VECTOR_UTRUE,a,b); // by construction, f = A(u_true)
-  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(fine_grid.boundary_condition.type == BC_PERIODIC){
-    double average_value_of_f = mean(&fine_grid,VECTOR_F);
+  if(level_h.boundary_condition.type == BC_PERIODIC){
+    double average_value_of_f = mean(&level_h,VECTOR_F);
     if(average_value_of_f!=0.0){
       if(my_rank==0){fprintf(stderr,"  WARNING... Periodic boundary conditions, but f does not sum to zero... mean(f)=%e\n",average_value_of_f);}
-      //shift_vector(&fine_grid,VECTOR_F,VECTOR_F,-average_value_of_f);
+      shift_vector(&level_h,VECTOR_F,VECTOR_F,-average_value_of_f);
     }
   }
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  mg_type all_grids;
-  int minCoarseDim = 1;
-  rebuild_operator(&fine_grid,NULL,a,b); // i.e. calculate Dinv and lambda_max
-  MGBuild(&all_grids,&fine_grid,a,b,minCoarseDim); // build the Multigrid Hierarchy 
   double dtol=  0.0;double rtol=1e-10; // converged if ||b-Ax|| / ||b|| < rtol
 //double dtol=1e-15;double rtol=  0.0; // converged if ||D^{-1}(b-Ax)|| < dtol
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-     int     doTiming;
-     int    minSolves = 10; // do at least minSolves MGSolves
-  double timePerSolve = 0;
-  for(doTiming=0;doTiming<=1;doTiming++){ // first pass warms up, second pass times
-
-    #ifdef USE_HPM // IBM performance counters for BGQ...
-    if(doTiming)HPM_Start("FMGSolve()");
-    #endif
-
-    #ifdef USE_MPI
-    double minTime   = 30.0; // minimum time in seconds that the benchmark should run
-    double startTime = MPI_Wtime();
-    if(doTiming==1){
-      if((minTime/timePerSolve)>minSolves)minSolves=(minTime/timePerSolve); // if one needs to do more than minSolves to run for minTime, change minSolves
-    }
-    #endif
-
-    if(my_rank==0){
-      if(doTiming==0){fprintf(stdout,"\n\n===== warming up by running %d solves ===============================\n",minSolves);}
-                 else{fprintf(stdout,"\n\n===== running %d solves =============================================\n",minSolves);}
-      fflush(stdout);
-    }
-
-    int numSolves =  0; // solves completed
-    MGResetTimers(&all_grids);
-    while( (numSolves<minSolves) ){
-      zero_vector(all_grids.levels[0],VECTOR_U);
-      #ifdef USE_FCYCLES
-      FMGSolve(&all_grids,0,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
-      #else
-       MGSolve(&all_grids,0,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
-      #endif
-      numSolves++;
-    }
-
-    #ifdef USE_MPI
-    if(doTiming==0){
-      double endTime = MPI_Wtime();
-      timePerSolve = (endTime-startTime)/numSolves;
-      MPI_Bcast(&timePerSolve,1,MPI_DOUBLE,0,MPI_COMM_WORLD); // after warmup, process 0 broadcasts the average time per solve (consensus)
-    }
-    #endif
-
-    #ifdef USE_HPM // IBM performance counters for BGQ...
-    if(doTiming)HPM_Stop("FMGSolve()");
+  #ifndef TEST_ERROR
+  bench_hpgmg(&MG_h,0,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
+  #endif
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  // solve A^h u^h = f^h
+  // solve A^2h u^2h = f^2h
+  // solve A^4h u^4h = f^4h
+  // error analysis...
+  MGResetTimers(&MG_h);
+  int l;for(l=0;l<3;l++){
+    if(l>0)restriction(MG_h.levels[l],VECTOR_F,MG_h.levels[l-1],VECTOR_F,RESTRICT_CELL);
+           zero_vector(MG_h.levels[l],VECTOR_U);
+    #ifdef USE_FCYCLES
+    FMGSolve(&MG_h,l,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
+    #else
+     MGSolve(&MG_h,l,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
     #endif
   }
-  MGPrintTiming(&all_grids); // don't include the error check in the timing results
-  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(my_rank==0){fprintf(stdout,"calculating error...  ");}
-  double fine_error = error(&fine_grid,VECTOR_U,VECTOR_UTRUE);
-  if(my_rank==0){fprintf(stdout,"h = %22.15e  ||error|| = %22.15e\n\n",h0,fine_error);fflush(stdout);}
+  richardson_error(&MG_h,0,VECTOR_U);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // MGDestroy()
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

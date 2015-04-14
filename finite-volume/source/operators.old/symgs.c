@@ -8,20 +8,21 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
 
   for(s=0;s<2*NUM_SMOOTHS;s++){ // there are two sweeps (forward/backward) per GS smooth
     exchange_boundary(level,phi_id,stencil_is_star_shaped());
-            apply_BCs(level,phi_id);
+            apply_BCs(level,phi_id,stencil_is_star_shaped());
 
     // now do ghosts communication-avoiding smooths on each box...
     uint64_t _timeStart = CycleTime();
+    const int  ghosts = level->box_ghosts;
+    const int jStride = level->box_jStride;
+    const int kStride = level->box_kStride;
+    const int     dim = level->box_dim;
+    const double h2inv = 1.0/(level->h*level->h);
+
     #ifdef _OPENMP
     #pragma omp parallel for
     #endif
     for(box=0;box<level->num_my_boxes;box++){
       int i,j,k;
-      const int ghosts = level->box_ghosts;
-      const int jStride = level->my_boxes[box].jStride;
-      const int kStride = level->my_boxes[box].kStride;
-      const int     dim = level->my_boxes[box].dim;
-      const double h2inv = 1.0/(level->h*level->h);
             double * __restrict__ phi      = level->my_boxes[box].vectors[       phi_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
       const double * __restrict__ rhs      = level->my_boxes[box].vectors[       rhs_id] + ghosts*(1+jStride+kStride);
       const double * __restrict__ alpha    = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);

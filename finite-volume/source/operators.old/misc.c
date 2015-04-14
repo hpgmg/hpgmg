@@ -62,7 +62,7 @@ void initialize_valid_region(level_type * level){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void initialize_grid_to_scalar(level_type * level, int component_id, double scalar){
+void init_vector(level_type * level, int component_id, double scalar){
   // initializes the grid to a scalar while zero'ing the ghost zones...
   uint64_t _timeStart = CycleTime();
   int box;

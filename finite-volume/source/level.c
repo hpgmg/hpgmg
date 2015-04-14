@@ -810,10 +810,14 @@ void create_vectors(level_type *level, int numVectors){
     if((numVectors>0)&&(level->vectors_base==NULL)){fprintf(stderr,"malloc failed - level->vectors_base\n");exit(0);}
     double * tmpbuf = level->vectors_base;
     while( (uint64_t)(tmpbuf+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & 0xff ){tmpbuf++;} // allign first *non-ghost* zone element of first component to a 256-Byte boundary
-    memset(tmpbuf,          0,(uint64_t)(       numVectors)*level->num_my_boxes*level->box_volume*sizeof(double)); // zero to avoid 0.0*NaN or 0.0*Inf // FIX... omp thread ???
+    uint64_t ofs;
+    #ifdef _OPENMP
+    #pragma omp parallel for
+    #endif
+    for(ofs=0;ofs<(uint64_t)numVectors*level->num_my_boxes*level->box_volume;ofs++){tmpbuf[ofs]=0.0;} // Faster in MPI+OpenMP environments, but not NUMA-aware
     // if there is existing FP data... copy it, then free old data and pointer array
     if(level->numVectors>0){
-      memcpy(tmpbuf,old_vector0,(uint64_t)(level->numVectors)*level->num_my_boxes*level->box_volume*sizeof(double)); // FIX... omp thread ???
+      memcpy(tmpbuf,old_vector0,(uint64_t)level->numVectors*level->num_my_boxes*level->box_volume*sizeof(double)); // FIX... omp thread ???
       if(old_vectors_base)free(old_vectors_base); // free old data...
     }
     // allocate an array of pointers which point to the union of boxes for each vector
@@ -828,8 +832,14 @@ void create_vectors(level_type *level, int numVectors){
     level->vectors = (double **)malloc(numVectors*sizeof(double*));
     int c;
     for(c=                0;c<level->numVectors;c++){level->vectors[c] = old_vectors[c];}
-    for(c=level->numVectors;c<       numVectors;c++){level->vectors[c] = (double*)malloc(level->num_my_boxes*level->box_volume*sizeof(double));}
-    for(c=level->numVectors;c<       numVectors;c++){memset(level->vectors[c],0,level->num_my_boxes*level->box_volume*sizeof(double));}
+    for(c=level->numVectors;c<       numVectors;c++){
+      level->vectors[c] = (double*)malloc((uint64_t)level->num_my_boxes*level->box_volume*sizeof(double));
+      uint64_t ofs;
+      #ifdef _OPENMP
+      #pragma omp parallel for
+      #endif
+      for(ofs=0;ofs<(uint64_t)level->num_my_boxes*level->box_volume;ofs++){level->vectors[c][ofs]=0.0;} // Faster in MPI+OpenMP environments, but not NUMA-aware
+    }
     free(old_vectors);
   #endif
 
@@ -1017,20 +1027,23 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
     //posix_memalign((void**)&(level->RedBlack_FP[0]  ),64,kStride*sizeof(double  )); // even planes
     //posix_memalign((void**)&(level->RedBlack_FP[1]  ),64,kStride*sizeof(double  ));
-    // FIX... align RedBlack_FP the same as elements within a plane (i.e. BOX_SIMD_ALIGNMENT)
            level->RedBlack_FP[0] = (double*)malloc(kStride*sizeof(double));
            level->RedBlack_FP[1] = (double*)malloc(kStride*sizeof(double));
     memset(level->RedBlack_FP[0],0,kStride*sizeof(double));
     memset(level->RedBlack_FP[1],0,kStride*sizeof(double));
             level->memory_allocated += kStride*sizeof(double);
             level->memory_allocated += kStride*sizeof(double);
-  
+ 
     for(j=0-level->box_ghosts;j<level->box_dim+level->box_ghosts;j++){
     for(i=0-level->box_ghosts;i<level->box_dim+level->box_ghosts;i++){
       int ij = (i+level->box_ghosts) + (j+level->box_ghosts)*jStride;
-  //  if((i^j)&0x1)level->RedBlack_64bMask[ij]= ~0;else level->RedBlack_64bMask[ij]=  0; // useful for blend instructions
-      if((i^j^1)&0x1)level->RedBlack_FP[  0][ij]=1.0;else level->RedBlack_FP[  0][ij]=0.0;
-      if((i^j^1)&0x1)level->RedBlack_FP[  1][ij]=0.0;else level->RedBlack_FP[  1][ij]=1.0;
+      if(((i+level->my_boxes[box].low.i)^(j+level->my_boxes[box].low.j)^(level->my_boxes[box].low.k))&0x1){
+        level->RedBlack_FP[0][ij]=1.0;
+        level->RedBlack_FP[1][ij]=0.0;
+      }else{
+        level->RedBlack_FP[0][ij]=0.0;
+        level->RedBlack_FP[1][ij]=1.0;
+      }
     }}
   }
 

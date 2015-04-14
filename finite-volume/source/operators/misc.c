@@ -94,7 +94,7 @@ void initialize_valid_region(level_type * level){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void initialize_grid_to_scalar(level_type * level, int component_id, double scalar){
+void init_vector(level_type * level, int component_id, double scalar){
   // initializes the grid to a scalar while zero'ing the ghost zones...
   uint64_t _timeStart = CycleTime();
   int block;
@@ -488,3 +488,71 @@ double error(level_type * level, int id_a, int id_b){
   double   max =      norm(level,VECTOR_TEMP);                return(max);   // max norm of error function
   double    L2 = sqrt( dot(level,VECTOR_TEMP,VECTOR_TEMP)*h3);return( L2);   // normalized L2 error ?
 }
+
+
+//------------------------------------------------------------------------------------------------------------------------------
+void color_vector(level_type * level, int id, int colors_in_each_dim, int icolor, int jcolor, int kcolor){
+  uint64_t _timeStart = CycleTime();
+  int block;
+
+  PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
+  for(block=0;block<level->num_my_blocks;block++){
+    const int box = level->my_blocks[block].read.box;
+    const int ilo = level->my_blocks[block].read.i;
+    const int jlo = level->my_blocks[block].read.j;
+    const int klo = level->my_blocks[block].read.k;
+    const int ihi = level->my_blocks[block].dim.i + ilo;
+    const int jhi = level->my_blocks[block].dim.j + jlo;
+    const int khi = level->my_blocks[block].dim.k + klo;
+    const int boxlowi = level->my_boxes[box].low.i;
+    const int boxlowj = level->my_boxes[box].low.j;
+    const int boxlowk = level->my_boxes[box].low.k;
+    const int jStride = level->my_boxes[box].jStride;
+    const int kStride = level->my_boxes[box].kStride;
+    const int  ghosts = level->my_boxes[box].ghosts;
+    double * __restrict__ grid = level->my_boxes[box].vectors[id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    int i,j,k;
+
+    for(k=klo;k<khi;k++){double sk=0.0;if( ((k+boxlowk)%colors_in_each_dim) == kcolor )sk=1.0;
+    for(j=jlo;j<jhi;j++){double sj=0.0;if( ((j+boxlowj)%colors_in_each_dim) == jcolor )sj=1.0;
+    for(i=ilo;i<ihi;i++){double si=0.0;if( ((i+boxlowi)%colors_in_each_dim) == icolor )si=1.0;
+      int ijk = i + j*jStride + k*kStride;
+      grid[ijk] = si*sj*sk;
+    }}}
+  }
+  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+}
+
+
+//------------------------------------------------------------------------------------------------------------------------------
+void random_vector(level_type * level, int id){
+  uint64_t _timeStart = CycleTime();
+  int block;
+
+  PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
+  for(block=0;block<level->num_my_blocks;block++){
+    const int box = level->my_blocks[block].read.box;
+    const int ilo = level->my_blocks[block].read.i;
+    const int jlo = level->my_blocks[block].read.j;
+    const int klo = level->my_blocks[block].read.k;
+    const int ihi = level->my_blocks[block].dim.i + ilo;
+    const int jhi = level->my_blocks[block].dim.j + jlo;
+    const int khi = level->my_blocks[block].dim.k + klo;
+    const int jStride = level->my_boxes[box].jStride;
+    const int kStride = level->my_boxes[box].kStride;
+    const int  ghosts = level->my_boxes[box].ghosts;
+    double * __restrict__ grid = level->my_boxes[box].vectors[id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    int i,j,k;
+
+    for(k=klo;k<khi;k++){
+    for(j=jlo;j<jhi;j++){
+    for(i=ilo;i<ihi;i++){
+      int ijk = i + j*jStride + k*kStride;
+      grid[ijk] = -0.500 + 1.0*(i^j^k^0x1);
+    }}}
+  }
+  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+}
+
+
+//------------------------------------------------------------------------------------------------------------------------------

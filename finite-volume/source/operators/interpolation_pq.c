@@ -26,7 +26,7 @@ static inline void interpolation_pq_block(level_type *level_f, int id_f, double 
   double * __restrict__  read = block->read.ptr;
   double * __restrict__ write = block->write.ptr;
   if(block->read.box >=0){
-     read = level_c->my_boxes[ block->read.box].vectors[        id_c] + level_c->my_boxes[ block->read.box].ghosts*(1+level_c->my_boxes[ block->read.box].jStride+level_c->my_boxes[ block->read.box].kStride);
+     read = level_c->my_boxes[ block->read.box].vectors[id_c] + level_c->my_boxes[ block->read.box].ghosts*(1+level_c->my_boxes[ block->read.box].jStride+level_c->my_boxes[ block->read.box].kStride);
      read_jStride = level_c->my_boxes[block->read.box ].jStride;
      read_kStride = level_c->my_boxes[block->read.box ].kStride;
   }

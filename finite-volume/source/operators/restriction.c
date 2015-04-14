@@ -24,14 +24,14 @@ static inline void restriction_pc_block(level_type *level_c, int id_c, level_typ
   double * __restrict__  read = block->read.ptr;
   double * __restrict__ write = block->write.ptr;
   if(block->read.box >=0){
-     read = level_f->my_boxes[ block->read.box].vectors[id_f] + level_f->my_boxes[ block->read.box].ghosts*(1+level_f->my_boxes[ block->read.box].jStride+level_f->my_boxes[ block->read.box].kStride);
      read_jStride = level_f->my_boxes[block->read.box ].jStride;
      read_kStride = level_f->my_boxes[block->read.box ].kStride;
+     read = level_f->my_boxes[ block->read.box].vectors[id_f] + level_f->my_boxes[ block->read.box].ghosts*(1+level_f->my_boxes[ block->read.box].jStride+level_f->my_boxes[ block->read.box].kStride);
   }
   if(block->write.box>=0){
-    write = level_c->my_boxes[block->write.box].vectors[id_c] + level_c->my_boxes[block->write.box].ghosts*(1+level_c->my_boxes[block->write.box].jStride+level_c->my_boxes[block->write.box].kStride);
     write_jStride = level_c->my_boxes[block->write.box].jStride;
     write_kStride = level_c->my_boxes[block->write.box].kStride;
+    write = level_c->my_boxes[block->write.box].vectors[id_c] + level_c->my_boxes[block->write.box].ghosts*(1+level_c->my_boxes[block->write.box].jStride+level_c->my_boxes[block->write.box].kStride);
   }
 
 
