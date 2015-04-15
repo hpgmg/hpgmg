@@ -117,6 +117,22 @@ mpiicc -mmic -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg.c time
 
 
 
+4th order HPGMG-FV
+==================
+Included in this release is a 4th order Finite Volume Full Multigrid Implementation.  Unlike the 2nd order implementation, this version requires a different driver (hpgmg-fv.c) and a different operator file (operators.fv4.c).  Currently, it is highly recommended one use GSRB over the Chebyshev or Jacobi smoothers.  By default, most smoothers make 6 pases thru the data (instead of 4) in order to provide sufficient error and residual.  This has the effect of increasing the time spent in smoothing by 50%.  
+
+Nominally, compared to the 2nd order method, the 4th order smoother performs ...
+- 4x the flops
+- 4x the MPI messages
+- 2x the MPI data movement
+- 1x the DRAM data movement
+- provides 4 more bits of accuracy for every 8x increase in the problem size (instead of 2 bits)
+
+In order to compile the 4th order version on Edison, one may use the following command line...
+cc  -Ofast -fopenmp level.c operators.fv4.c  mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB -o run.edison
+
+
+
 Running the benchmark
 =====================
 The benchmark exploits OpenMP and/or MPI for parallelism.
