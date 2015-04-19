@@ -71,6 +71,26 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
             double lambda =     Dinv_ijk();
             x_np1[ijk] = x_n[ijk] + RedBlack[EvenOdd][ij]*lambda*(rhs[ijk]-Ax); // compiler seems to get confused unless there are disjoint read/write pointers
       }}}
+      #elif defined(GSRB_STRIDE2)
+      for(k=klo;k<khi;k++){
+      for(j=jlo;j<jhi;j++){
+        #ifdef GSRB_OOP
+        #warning GSRB using out-of-place and stride-2 accesses to minimie the number of flops
+        // out-of-place must copy old value...
+        for(i=ilo;i<ihi;i++){
+          int ijk = i + j*jStride + k*kStride; 
+          x_np1[ijk] = x_n[ijk];
+        }
+        #else
+        #warning GSRB using stride-2 accesses to minimie the number of flops
+        #endif
+        for(i=ilo+((ilo^j^k^s^color000)&1);i<ihi;i+=2){ // stride-2 GSRB
+          int ijk = i + j*jStride + k*kStride; 
+          double Ax     = apply_op_ijk(x_n);
+          double lambda =     Dinv_ijk();
+          x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);
+        }
+      }}
       #elif defined(GSRB_OOP)
       #warning GSRB using out-of-place implementation with an if-then-else on loop indices...
       for(k=klo;k<khi;k++){
@@ -84,19 +104,8 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       }else{
           x_np1[ijk] = x_n[ijk]; // copy old value when sweep color != cell color
       }}}}
-      //#elif defined(GSRB_STRIDE2)
-      //#warning GSRB using stride-2 accesses to minimie the number of flops
-      //#error verify this still works...
-      //for(k=klo;k<khi;k++){
-      //for(j=jlo;j<jhi;j++){
-      //for(i=ilo+((j^k^s^color000)&1)+1-ghosts;i<ihi;i+=2){ // stride-2 GSRB
-      //      int ijk = i + j*jStride + k*kStride; 
-      //      double Ax     = apply_op_ijk(x_n);
-      //      double lambda =     Dinv_ijk();
-      //      x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);
-      //}}}
       #else
-      #warning GSRB using if-then-else on loop indices for Red-Black because its easy to read...
+      #warning GSRB using if-then-else on loop indices...
       for(k=klo;k<khi;k++){
       for(j=jlo;j<jhi;j++){
       for(i=ilo;i<ihi;i++){

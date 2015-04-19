@@ -148,7 +148,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     restriction(level,VECTOR_BETA_K,fromLevel,VECTOR_BETA_K,RESTRICT_FACE_K);
   } // else case assumes alpha/beta have been set
 
-  // extrapolate the beta's into the ghost zones (needed for partial derivatives)
+  // extrapolate the beta's into the ghost zones (needed for mixed derivatives)
   extrapolate_betas(level);
   //initialize_problem(level,level->h,a,b); // approach used for testing smooth beta's; destroys the black box nature of the solver
 

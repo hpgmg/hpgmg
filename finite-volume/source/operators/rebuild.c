@@ -29,9 +29,9 @@ double power_method(level_type * level, double a, double b, int max_iterations){
    scale_vector(level,x_id,1.0/Ax_max,Ax_id); 
   }
   #ifdef USE_MPI
-  if(level->my_rank==0){fprintf(stdout,"  %e (%0.6f seconds)\n",lambda_max,MPI_Wtime()-lmax_start);}
+  if(level->my_rank==0){fprintf(stdout,"  %1.15e (%0.6f seconds)\n",lambda_max,MPI_Wtime()-lmax_start);}
   #else
-  if(level->my_rank==0){fprintf(stdout,"  %e\n",lambda_max);}
+  if(level->my_rank==0){fprintf(stdout,"  %1.15e\n",lambda_max);}
   #endif
   return(lambda_max);
 }
@@ -167,7 +167,7 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
   uint64_t _timeEndAllReduce = CycleTime();
   level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
-  if(level->my_rank==0){fprintf(stdout,"  estimating  lambda_max... <%e\n",dominant_eigenvalue);fflush(stdout);}
+  if(level->my_rank==0){fprintf(stdout,"  estimating  lambda_max... <%1.15e\n",dominant_eigenvalue);fflush(stdout);}
   level->dominant_eigenvalue_of_DinvA = dominant_eigenvalue;
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
