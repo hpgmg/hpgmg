@@ -96,7 +96,8 @@ def makefile(args):
     m.append('CONFIG_FV_CPPFLAGS = ' + hpgmg_fv_cflags(args))
     if args.petsc_dir:
         found = False
-        for variables_path in [os.path.join('lib', 'petsc-conf', 'variables'),
+        for variables_path in [os.path.join('lib', 'petsc', 'conf', 'variables'),
+                               os.path.join('lib', 'petsc-conf', 'variables'),
                                os.path.join('conf', 'variables')]:
             if os.path.exists(os.path.join(args.petsc_dir,variables_path)):
                 m.append('include $(PETSC_DIR)/' + variables_path)
