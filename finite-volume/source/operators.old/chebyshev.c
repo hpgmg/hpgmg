@@ -17,6 +17,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   int box,s;
 
 
+
   // compute the Chebyshev coefficients...
   double beta     = 1.000*level->dominant_eigenvalue_of_DinvA;
 //double alpha    = 0.300000*beta;
@@ -41,19 +42,20 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
 
   for(s=0;s<CHEBYSHEV_DEGREE*NUM_SMOOTHS;s++){
     // get ghost zone data... Chebyshev ping pongs between x_id and VECTOR_TEMP
-    if((s&1)==0){exchange_boundary(level,       x_id,stencil_is_star_shaped());apply_BCs(level,       x_id);}
-            else{exchange_boundary(level,VECTOR_TEMP,stencil_is_star_shaped());apply_BCs(level,VECTOR_TEMP);}
-   
+    if((s&1)==0){exchange_boundary(level,       x_id,stencil_is_star_shaped());apply_BCs(level,       x_id,stencil_is_star_shaped());}
+            else{exchange_boundary(level,VECTOR_TEMP,stencil_is_star_shaped());apply_BCs(level,VECTOR_TEMP,stencil_is_star_shaped());}
+
     // apply the smoother... Chebyshev ping pongs between x_id and VECTOR_TEMP
     uint64_t _timeStart = CycleTime();
+    const int  ghosts = level->box_ghosts;
+    const int jStride = level->box_jStride;
+    const int kStride = level->box_kStride;
+    const int     dim = level->box_dim;
+    const double h2inv = 1.0/(level->h*level->h);
+
     PRAGMA_THREAD_ACROSS_BOXES(level,box)
     for(box=0;box<level->num_my_boxes;box++){
       int i,j,k;
-      const int ghosts = level->box_ghosts;
-      const int jStride = level->my_boxes[box].jStride;
-      const int kStride = level->my_boxes[box].kStride;
-      const int     dim = level->my_boxes[box].dim;
-      const double h2inv = 1.0/(level->h*level->h);
       const double * __restrict__ rhs      = level->my_boxes[box].vectors[       rhs_id] + ghosts*(1+jStride+kStride);
       const double * __restrict__ alpha    = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);
       const double * __restrict__ beta_i   = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride);
@@ -73,6 +75,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
                                     x_np1  = level->my_boxes[box].vectors[         x_id] + ghosts*(1+jStride+kStride);}
       const double c1 = chebyshev_c1[s%CHEBYSHEV_DEGREE]; // limit polynomial to degree CHEBYSHEV_DEGREE.
       const double c2 = chebyshev_c2[s%CHEBYSHEV_DEGREE]; // limit polynomial to degree CHEBYSHEV_DEGREE.
+
       PRAGMA_THREAD_WITHIN_A_BOX(level,i,j,k)
       for(k=0;k<dim;k++){
       for(j=0;j<dim;j++){

@@ -10,3 +10,6 @@ qsub -t 00:10:00 -n  64 --proccount   64 --mode c1  -A PEACEndStation --env BG_S
 mpixlc_r -O5 -qsmp=omp:noauto hpgmg.c mg.c level.c solver.c operators.omp.c     timer.bgq.c -D__MPI  -D__COLLABORATIVE_THREADING=5 -DUSE_BICGSTAB -I/bgsys/drivers/ppcfloor/bgpm/include -L/soft/perftools/hpctw/lib -L/bgsys/drivers/ppcfloor/bgpm/lib -lbgpm  -lmpihpm_smp -lmpitrace  -o run.bgq /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a
 
 qsub -t 00:10:00 -n  64 --proccount   64 --mode c1  -A PEACEndStation --env BG_SHAREDMEMSIZE=32MB:PAMID_VERBOSE=1:BG_COREDUMPDISABLED=1:BG_SMP_FAST_WAKEUP=YES:BG_THREADLAYOUT=2:OMP_PROC_BIND=TRUE:OMP_NUM_THREADS=64:OMP_WAIT_POLICY=active:OMP_NESTED=true ./run.bgq 6 8
+
+
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.fv4.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB -DBLOCKCOPY_TILE_K=1 -DBLOCKCOPY_TILE_J=32 -o run.bgq.1x32 -DUSE_HPM -L/soft/perftools/hpctw/lib -L/soft/perftools/bgpm/lib -lmpihpm_smp -lbgpm 

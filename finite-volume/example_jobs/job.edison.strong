@@ -8,7 +8,8 @@
 
 set -x
 cd $PBS_O_WORKDIR
-#module load craype-hugepages8M
+export UGNI_CDM_MDD_DEDICATED=2
+
 
 export OMP_NUM_THREADS=1
 aprun -n     8  -N  8  -S 8  -ss  -cc numa_node ./run.edison.flat      8   1

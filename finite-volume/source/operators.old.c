@@ -326,27 +326,28 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+#include "operators.old/iterators.c"
 #ifdef  USE_GSRB
 #define NUM_SMOOTHS      2 // RBRB
-#include "operators/gsrb.c"
+#include "operators.old/gsrb.c"
 #elif   USE_CHEBY
 #define NUM_SMOOTHS      1
 #define CHEBYSHEV_DEGREE 4 // i.e. one degree-4 polynomial smoother
-#include "operators/chebyshev.c"
+#include "operators.old/chebyshev.c"
 #elif   USE_JACOBI
 #define NUM_SMOOTHS      6
-#include "operators/jacobi.c"
+#include "operators.old/jacobi.c"
 #elif   USE_L1JACOBI
 #define NUM_SMOOTHS      6
-#include "operators/jacobi.c"
+#include "operators.old/jacobi.c"
 #elif   USE_SYMGS
-#define NUM_SMOOTHS      2
-#include "operators/symgs.c"
+#define NUM_SMOOTHS      1
+#include "operators.old/symgs.c"
 #else
 #error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, -DUSE_JACOBI, -DUSE_L1JACOBI, or -DUSE_SYMGS
 #endif
-#include "operators/residual.c"
-#include "operators/apply_op.c"
+#include "operators.old/residual.c"
+#include "operators.old/apply_op.c"
 //------------------------------------------------------------------------------------------------------------------------------
 #include "operators/blockCopy.c"
 #include "operators/misc.c"

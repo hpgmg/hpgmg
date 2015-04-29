@@ -8,20 +8,13 @@
 
 set -x
 cd $PBS_O_WORKDIR
-#module load craype-hugepages8M
+export UGNI_CDM_MDD_DEDICATED=2
+
 
 export OMP_NUM_THREADS=1
-aprun -n     1  -N  1  -S 1  -ss  -cc numa_node ./run.edison      7  64
-aprun -n     8  -N  8  -S 8  -ss  -cc numa_node ./run.edison      7   8
-aprun -n    64  -N 16  -S 8  -ss  -cc numa_node ./run.edison      7   1
-aprun -n   512  -N 16  -S 8  -ss  -cc numa_node ./run.edison      6   1
-aprun -n  4096  -N 16  -S 8  -ss  -cc numa_node ./run.edison      5   1
-aprun -n 32768  -N 16  -S 8  -ss  -cc numa_node ./run.edison      4   1
-
-aprun -n     1  -N  1  -S 1  -ss  -cc numa_node ./run.edison.fmg  7  64
-aprun -n     8  -N  8  -S 8  -ss  -cc numa_node ./run.edison.fmg  7   8
-aprun -n    64  -N 16  -S 8  -ss  -cc numa_node ./run.edison.fmg  7   1
-aprun -n   512  -N 16  -S 8  -ss  -cc numa_node ./run.edison.fmg  6   1
-aprun -n  4096  -N 16  -S 8  -ss  -cc numa_node ./run.edison.fmg  5   1
-aprun -n 32768  -N 16  -S 8  -ss  -cc numa_node ./run.edison.fmg  4   1
-
+aprun -n     1  -N  1  -S 1  -ss  -cc numa_node ./run.edison.flat 7  64
+aprun -n     8  -N  8  -S 8  -ss  -cc numa_node ./run.edison.flat 7   8
+aprun -n    64  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat 7   1
+aprun -n   512  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat 6   1
+aprun -n  4096  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat 5   1
+aprun -n 32768  -N 16  -S 8  -ss  -cc numa_node ./run.edison.flat 4   1

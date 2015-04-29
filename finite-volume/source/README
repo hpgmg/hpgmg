@@ -64,6 +64,7 @@ Although no make file currently exists, compilation is straightforward.
 There are a few basic arguments that should be used.  Most are selfexplanatory.  
 
 -DUSE_MPI			// compiles the distributed (MPI) version
+-DUSE_CG			// use CG as a bottom (coarse grid) solver
 -DUSE_BICGSTAB			// use BiCGStab as a bottom (coarse grid) solver
 -DUSE_CABICGSTAB		// use CABiCGStab as a bottom (coarse grid) solver (makes more sense with U-Cycles)
 -DUSE_SUBCOMM			// build a subcommunicator for each level in the MG v-cycle to minimize the scope of MPI_AllReduce()
@@ -86,11 +87,18 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 -DBLOCKCOPY_TILE_K=###		// Smaller blocks fit in cache and express more TLP (good for MIC/BGQ/GPUs/...).  However, the unit stride for small blocks is reduced (bad for CPUs which rely on prefetchers)
 				// If these are ommited, the code relies on its defaults.
 
+-DBOX_ALIGN_JSTRIDE=###		// Data allocation is now performed on a level-by-level basis (rather than block-by-block).  
+-DBOX_ALIGN_KSTRIDE=###		// In order to guarantee SIMD alignment, you can pad the unit-stride to a nice round number (e.g. 2, 4, or 8) so that j+/-1 is SIMD-aligned.
+-DBOX_ALIGN_VOLUME=###		// Similarly, you can pad the kStride (or volume) so that k+/-1 (or vector+/-1) is SIMD-aligned
+				// If these are ommited, the code relies on its defaults.
+
+-DMAX_COARSE_DIM=###		// provides a means of constraining the maximum coarse dimension.  By default, the maximum is 11 (i.e. maximum coarse grid is 11^3)
+
 
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
-cc -Ofast -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.edison
-Conversely, true flat MPI should omit the -openmp flag.
-cc -Ofast         level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.edison.flat
+cc -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.edison
+Conversely, true flat MPI should omit the -fopenmp flag.
+cc -Ofast          level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.edison.flat
 
 
 On Mira (an IBM BlueGene/Q), one can use the following...
@@ -103,9 +111,25 @@ mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c tim
   -DUSE_HPM -I/bgsys/drivers/ppcfloor/bgpm/include -L/soft/perftools/hpctw/lib -L/bgsys/drivers/ppcfloor/bgpm/lib /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a  -lbgpm  -lmpihpm_smp -lmpitrace
 
 On Babbage (Xeon Phi cluster at NERSC), one can use the following for native mode compilation...
-mpiicc -mmic -Ofast -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -o run.babbage
+mpiicc -mmic -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -o run.babbage
 -or-
-mpiicc -mmic -Ofast -openmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.babbage
+mpiicc -mmic -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.babbage
+
+
+
+4th order HPGMG-FV
+==================
+Included in this release is a 4th order Finite Volume Full Multigrid Implementation.  Unlike the 2nd order implementation, this version requires a different driver (hpgmg-fv.c) and a different operator file (operators.fv4.c).  Currently, it is highly recommended one use GSRB over the Chebyshev or Jacobi smoothers.  By default, most smoothers make 6 pases thru the data (instead of 4) in order to provide sufficient error and residual.  This has the effect of increasing the time spent in smoothing by 50%.  
+
+Nominally, compared to the 2nd order method, the 4th order smoother performs ...
+- 4x the flops
+- 4x the MPI messages
+- 2x the MPI data movement
+- 1x the DRAM data movement
+- provides 4 more bits of accuracy for every 8x increase in the problem size (instead of 2 bits)
+
+In order to compile the 4th order version on Edison, one may use the following command line...
+cc  -Ofast -fopenmp level.c operators.fv4.c  mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB -o run.edison
 
 
 
@@ -138,7 +162,7 @@ finest grid.  The resultant problem is thus 256^3 on the finest grid.
 
 On Mira (the IBM Blue Gene/Q at Argonne), one may use qsub to directly queue
 the benchmark.  For example...
-qsub -t 00:10:00 -n  64 --proccount   64 --mode c1  -A [ALLOCATION] --env BG_SHAREDMEMSIZE=32MB:PAMID_VERBOSE=1:BG_COREDUMPDISABLED=1:BG_SMP_FAST_WAKEUP=YES:BG_THREADLAYOUT=2:OMP_PROC_BIND=TRUE:OMP_NUM_THREADS=64:OMP_WAIT_POLICY=active:OMP_NESTED=true ./run.bgq 6 8
+qsub -t 00:10:00 -n  64 --proccount   64 --mode c1  -A [ALLOCATION] --env BG_SHAREDMEMSIZE=32MB:PAMID_VERBOSE=1:BG_COREDUMPDISABLED=1:BG_SMP_FAST_WAKEUP=YES:BG_THREADLAYOUT=1:OMP_PROC_BIND=TRUE:OMP_NUM_THREADS=64:OMP_WAIT_POLICY=active:OMP_NESTED=true ./run.bgq 6 8
 Will run the benchmark on 64 processes spread over 64 nodes with 1 process per 
 node (c1) and 64 threads per process.  Each process is allocated 8 64^3 boxes. 
 At one point, the additional environment variables listed were found to 

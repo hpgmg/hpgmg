@@ -31,8 +31,19 @@
 #define BLOCKCOPY_TILE_K 8
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef BOX_ALIGN_JSTRIDE
+#define BOX_ALIGN_JSTRIDE   2  // j-stride(unit stride dimension including ghosts and padding) is a multiple of BOX_ALIGN_JSTRIDE... useful for SIMD in j+/-1
+#endif
+#ifndef BOX_ALIGN_KSTRIDE
+#define BOX_ALIGN_KSTRIDE   8  // k-stride is a multiple of BOX_ALIGN_KSTRIDE ... useful for SIMD in k+/-1
+#endif
+#ifndef BOX_ALIGN_VOLUME
+#define BOX_ALIGN_VOLUME    8  // box volumes are a multiple of BOX_ALIGN_VOLUME ... useful for SIMD on different vectors
+#endif
+//------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
-  struct {int i, j, k;}dim;			// dimensions of the block to copy
+  int subtype;			// e.g. used to calculate normal to domain for BC's
+  struct {int i, j, k;}dim;	// dimensions of the block to copy
   struct {int box, i, j, k, jStride, kStride;double * __restrict__ ptr;}read,write;
   // coordinates in the read grid to extract data, 
   // coordinates in the write grid to insert data
@@ -69,8 +80,7 @@ typedef struct {
   int                                ghosts;	// ghost zone depth
   int                jStride,kStride,volume;	// useful for offsets
   int                            numVectors;	//
-  double   ** __restrict__          vectors;	// vectors[c] = pointer to 3D array for vector c
-  double    * __restrict__     vectors_base;    // pointer used for malloc/free.  vectors[c] are shifted from this for alignment
+  double   ** __restrict__          vectors;	// vectors[c] = pointer to 3D array for vector c for one box
 } box_type;
 
 
@@ -82,17 +92,31 @@ typedef struct {
   int my_rank;					// my MPI rank
   int box_dim;					// dimension of each cubical box (not counting ghost zones)
   int box_ghosts;				// ghost zone depth for each box
-  int box_vectors;				// number of vectors stored in each box
+  int box_jStride,box_kStride,box_volume;	// useful for offsets
+  int numVectors;				// number of vectors stored in each box
   int tag;					// tag each level uniquely... FIX... replace with sub commuicator
   struct {int i, j, k;}boxes_in;		// total number of boxes in i,j,k across this level
   struct {int i, j, k;}dim;			// global dimensions at this level (NOTE: dim.i == boxes_in.i * box_dim)
-  int domain_boundary_condition;		//
+
   int * rank_of_box;				// 3D array containing rank of each box.  i-major ordering
   int    num_my_boxes;				//           number of boxes owned by this rank
   box_type * my_boxes;				// pointer to array of boxes owned by this rank
+
+  // create flattened FP data... useful for CUDA/OpenMP4/OpenACC when you want to copy an entire vector to/from an accelerator
+  double   ** __restrict__          vectors;	// vectors[v][box][k][j][i] = pointer to 5D array for vector v encompasing all boxes on this process... 
+  double    * __restrict__     vectors_base;    // pointer used for malloc/free.  vectors[v] are shifted from this for alignment
+
   int       allocated_blocks;			//       number of blocks allocated by this rank (note, this represents a flattening of the box/cell hierarchy to facilitate threading)
   int          num_my_blocks;			//       number of blocks     owned by this rank (note, this represents a flattening of the box/cell hierarchy to facilitate threading)
   blockCopy_type * my_blocks;			// pointer to array of blocks owned by this rank (note, this represents a flattening of the box/cell hierarchy to facilitate threading)
+
+  struct {
+    int                type;			// BC_PERIODIC or BC_DIRICHLET
+    int    allocated_blocks[2];			// number of blocks allocated (not necessarily used) for boundary conditions on this level for [0=all,1=justFaces]
+    int          num_blocks[2];			// number of blocks used for boundary conditions on this level for [0=all,1=justFaces]
+    blockCopy_type * blocks[2];			// pointer to array of blocks used for boundary conditions on this level for [0=all,1=justFaces]
+  } boundary_condition;				// boundary conditions on this level
+
   communicator_type exchange_ghosts[2];		// mini program that performs a neighbor ghost zone exchange for [0=all,1=justFaces]
   communicator_type restriction[4];		// mini program that performs restriction and agglomeration for [0=cell centered, 1=i-face, 2=j-face, 3-k-face]
   communicator_type interpolation;		// mini program that performs interpolation and dissemination...
@@ -151,11 +175,9 @@ typedef struct {
 
 
 //------------------------------------------------------------------------------------------------------------------------------
- int create_box(box_type *box, int numVectors, int dim, int ghosts);
-void add_vectors_to_box(box_type *box, int numAdditionalVectors);
-void destroy_box(box_type *box);
-void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int box_vectors, int domain_boundary_condition, int my_rank, int num_ranks);
+void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int numVectors, int domain_boundary_condition, int my_rank, int num_ranks);
 void destroy_level(level_type *level);
+void create_vectors(level_type *level, int numVectors);
 void reset_level_timers(level_type *level);
 void   max_level_timers(level_type *level);
 int qsortInt(const void *a, const void *b);
@@ -163,7 +185,8 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
                           int dim_i, int dim_j, int dim_k,
                           int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride, int  read_scale,
                           int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride, int write_scale,
-                          int my_blockcopy_tile_i, int my_blockcopy_tile_j, int my_blockcopy_tile_k
+                          int my_blockcopy_tile_i, int my_blockcopy_tile_j, int my_blockcopy_tile_k,
+                          int subtype
                          );
 //------------------------------------------------------------------------------------------------------------------------------
 #endif

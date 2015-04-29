@@ -37,31 +37,24 @@ void evaluateBeta(double x, double y, double z, double *B, double *Bx, double *B
 
 //------------------------------------------------------------------------------------------------------------------------------
 void evaluateU(double x, double y, double z, double *U, double *Ux, double *Uy, double *Uz, double *Uxx, double *Uyy, double *Uzz, int isPeriodic){
-  // should be continuous in u, u', and u''
-  // v(w) = w^4 - 2w^3 + w^2 + c
-  // u(x,y,z) = v(x)v(y)v(z)
-  // If Periodic, then the integral of the RHS should sum to zero.
-  //   Setting shift=1/30 should ensure that the integrals of X, Y, or Z should sum to zero... 
-  //   That should(?) make the integrals of u,ux,uy,uz,uxx,uyy,uzz sum to zero and thus make the integral of f sum to zero
-  // If dirichlet, then w(0)=w(1) = 0.0
-  //   Setting shift to 0 should ensure that U(x,y,z) = 0 on boundary
-  double shift = 0.0;if(isPeriodic)shift= -1.0/30.0;
-  double X   =  1.0*pow(x,4) -  2.0*pow(x,3) + 1.0*pow(x,2) + shift;
-  double Y   =  1.0*pow(y,4) -  2.0*pow(y,3) + 1.0*pow(y,2) + shift;
-  double Z   =  1.0*pow(z,4) -  2.0*pow(z,3) + 1.0*pow(z,2) + shift;
-  double Xx  =  4.0*pow(x,3) -  6.0*pow(x,2) + 2.0*x;
-  double Yy  =  4.0*pow(y,3) -  6.0*pow(y,2) + 2.0*y;
-  double Zz  =  4.0*pow(z,3) -  6.0*pow(z,2) + 2.0*z;
-  double Xxx = 12.0*pow(x,2) - 12.0*x        + 2.0;
-  double Yyy = 12.0*pow(y,2) - 12.0*y        + 2.0;
-  double Zzz = 12.0*pow(z,2) - 12.0*z        + 2.0;
-        *U   = X*Y*Z;
-        *Ux  = Xx*Y*Z;
-        *Uy  = X*Yy*Z;
-        *Uz  = X*Y*Zz;
-        *Uxx = Xxx*Y*Z;
-        *Uyy = X*Yyy*Z;
-        *Uzz = X*Y*Zzz;
+  double c1 = 2.0*M_PI;
+  double c2 = 6.0*M_PI;
+  double p = 13; // must be odd(?) and allows up to p-2 order MG
+        *U    =                                                       pow(sin(c1*x),p  )*pow(sin(c1*y),p)*pow(sin(c1*z),p);
+        *Ux   =                                        c1*p*cos(c1*x)*pow(sin(c1*x),p-1)*pow(sin(c1*y),p)*pow(sin(c1*z),p);
+        *Uy   =                                        c1*p*cos(c1*y)*pow(sin(c1*y),p-1)*pow(sin(c1*x),p)*pow(sin(c1*z),p);
+        *Uz   =                                        c1*p*cos(c1*z)*pow(sin(c1*z),p-1)*pow(sin(c1*x),p)*pow(sin(c1*y),p);
+        *Uxx  = c1*c1*p*( (p-1)*pow(sin(c1*x),p-2)*pow(cos(c1*x),2) - pow(sin(c1*x),p) )*pow(sin(c1*y),p)*pow(sin(c1*z),p);
+        *Uyy  = c1*c1*p*( (p-1)*pow(sin(c1*y),p-2)*pow(cos(c1*y),2) - pow(sin(c1*y),p) )*pow(sin(c1*x),p)*pow(sin(c1*z),p);
+        *Uzz  = c1*c1*p*( (p-1)*pow(sin(c1*z),p-2)*pow(cos(c1*z),2) - pow(sin(c1*z),p) )*pow(sin(c1*x),p)*pow(sin(c1*y),p);
+
+        *U   +=                                                       pow(sin(c2*x),p  )*pow(sin(c2*y),p)*pow(sin(c2*z),p);
+        *Ux  +=                                        c2*p*cos(c2*x)*pow(sin(c2*x),p-1)*pow(sin(c2*y),p)*pow(sin(c2*z),p);
+        *Uy  +=                                        c2*p*cos(c2*y)*pow(sin(c2*y),p-1)*pow(sin(c2*x),p)*pow(sin(c2*z),p);
+        *Uz  +=                                        c2*p*cos(c2*z)*pow(sin(c2*z),p-1)*pow(sin(c2*x),p)*pow(sin(c2*y),p);
+        *Uxx += c2*c2*p*( (p-1)*pow(sin(c2*x),p-2)*pow(cos(c2*x),2) - pow(sin(c2*x),p) )*pow(sin(c2*y),p)*pow(sin(c2*z),p);
+        *Uyy += c2*c2*p*( (p-1)*pow(sin(c2*y),p-2)*pow(cos(c2*y),2) - pow(sin(c2*y),p) )*pow(sin(c2*x),p)*pow(sin(c2*z),p);
+        *Uzz += c2*c2*p*( (p-1)*pow(sin(c2*z),p-2)*pow(cos(c2*z),2) - pow(sin(c2*z),p) )*pow(sin(c2*x),p)*pow(sin(c2*y),p);
 }
 
 

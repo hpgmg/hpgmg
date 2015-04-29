@@ -34,10 +34,12 @@ typedef struct {
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void  MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int minCoarseGridDim);
-void  MGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double desired_mg_norm);
-void FMGSolve(mg_type *all_grids, int u_id, int F_id, double a, double b, double desired_mg_norm);
-void MGPrintTiming(mg_type *all_grids);
-void MGResetTimers(mg_type *all_grids);
+void          MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int minCoarseGridDim);
+void          MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol);
+void         FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol);
+void            MGPCG(mg_type *all_grids, int onLevel, int x_id, int F_id, double a, double b, double dtol, double rtol);
+void    MGPrintTiming(mg_type *all_grids);
+void    MGResetTimers(mg_type *all_grids);
+void richardson_error(mg_type *all_grids, int levelh, int u_id);
 //------------------------------------------------------------------------------------------------------------------------------
 #endif

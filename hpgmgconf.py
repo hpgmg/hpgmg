@@ -95,7 +95,14 @@ def makefile(args):
         m.append('CONFIG_FE = y')
     m.append('CONFIG_FV_CPPFLAGS = ' + hpgmg_fv_cflags(args))
     if args.petsc_dir:
-        m.append('include $(PETSC_DIR)/conf/variables')
+        found = False
+        for variables_path in [os.path.join('lib', 'petsc-conf', 'variables'),
+                               os.path.join('conf', 'variables')]:
+            if os.path.exists(os.path.join(args.petsc_dir,variables_path)):
+                m.append('include $(PETSC_DIR)/' + variables_path)
+                found = True
+        if not found:
+            raise RuntimeError('Could not find PETSc variables file in PETSC_DIR=%s' % (args.petsc_dir,))
     m.append('include $(SRCDIR)/base.mk\n')
     return '\n'.join(m)
 
@@ -109,5 +116,5 @@ def hpgmg_fv_cflags(args):
     defines.append('USE_%sCYCLES' % args.fv_cycle.upper())
     defines.append('USE_%s' % args.fv_smoother.upper())
     #defines.append('STENCIL_FUSE_DINV') # generally only good on compute-intensive architectures with good compilers
-    defines.append('STENCIL_FUSE_BC')
+    #defines.append('STENCIL_FUSE_BC')
     return ' '.join('-D%s=1'%d for d in defines)

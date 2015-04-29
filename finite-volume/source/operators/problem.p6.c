@@ -37,31 +37,41 @@ void evaluateBeta(double x, double y, double z, double *B, double *Bx, double *B
 
 //------------------------------------------------------------------------------------------------------------------------------
 void evaluateU(double x, double y, double z, double *U, double *Ux, double *Uy, double *Uz, double *Uxx, double *Uyy, double *Uzz, int isPeriodic){
-  // should be continuous in u, u', and u''
-  // v(w) = w^4 - 2w^3 + w^2 + c
+  // should be continuous in u, u', u'', u''', and u'''' to guarantee high order and periodic boundaries
+  // v(w) = ???
   // u(x,y,z) = v(x)v(y)v(z)
   // If Periodic, then the integral of the RHS should sum to zero.
-  //   Setting shift=1/30 should ensure that the integrals of X, Y, or Z should sum to zero... 
+  //   Setting shift=1.0 should ensure that the integrals of X, Y, or Z should sum to zero... 
   //   That should(?) make the integrals of u,ux,uy,uz,uxx,uyy,uzz sum to zero and thus make the integral of f sum to zero
   // If dirichlet, then w(0)=w(1) = 0.0
   //   Setting shift to 0 should ensure that U(x,y,z) = 0 on boundary
-  double shift = 0.0;if(isPeriodic)shift= -1.0/30.0;
-  double X   =  1.0*pow(x,4) -  2.0*pow(x,3) + 1.0*pow(x,2) + shift;
-  double Y   =  1.0*pow(y,4) -  2.0*pow(y,3) + 1.0*pow(y,2) + shift;
-  double Z   =  1.0*pow(z,4) -  2.0*pow(z,3) + 1.0*pow(z,2) + shift;
-  double Xx  =  4.0*pow(x,3) -  6.0*pow(x,2) + 2.0*x;
-  double Yy  =  4.0*pow(y,3) -  6.0*pow(y,2) + 2.0*y;
-  double Zz  =  4.0*pow(z,3) -  6.0*pow(z,2) + 2.0*z;
-  double Xxx = 12.0*pow(x,2) - 12.0*x        + 2.0;
-  double Yyy = 12.0*pow(y,2) - 12.0*y        + 2.0;
-  double Zzz = 12.0*pow(z,2) - 12.0*z        + 2.0;
-        *U   = X*Y*Z;
-        *Ux  = Xx*Y*Z;
-        *Uy  = X*Yy*Z;
-        *Uz  = X*Y*Zz;
-        *Uxx = Xxx*Y*Z;
-        *Uyy = X*Yyy*Z;
-        *Uzz = X*Y*Zzz;
+  //    u =    ax^6 +    bx^5 +   cx^4 +  dx^3 +  ex^2 + fx + g
+  //   ux =   6ax^5 +   5bx^4 +  4cx^3 + 3dx^2 + 2ex   + f
+  //  uxx =  30ax^4 +  20bx^3 + 12cx^2 + 6dx   + 2e
+  // a =   42.0
+  // b = -126.0
+  // c =  105.0
+  // d =    0.0
+  // e =  -21.0
+  // f =    0.0
+  // g =    1.0
+  double shift = 0.0;if(isPeriodic)shift= 1.0/21.0;
+  double X     =  2.0*pow(x,6) -   6.0*pow(x,5) +  5.0*pow(x,4) - 1.0*pow(x,2) + shift;
+  double Y     =  2.0*pow(y,6) -   6.0*pow(y,5) +  5.0*pow(y,4) - 1.0*pow(y,2) + shift;
+  double Z     =  2.0*pow(z,6) -   6.0*pow(z,5) +  5.0*pow(z,4) - 1.0*pow(z,2) + shift;
+  double Xx    = 12.0*pow(x,5) -  30.0*pow(x,4) + 20.0*pow(x,3) - 2.0*x;
+  double Yy    = 12.0*pow(y,5) -  30.0*pow(y,4) + 20.0*pow(y,3) - 2.0*y;
+  double Zz    = 12.0*pow(z,5) -  30.0*pow(z,4) + 20.0*pow(z,3) - 2.0*z;
+  double Xxx   = 60.0*pow(x,4) - 120.0*pow(x,3) + 60.0*pow(x,2) - 2.0;
+  double Yyy   = 60.0*pow(y,4) - 120.0*pow(y,3) + 60.0*pow(y,2) - 2.0;
+  double Zzz   = 60.0*pow(z,4) - 120.0*pow(z,3) + 60.0*pow(z,2) - 2.0;
+        *U     = X   * Y   * Z;
+        *Ux    = Xx  * Y   * Z;
+        *Uy    = X   * Yy  * Z;
+        *Uz    = X   * Y   * Zz;
+        *Uxx   = Xxx * Y   * Z;
+        *Uyy   = X   * Yyy * Z;
+        *Uzz   = X   * Y   * Zzz;
 }
 
 
@@ -71,12 +81,12 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
 
   int box;
   for(box=0;box<level->num_my_boxes;box++){
-    memset(level->my_boxes[box].vectors[VECTOR_ALPHA ],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].vectors[VECTOR_BETA_I],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].vectors[VECTOR_BETA_J],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].vectors[VECTOR_BETA_K],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].vectors[VECTOR_UTRUE ],0,level->my_boxes[box].volume*sizeof(double));
-    memset(level->my_boxes[box].vectors[VECTOR_F     ],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_ALPHA ],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_BETA_I],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_BETA_J],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_BETA_K],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_UTRUE ],0,level->my_boxes[box].volume*sizeof(double));
+    //memset(level->my_boxes[box].vectors[VECTOR_F     ],0,level->my_boxes[box].volume*sizeof(double));
     int i,j,k;
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
@@ -85,7 +95,7 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
     const int   dim_j = level->my_boxes[box].dim;
     const int   dim_k = level->my_boxes[box].dim;
     #ifdef _OPENMP
-    #pragma omp parallel for private(k,j,i) collapse(2)
+    #pragma omp parallel for private(k,j,i) collapse(3)
     #endif
     for(k=0;k<=dim_k;k++){ // include high face
     for(j=0;j<=dim_j;j++){ // include high face
@@ -116,7 +126,7 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       evaluateBeta(x           ,y           ,z           ,&B ,&Bx,&By,&Bz); // cell-centered value of Beta
       #endif
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-      evaluateU(x,y,z,&U,&Ux,&Uy,&Uz,&Uxx,&Uyy,&Uzz, (level->domain_boundary_condition == BC_PERIODIC) );
+      evaluateU(x,y,z,&U,&Ux,&Uy,&Uz,&Uxx,&Uyy,&Uzz, (level->boundary_condition.type == BC_PERIODIC) );
       double F = a*A*U - b*( (Bx*Ux + By*Uy + Bz*Uz)  +  B*(Uxx + Uyy + Uzz) );
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
       level->my_boxes[box].vectors[VECTOR_BETA_I][ijk] = Bi;
@@ -129,33 +139,8 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
     }}}
   }
 
-
+  // quick test for Poisson...
   if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
 
-
-  // FIX... Periodic Boundary Conditions...
-  if(level->domain_boundary_condition == BC_PERIODIC){
-    double average_value_of_f = mean(level,VECTOR_F);
-    if(average_value_of_f!=0.0)if(level->my_rank==0){fprintf(stderr,"\n  WARNING... Periodic boundary conditions, but f does not sum to zero... mean(f)=%e\n",average_value_of_f);}
-   
-    if((a==0.0) || (level->alpha_is_zero==1) ){ // poisson... by convention, we assume u sums to zero...
-      double average_value_of_u = mean(level,VECTOR_UTRUE);
-      if(level->my_rank==0){fprintf(stdout,"\n  average value of u = %20.12e... shifting u to ensure it sums to zero...\n",average_value_of_u);}
-      shift_vector(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_u);
-      shift_vector(level,VECTOR_F,VECTOR_F,-average_value_of_f);
-    }
-    //}else{ // helmholtz...
-    // FIX... for helmoltz, does the fine grid RHS have to sum to zero ???
-    //double average_value_of_f = mean(level,VECTOR_F);
-    //if(level->my_rank==0){fprintf(stdout,"\n");}
-    //if(level->my_rank==0){fprintf(stdout,"  average value of f = %20.12e... shifting to ensure f sums to zero...\n",average_value_of_f);}
-    //if(a!=0){
-    //  shift_vector(level,VECTOR_F      ,VECTOR_F      ,-average_value_of_f);
-    //  shift_vector(level,VECTOR_UTRUE,VECTOR_UTRUE,-average_value_of_f/a);
-    //}
-    //average_value_of_f = mean(level,VECTOR_F);
-    //if(level->my_rank==0){fprintf(stdout,"  average value of f = %20.12e after shifting\n",average_value_of_f);}
-    //}
-  }
 }
 //------------------------------------------------------------------------------------------------------------------------------

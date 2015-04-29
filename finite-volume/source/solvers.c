@@ -41,7 +41,7 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
                      residual(level,VECTOR_TEMP,u_id,f_id,a,b);
                   mul_vectors(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
      double norm_of_r0 = norm(level,VECTOR_TEMP);
-    int s=0,maxSmoothsBottom=10,converged=0;
+    int s=0,maxSmoothsBottom=200,converged=0;
     while( (s<maxSmoothsBottom) && !converged){
       s++;
       level->Krylov_iterations++;
@@ -68,9 +68,9 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
 int IterativeSolver_NumVectors(){
   // additionally number of grids required by an iterative solver...
   #ifdef USE_BICGSTAB
-  return(6);                  // BiCGStab requires additional grids r0,r,p,s,Ap,As
+  return(8);                  // BiCGStab requires additional grids r0,r,p,s,Ap,As
   #elif  USE_CG
-  return(4);                  // CG requires extra grids r0,r,p,Ap
+  return(5);                  // CG requires extra grids r0,r,p,Ap,z
   #elif  USE_CABICGSTAB
   return(4+4*CA_KRYLOV_S);    // CABiCGStab requires additional grids rt,p,r,P[2s+1],R[2s].
   #elif  USE_CACG

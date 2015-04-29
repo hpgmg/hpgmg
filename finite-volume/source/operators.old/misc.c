@@ -47,7 +47,7 @@ void initialize_valid_region(level_type * level){
     for(i=-ghosts;i<dim+ghosts;i++){
       int ijk = i + j*jStride + k*kStride;
       valid[ijk] = 1.0; // i.e. all cells including ghosts are valid for periodic BC's
-      if(level->domain_boundary_condition == BC_DIRICHLET){ // cells outside the domain boundaries are not valid
+      if(level->boundary_condition.type == BC_DIRICHLET){ // cells outside the domain boundaries are not valid
         if(i + level->my_boxes[box].low.i <             0)valid[ijk] = 0.0;
         if(j + level->my_boxes[box].low.j <             0)valid[ijk] = 0.0;
         if(k + level->my_boxes[box].low.k <             0)valid[ijk] = 0.0;
@@ -62,7 +62,7 @@ void initialize_valid_region(level_type * level){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void initialize_grid_to_scalar(level_type * level, int component_id, double scalar){
+void init_vector(level_type * level, int component_id, double scalar){
   // initializes the grid to a scalar while zero'ing the ghost zones...
   uint64_t _timeStart = CycleTime();
   int box;

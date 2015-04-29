@@ -9,7 +9,7 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
-#define KRYLOV_DIAGONAL_PRECONDITION
+//#define KRYLOV_DIAGONAL_PRECONDITION
 //------------------------------------------------------------------------------------------------------------------------------
 #ifndef    CA_KRYLOV_TELESCOPING
 #define    CA_KRYLOV_TELESCOPING
