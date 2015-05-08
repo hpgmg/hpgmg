@@ -881,8 +881,12 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   int TotalBoxes = boxes_in_i*boxes_in_i*boxes_in_i;
 
   if(my_rank==0){
-    if(domain_boundary_condition==BC_DIRICHLET)fprintf(stdout,"\nattempting to create a %d^3 level (with Dirichlet BC) using a %d^3 grid of %d^3 boxes and %d tasks...\n",box_dim*boxes_in_i,boxes_in_i,box_dim,num_ranks);
-    if(domain_boundary_condition==BC_PERIODIC )fprintf(stdout,"\nattempting to create a %d^3 level (with Periodic BC) using a %d^3 grid of %d^3 boxes and %d tasks...\n", box_dim*boxes_in_i,boxes_in_i,box_dim,num_ranks);
+  //if(domain_boundary_condition==BC_DIRICHLET)fprintf(stdout,"\nattempting to create a %d^3 level (with Dirichlet BC) using a %d^3 grid of %d^3 boxes and %d tasks...\n",box_dim*boxes_in_i,boxes_in_i,box_dim,num_ranks);
+  //if(domain_boundary_condition==BC_PERIODIC )fprintf(stdout,"\nattempting to create a %d^3 level (with Periodic BC) using a %d^3 grid of %d^3 boxes and %d tasks...\n", box_dim*boxes_in_i,boxes_in_i,box_dim,num_ranks);
+                                               fprintf(stdout,"\nattempting to create a %d^3 level from %d x %d^3 boxes distributed among %d tasks...\n", box_dim*boxes_in_i,TotalBoxes,box_dim,num_ranks);
+    if(domain_boundary_condition==BC_DIRICHLET)fprintf(stdout,"  boundary condition = BC_DIRICHLET\n");
+    if(domain_boundary_condition==BC_PERIODIC )fprintf(stdout,"  boundary condition = BC_PERIODIC\n");
+    
   }
 
   int omp_threads = 1;

@@ -221,8 +221,10 @@ int main(int argc, char **argv){
   // create the fine level...
   #ifdef USE_PERIODIC_BC
   int bc = BC_PERIODIC;
+  int minCoarseDim = 2; // avoid problems with black box calculation of D^{-1} for poisson with periodic BC's on a 1^3 grid
   #else
   int bc = BC_DIRICHLET;
+  int minCoarseDim = 1; // assumes you can drop order on the boundaries
   #endif
   level_type level_h;
   mg_type MG_h;
@@ -238,8 +240,6 @@ int main(int argc, char **argv){
   #endif
   double h=1.0/( (double)boxes_in_i*(double)box_dim );
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  int minCoarseDim = 1; // is this safe??  quartic BC's need 4^3 boxes
-  //int minCoarseDim = 4;
   initialize_problem(&level_h,h,a,b);        // calculate VECTOR_ALPHA, VECTOR_BETA, and VECTOR_F
   rebuild_operator(&level_h,NULL,a,b);       // i.e. calculate Dinv and lambda_max
   MGBuild(&MG_h,&level_h,a,b,minCoarseDim);  // build the Multigrid Hierarchy 

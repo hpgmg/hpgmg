@@ -75,14 +75,14 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       for(k=klo;k<khi;k++){
       for(j=jlo;j<jhi;j++){
         #ifdef GSRB_OOP
-        #warning GSRB using out-of-place and stride-2 accesses to minimie the number of flops
+        #warning GSRB using out-of-place and stride-2 accesses to minimize the number of flops
         // out-of-place must copy old value...
         for(i=ilo;i<ihi;i++){
           int ijk = i + j*jStride + k*kStride; 
           x_np1[ijk] = x_n[ijk];
         }
         #else
-        #warning GSRB using stride-2 accesses to minimie the number of flops
+        #warning GSRB using stride-2 accesses to minimize the number of flops
         #endif
         for(i=ilo+((ilo^j^k^s^color000)&1);i<ihi;i+=2){ // stride-2 GSRB
           int ijk = i + j*jStride + k*kStride; 

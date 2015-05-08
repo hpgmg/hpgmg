@@ -948,10 +948,10 @@ void richardson_error(mg_type *all_grids, int levelh, int u_id){
   if(all_grids->my_rank==0){fprintf(stdout,"performing Richardson error analysis...\n");fflush(stdout);}
   restriction(all_grids->levels[levelh+1],VECTOR_TEMP,all_grids->levels[levelh  ],u_id,RESTRICT_CELL); // temp^2h = R u^h
   restriction(all_grids->levels[levelh+2],VECTOR_TEMP,all_grids->levels[levelh+1],u_id,RESTRICT_CELL); // temp^4h = R u^2h
-  add_vectors(all_grids->levels[levelh+1],VECTOR_TEMP,1.0,u_id,-1.0,VECTOR_TEMP);                      // temp^2h = u^2h - temp^2h = u^2h = R u^h
-  add_vectors(all_grids->levels[levelh+2],VECTOR_TEMP,1.0,u_id,-1.0,VECTOR_TEMP);                      // temp^2h = u^4h - temp^4h = u^4h = R u^2h
-  double norm_of_u2h_minus_uh  = norm(all_grids->levels[levelh+1],VECTOR_TEMP); // || u^2h = R u^h  ||max
-  double norm_of_u4h_minus_u2h = norm(all_grids->levels[levelh+2],VECTOR_TEMP); // || u^4h = R u^2h ||max
+  add_vectors(all_grids->levels[levelh+1],VECTOR_TEMP,1.0,u_id,-1.0,VECTOR_TEMP);                      // temp^2h = u^2h - temp^2h = u^2h - R u^h
+  add_vectors(all_grids->levels[levelh+2],VECTOR_TEMP,1.0,u_id,-1.0,VECTOR_TEMP);                      // temp^2h = u^4h - temp^4h = u^4h - R u^2h
+  double norm_of_u2h_minus_uh  = norm(all_grids->levels[levelh+1],VECTOR_TEMP); // || u^2h - R u^h  ||max
+  double norm_of_u4h_minus_u2h = norm(all_grids->levels[levelh+2],VECTOR_TEMP); // || u^4h - R u^2h ||max
   // estimate the error^h using ||u^2h - R u^h||
   if(all_grids->my_rank==0){fprintf(stdout,"  h = %22.15e  ||error|| = %22.15e\n",all_grids->levels[levelh]->h,norm_of_u2h_minus_uh);fflush(stdout);}
   // log( ||u^4h - R u^2h|| / ||u^2h - R u^h|| ) / log(2) is an estimate of the order of the method (e.g. 4th order)
@@ -1071,7 +1071,11 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
   all_grids->MGSolves_performed++;
   if(!all_grids->levels[onLevel]->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  #ifdef UNLIMIT_FMG_VCYCLES
+  int maxVCycles=20;
+  #else
   int maxVCycles=0;
+  #endif
   int v;
   int level;
   int e_id = u_id;

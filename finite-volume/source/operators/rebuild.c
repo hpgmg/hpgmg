@@ -40,7 +40,21 @@ double power_method(level_type * level, double a, double b, int max_iterations){
 //------------------------------------------------------------------------------------------------------------------------------
 // black-box routine to rebuild both D^{-1} and the l1 norm as well as estimate the dominant eigenvalue
 void rebuild_operator_blackbox(level_type * level, double a, double b, int colors_in_each_dim){
+
+  // trying to color a 1^3 grid with 8 colors won't work... reduce the number of colors...
+  // FIX... is this necessary?
+  if(level->dim.i<colors_in_each_dim)colors_in_each_dim=level->dim.i;
+  if(level->dim.j<colors_in_each_dim)colors_in_each_dim=level->dim.j;
+  if(level->dim.k<colors_in_each_dim)colors_in_each_dim=level->dim.k;
+
+  if(level->my_rank==0){fprintf(stdout,"  calculating D^{-1} exactly for level h=%e using %d colors...  ",level->h,colors_in_each_dim*colors_in_each_dim*colors_in_each_dim);fflush(stdout);}
+  #ifdef USE_MPI
+  double dinv_start = MPI_Wtime();
+  #endif
+
   #if 0 // naive version using existing routines.  Doesn't calculate l1inv or estimate the dominant eigenvalue
+  int         x_id = VECTOR_U;
+  int        Ax_id = VECTOR_TEMP;
   int icolor,jcolor,kcolor;
   zero_vector(level,VECTOR_DINV);
   zero_vector(level,VECTOR_L1INV);
@@ -55,17 +69,12 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
   invert_vector(level,VECTOR_DINV,1.0,VECTOR_DINV);
   #else
 
-  int x_id = VECTOR_TEMP;
+  int         x_id = VECTOR_TEMP;
   int       Aii_id = VECTOR_DINV;
   int sumAbsAij_id = VECTOR_L1INV;
   int icolor,jcolor,kcolor;
   double dominant_eigenvalue = -1e9;
   int block;
-
-  if(level->my_rank==0){fprintf(stdout,"  calculating D^{-1} exactly for level h=%e using %d colors...  ",level->h,colors_in_each_dim*colors_in_each_dim*colors_in_each_dim);fflush(stdout);}
-  #ifdef USE_MPI
-  double dinv_start = MPI_Wtime();
-  #endif
 
   // initialize Aii[] = subAbsAij[] = 0's
   zero_vector(level,      Aii_id);
@@ -131,6 +140,7 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
     const int  ghosts = level->my_boxes[box].ghosts;
+    const double h2inv = 1.0/(level->h*level->h);
     double * __restrict__       Aii = level->my_boxes[box].vectors[      Aii_id] + ghosts*(1+jStride+kStride);
     double * __restrict__ sumAbsAij = level->my_boxes[box].vectors[sumAbsAij_id] + ghosts*(1+jStride+kStride);
 
@@ -140,15 +150,25 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
     for(j=jlo;j<jhi;j++){
     for(i=ilo;i<ihi;i++){
       int ijk = i + j*jStride + k*kStride;
+
+      // catch failure...
+      if(Aii[ijk]==0.0){
+        printf("Aii[%d,%d,%d]==0.0 !!!\n",i+level->my_boxes[box].low.i,j+level->my_boxes[box].low.j,k+level->my_boxes[box].low.k);
+        Aii[ijk] = a+b*h2inv; // FIX !!!
+      }
+
       // upper limit to Gershgorin disc == bound on dominant eigenvalue
       double Di = (Aii[ijk] + sumAbsAij[ijk])/Aii[ijk];if(Di>block_eigenvalue)block_eigenvalue=Di;
+
       // inverse of the L1 row norm... L1inv = ( D+D^{L1} )^{-1}
       // sumAbsAij[ijk] = 1.0/(Aii[ijk]+sumAbsAij[ijk]);
       // alternately, as suggested by eq 6.5 in Baker et al, "Multigrid smoothers for ultra-parallel computing: additional theory and discussion"...
       if(Aii[ijk]>=1.5*sumAbsAij[ijk])sumAbsAij[ijk] = 1.0/(Aii[ijk]                   ); // VECTOR_L1INV = ...
                                  else sumAbsAij[ijk] = 1.0/(Aii[ijk]+0.5*sumAbsAij[ijk]); // VECTOR_L1INV = ...
+
       // inverse of the diagonal...
       Aii[ijk] = 1.0/Aii[ijk]; // VECTOR_DINV = ...
+
     }}}
     if(block_eigenvalue>dominant_eigenvalue){dominant_eigenvalue = block_eigenvalue;}
   }

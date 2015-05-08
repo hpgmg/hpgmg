@@ -26,6 +26,17 @@
 void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b, double desired_reduction_in_norm){ 
   if(!level->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  #if 0
+  if( (level->dim.i==1)&&(level->dim.j==1)&&(level->dim.k==1) ){
+    // I have reduced the system to 1 equation and 1 unknown and know D^{-1} exactly
+    // therefore A^{-1} == D^{-1}
+    // u = A^{-1}f == D^{-1}f
+    mul_vectors(level,u_id,1.0,VECTOR_DINV,f_id); // u = A^{-1}f = D^{-1}f 
+    // FIX, cc poisson with periodic BC's has null space issue... need to subtract the mean...
+    return;
+  }
+  #endif
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);  // haven't determined if alpha[] == 0
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef USE_BICGSTAB
@@ -36,7 +47,9 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
     CABiCGStab(level,u_id,f_id,a,b,desired_reduction_in_norm);
   #elif  USE_CACG
     CACG(level,u_id,f_id,a,b,desired_reduction_in_norm);
-  #else // just point relaxation via multiple smooth()'s
+  #else 
+    // just point relaxation via multiple smooth()'s
+    // FIX, cc poisson with periodic BC's has null space issue... need to subtract the mean...
     #if 1 
                      residual(level,VECTOR_TEMP,u_id,f_id,a,b);
                   mul_vectors(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...

@@ -513,9 +513,9 @@ void color_vector(level_type * level, int id, int colors_in_each_dim, int icolor
     double * __restrict__ grid = level->my_boxes[box].vectors[id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     int i,j,k;
 
-    for(k=klo;k<khi;k++){double sk=0.0;if( ((k+boxlowk)%colors_in_each_dim) == kcolor )sk=1.0;
-    for(j=jlo;j<jhi;j++){double sj=0.0;if( ((j+boxlowj)%colors_in_each_dim) == jcolor )sj=1.0;
-    for(i=ilo;i<ihi;i++){double si=0.0;if( ((i+boxlowi)%colors_in_each_dim) == icolor )si=1.0;
+    for(k=klo;k<khi;k++){double sk=0.0;if( ((k+boxlowk+kcolor)%colors_in_each_dim) == 0 )sk=1.0; // if colors_in_each_dim==1 (don't color), all cells are set to 1.0
+    for(j=jlo;j<jhi;j++){double sj=0.0;if( ((j+boxlowj+jcolor)%colors_in_each_dim) == 0 )sj=1.0;
+    for(i=ilo;i<ihi;i++){double si=0.0;if( ((i+boxlowi+icolor)%colors_in_each_dim) == 0 )si=1.0;
       int ijk = i + j*jStride + k*kStride;
       grid[ijk] = si*sj*sk;
     }}}
