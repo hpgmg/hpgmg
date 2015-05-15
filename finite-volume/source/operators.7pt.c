@@ -282,7 +282,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
                          );
 
       // center of Gershgorin disc is the diagonal element...
-      double    Aii = a*alpha[ijk] - b*h2inv*(
+      double    Aii = a - b*h2inv*(
                          valid[ijk-1      ] +
                          valid[ijk-jStride] +
                          valid[ijk-kStride] +
