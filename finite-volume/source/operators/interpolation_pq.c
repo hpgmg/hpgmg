@@ -90,8 +90,8 @@ static inline void interpolation_pq_block(level_type *level_f, int id_f, double 
 //------------------------------------------------------------------------------------------------------------------------------
 // perform a (inter-level) piecewise quadratic interpolation
 void interpolation_pq(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){
-    exchange_boundary(level_c,id_c,0);
-  apply_BCs_quadratic(level_c,id_c,0);
+    exchange_boundary(level_c,id_c,STENCIL_SHAPE_BOX);
+  apply_BCs_quadratic(level_c,id_c,STENCIL_SHAPE_BOX);
 
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;

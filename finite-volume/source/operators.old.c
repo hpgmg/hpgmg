@@ -40,10 +40,10 @@
   #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs(level_type * level, int x_id, int justFaces){
+void apply_BCs(level_type * level, int x_id, int shape){
   #ifndef STENCIL_FUSE_BC
   // This is a failure mode if (trying to do communication-avoiding) && (BC!=BC_PERIODIC)
-  apply_BCs_linear(level,x_id,justFaces);
+  apply_BCs_linear(level,x_id,shape);
   #endif
 }
 //------------------------------------------------------------------------------------------------------------------------------
@@ -191,8 +191,8 @@ void apply_BCs(level_type * level, int x_id, int justFaces){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-int stencil_get_radius()    {return(1);} // replaces #define STENCIL_RADIUS         1
-int stencil_is_star_shaped(){return(1);} // replaces #define STENCIL_IS_STAR_SHAPED 1
+int stencil_get_radius(){return(1);} // 7pt reaches out 1 point
+int stencil_get_shape(){return(STENCIL_SHAPE_STAR);} // needs just faces
 //------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
   if(level->my_rank==0){fprintf(stdout,"  rebuilding operator for level...  h=%e  ",level->h);}
@@ -209,10 +209,10 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange alpha/beta/...  (must be done before calculating Dinv)
-  exchange_boundary(level,VECTOR_ALPHA ,0); // must be 0(faces,edges,corners) for CA version or 27pt
-  exchange_boundary(level,VECTOR_BETA_I,0);
-  exchange_boundary(level,VECTOR_BETA_J,0);
-  exchange_boundary(level,VECTOR_BETA_K,0);
+  exchange_boundary(level,VECTOR_ALPHA ,STENCIL_SHAPE_BOX); // safe
+  exchange_boundary(level,VECTOR_BETA_I,STENCIL_SHAPE_BOX);
+  exchange_boundary(level,VECTOR_BETA_J,STENCIL_SHAPE_BOX);
+  exchange_boundary(level,VECTOR_BETA_K,STENCIL_SHAPE_BOX);
 
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -319,8 +319,8 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange Dinv/L1inv/...
-  exchange_boundary(level,VECTOR_DINV ,0); // must be 0(faces,edges,corners) for CA version
-  exchange_boundary(level,VECTOR_L1INV,0);
+  exchange_boundary(level,VECTOR_DINV ,STENCIL_SHAPE_BOX); // safe
+  exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
 

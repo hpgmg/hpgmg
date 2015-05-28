@@ -396,11 +396,6 @@ void build_interpolation(mg_type *all_grids){
 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  //MPI_Barrier(MPI_COMM_WORLD);
-  //if(all_grids->my_rank==0){printf("================================================================================\n");}
-  //print_communicator(0x7,all_grids->my_rank,level,&all_grids->levels[level]->interpolation);
-  //if((all_grids->my_rank==0)&&(level==all_grids->num_levels-1))print_communicator(2,all_grids->my_rank,level,&all_grids->levels[level]->interpolation);
-  //MPI_Barrier(MPI_COMM_WORLD);
   } // all levels
 
 
@@ -737,11 +732,6 @@ void build_restriction(mg_type *all_grids, int restrictionType){
 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  //MPI_Barrier(MPI_COMM_WORLD);
-  //if(all_grids->my_rank==0){printf("================================================================================\n");}
-  //if(                         (level==all_grids->num_levels-2))print_communicator(2,all_grids->my_rank,level,&all_grids->levels[level]->restriction);
-  //if((all_grids->my_rank==0)&&(level==all_grids->num_levels-1))print_communicator(1,all_grids->my_rank,level,&all_grids->levels[level]->restriction);
-  //MPI_Barrier(MPI_COMM_WORLD);
   } // level loop
 
 
@@ -926,9 +916,12 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   if(all_grids->my_rank==0){fprintf(stdout,"\n");}
 
 
-  // used for quick test for poisson
+  // quick tests for Poisson, Neumann, etc...
   for(level=0;level<all_grids->num_levels;level++){
-    all_grids->levels[level]->alpha_is_zero = (dot(all_grids->levels[level],VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
+    all_grids->levels[level]->must_subtract_mean = 0;
+    int alpha_is_zero = (dot(all_grids->levels[level],VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
+    // For Poisson with Periodic Boundary Conditions, by convention we assume the solution sums to zero.  Eliminate any constants from the solution by subtracting the mean.
+    if( (all_grids->levels[level]->boundary_condition.type==BC_PERIODIC) && ((a==0) || (alpha_is_zero==1)) )all_grids->levels[level]->must_subtract_mean = 1;
   }
 
   
@@ -1035,8 +1028,7 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
 
     // now calculate the norm of the residual...
     uint64_t _timeStart = CycleTime();
-    if( (all_grids->levels[level]->boundary_condition.type==BC_PERIODIC) && ((a==0) || (all_grids->levels[level]->alpha_is_zero==1)) ){
-      // Poisson with Periodic Boundary Conditions... by convention, we assume the solution sums to zero... so eliminate any constants from the solution...
+    if(all_grids->levels[level]->must_subtract_mean == 1){
       double average_value_of_e = mean(all_grids->levels[level],e_id);
       shift_vector(all_grids->levels[level],e_id,e_id,-average_value_of_e);
     }
@@ -1148,8 +1140,7 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
 
     // now calculate the norm of the residual...
     uint64_t _timeStart = CycleTime();
-    if( (all_grids->levels[level]->boundary_condition.type==BC_PERIODIC) && ((a==0) || (all_grids->levels[level]->alpha_is_zero==1)) ){
-      // Poisson with Periodic Boundary Conditions... by convention, we assume the solution sums to zero... so eliminate any constants from the solution...
+    if(all_grids->levels[level]->must_subtract_mean == 1){
       double average_value_of_e = mean(all_grids->levels[level],e_id);
       shift_vector(all_grids->levels[level],e_id,e_id,-average_value_of_e);
     }
@@ -1189,7 +1180,20 @@ void MGPCG(mg_type *all_grids, int onLevel, int x_id, int F_id, double a, double
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // CG with a MG preconditioner, every level needs 3 extra vectors (p, Ap, z)
-  int l;for(l=0;l<all_grids->num_levels;l++)create_vectors(all_grids->levels[l],VECTORS_RESERVED+3);
+  int l;
+  for(l=0;l<all_grids->num_levels;l++){
+    create_vectors(all_grids->levels[l],VECTORS_RESERVED+3);
+  }
+
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  // Test for Poisson with Periodic BCs
+  for(l=0;l<all_grids->num_levels;l++){
+    if(all_grids->levels[l]->must_subtract_mean==-1){
+      all_grids->levels[l]->must_subtract_mean=0;
+      int alpha_is_zero = (dot(all_grids->levels[l],VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
+      if( (all_grids->levels[l]->boundary_condition.type==BC_PERIODIC) && ((a==0) || (alpha_is_zero)) )all_grids->levels[l]->must_subtract_mean = 1;
+    }
+  }
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   int   r_id = VECTOR_F_MINUS_AV;
@@ -1212,6 +1216,12 @@ void MGPCG(mg_type *all_grids, int onLevel, int x_id, int F_id, double a, double
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   zero_vector(level,x_id);                                                      // x[] = 0
   residual(level,r_id,x_id,F_id,a,b);                                           // r[] = F_id[] - A(x_id)
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  if(level->must_subtract_mean == 1){
+    double mean_of_r = mean(level,r_id);
+    shift_vector(level,r_id,r_id,-mean_of_r);
+  }
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   double norm_of_r0 = norm(level,r_id);                                         // the norm of the initial residual...
   if(norm_of_r0 == 0.0){CGConverged=1;}                                         // entered CG with exact solution
   level->vcycles_from_this_level++;                                             //
@@ -1228,6 +1238,12 @@ void MGPCG(mg_type *all_grids, int onLevel, int x_id, int F_id, double a, double
     if(isinf(alpha)){CGFailed=1;break;}                                         //   ???
     add_vectors(level,x_id,1.0,x_id, alpha,p_id );                              //   x_id[] = x_id[] + alpha*p[]
     add_vectors(level,r_id,1.0,r_id,-alpha,Ap_id);                              //   r[]    = r[]    - alpha*Ap[]   (intermediate residual?)
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(level->must_subtract_mean == 1){
+      double mean_of_r = mean(level,r_id);
+      shift_vector(level,r_id,r_id,-mean_of_r);
+    }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //double norm_of_r = norm(level,r_id);                                        //   norm of intermediate residual (delusional convergence)
     residual(level,VECTOR_TEMP,x_id,F_id,a,b);                                  //   true residual
     double norm_of_r = norm(level,VECTOR_TEMP);                                 //   norm of true residual (true convergence test)

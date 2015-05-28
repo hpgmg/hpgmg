@@ -285,13 +285,13 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 // create a mini program that traverses the domain boundary intersecting with this process's boxes
 // This includes faces, corners, and edges
-void build_boundary_conditions(level_type *level, int justFaces){
-  level->boundary_condition.blocks[justFaces]           = NULL;	// default for periodic (i.e. no BC's)
-  level->boundary_condition.num_blocks[justFaces]       = 0;	// default for periodic (i.e. no BC's)
-  level->boundary_condition.allocated_blocks[justFaces] = 0;	// default for periodic (i.e. no BC's)
+void build_boundary_conditions(level_type *level, int shape){
+  level->boundary_condition.blocks[shape]           = NULL;	// default for periodic (i.e. no BC's)
+  level->boundary_condition.num_blocks[shape]       = 0;	// default for periodic (i.e. no BC's)
+  level->boundary_condition.allocated_blocks[shape] = 0;	// default for periodic (i.e. no BC's)
   if(level->boundary_condition.type == BC_PERIODIC)return;
 
-  int    faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
+//int    faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
   int    edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
   int  corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
@@ -300,11 +300,11 @@ void build_boundary_conditions(level_type *level, int justFaces){
   for(dk=-1;dk<=1;dk++){			// for each box, examine its 26 neighbors...
   for(dj=-1;dj<=1;dj++){
   for(di=-1;di<=1;di++){
-    int dir = 13+di+3*dj+9*dk;
+    int dir = 13+di+3*dj+9*dk; // face/edge/corner of *THIS* box (not the domain)
 
     // determine if this region (box's di,dj,dk ghost zone) is outside of the domain
     int regionIsOutside=0;
-    int normal = 13; // normal effectively defines the normal vector to the domain for this region... 
+    int normal = 13; // normal effectively defines the normal vector to the *DOMAIN* for this region... 
                      // this addition is necessary for linearly interpolated BC's as a box's corner is not necessarily a domain's corner
     int myBox_i = level->my_boxes[box].low.i / level->box_dim;
     int myBox_j = level->my_boxes[box].low.j / level->box_dim;
@@ -338,9 +338,14 @@ void build_boundary_conditions(level_type *level, int justFaces){
       case  1:dim_k=level->box_ghosts;block_k=0+level->box_dim;   break;
     }
 
-    if(justFaces && (faces[dir]==0))regionIsOutside=0;
+    // use regionIsOutside to short circuit logic and cull unnecessary regions...
+    switch(shape){
+      case STENCIL_SHAPE_STAR:      if(edges[dir]||corners[dir])regionIsOutside=0;break; // star-shaped stencils don't need BC's enforced on corners or edges
+      case STENCIL_SHAPE_NO_CORNERS:if(            corners[dir])regionIsOutside=0;break; // these stencils don't need BC's enforced on edges
+    }
+
     if(regionIsOutside){
-    append_block_to_list(&(level->boundary_condition.blocks[justFaces]),&(level->boundary_condition.allocated_blocks[justFaces]),&(level->boundary_condition.num_blocks[justFaces]),
+    append_block_to_list(&(level->boundary_condition.blocks[shape]),&(level->boundary_condition.allocated_blocks[shape]),&(level->boundary_condition.num_blocks[shape]),
       /* dim.i         = */ dim_i,
       /* dim.j         = */ dim_j,
       /* dim.k         = */ dim_k,
@@ -400,26 +405,29 @@ void build_boundary_conditions(level_type *level, int justFaces){
 //    /  3  4  5 /	(k-1)
 //   /  0  1  2 /
 //
-void build_exchange_ghosts(level_type *level, int justFaces){
+void build_exchange_ghosts(level_type *level, int shape){
   int    faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
   int    edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
   int  corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
-  level->exchange_ghosts[justFaces].num_recvs           = 0;
-  level->exchange_ghosts[justFaces].num_sends           = 0;
-  level->exchange_ghosts[justFaces].blocks[0]           = NULL;
-  level->exchange_ghosts[justFaces].blocks[1]           = NULL;
-  level->exchange_ghosts[justFaces].blocks[2]           = NULL;
-  level->exchange_ghosts[justFaces].num_blocks[0]       = 0;
-  level->exchange_ghosts[justFaces].num_blocks[1]       = 0;
-  level->exchange_ghosts[justFaces].num_blocks[2]       = 0;
-  level->exchange_ghosts[justFaces].allocated_blocks[0] = 0;
-  level->exchange_ghosts[justFaces].allocated_blocks[1] = 0;
-  level->exchange_ghosts[justFaces].allocated_blocks[2] = 0;
+  level->exchange_ghosts[shape].num_recvs           = 0;
+  level->exchange_ghosts[shape].num_sends           = 0;
+  level->exchange_ghosts[shape].blocks[0]           = NULL;
+  level->exchange_ghosts[shape].blocks[1]           = NULL;
+  level->exchange_ghosts[shape].blocks[2]           = NULL;
+  level->exchange_ghosts[shape].num_blocks[0]       = 0;
+  level->exchange_ghosts[shape].num_blocks[1]       = 0;
+  level->exchange_ghosts[shape].num_blocks[2]       = 0;
+  level->exchange_ghosts[shape].allocated_blocks[0] = 0;
+  level->exchange_ghosts[shape].allocated_blocks[1] = 0;
+  level->exchange_ghosts[shape].allocated_blocks[2] = 0;
 
-  int CommunicateThisDir[27];
-         int n;for(n=0;n<27;n++)CommunicateThisDir[n]=1;CommunicateThisDir[13]=0;
-  if(justFaces)for(n=0;n<27;n++)CommunicateThisDir[n]=faces[n];
+  int    n,CommunicateThisDir[27];for(n=0;n<27;n++)CommunicateThisDir[n] = faces[n] + edges[n] + corners[n];// to be safe, communicate everything
+  switch(shape){
+    case STENCIL_SHAPE_BOX:       for(n=0;n<27;n++)CommunicateThisDir[n] = faces[n] + edges[n] + corners[n];break;
+    case STENCIL_SHAPE_STAR:      for(n=0;n<27;n++)CommunicateThisDir[n] = faces[n]                        ;break;
+    case STENCIL_SHAPE_NO_CORNERS:for(n=0;n<27;n++)CommunicateThisDir[n] = faces[n] + edges[n]             ;break;
+  }
 
   int sendBox,recvBox;
   int stage;
@@ -490,34 +498,34 @@ void build_exchange_ghosts(level_type *level, int justFaces){
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // in a two-stage process, traverse the list of ghosts and allocate the pack/local lists as well as the MPI buffers, and then populate the pack/local lists
-  level->exchange_ghosts[justFaces].num_sends     =                  numSendRanks;
-  level->exchange_ghosts[justFaces].send_ranks    =     (int*)malloc(numSendRanks*sizeof(int));
-  level->exchange_ghosts[justFaces].send_sizes    =     (int*)malloc(numSendRanks*sizeof(int));
-  level->exchange_ghosts[justFaces].send_buffers  = (double**)malloc(numSendRanks*sizeof(double*));
+  level->exchange_ghosts[shape].num_sends     =                  numSendRanks;
+  level->exchange_ghosts[shape].send_ranks    =     (int*)malloc(numSendRanks*sizeof(int));
+  level->exchange_ghosts[shape].send_sizes    =     (int*)malloc(numSendRanks*sizeof(int));
+  level->exchange_ghosts[shape].send_buffers  = (double**)malloc(numSendRanks*sizeof(double*));
   if(numSendRanks>0){
-  if(level->exchange_ghosts[justFaces].send_ranks  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_ranks\n",justFaces);exit(0);}
-  if(level->exchange_ghosts[justFaces].send_sizes  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_sizes\n",justFaces);exit(0);}
-  if(level->exchange_ghosts[justFaces].send_buffers==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_buffers\n",justFaces);exit(0);}
+  if(level->exchange_ghosts[shape].send_ranks  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_ranks\n",shape);exit(0);}
+  if(level->exchange_ghosts[shape].send_sizes  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_sizes\n",shape);exit(0);}
+  if(level->exchange_ghosts[shape].send_buffers==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_buffers\n",shape);exit(0);}
   }
-  level->exchange_ghosts[justFaces].blocks[0] = NULL;
-  level->exchange_ghosts[justFaces].blocks[1] = NULL;
-  level->exchange_ghosts[justFaces].num_blocks[0] = 0;
-  level->exchange_ghosts[justFaces].num_blocks[1] = 0;
-  level->exchange_ghosts[justFaces].allocated_blocks[0] = 0;
-  level->exchange_ghosts[justFaces].allocated_blocks[1] = 0;
+  level->exchange_ghosts[shape].blocks[0] = NULL;
+  level->exchange_ghosts[shape].blocks[1] = NULL;
+  level->exchange_ghosts[shape].num_blocks[0] = 0;
+  level->exchange_ghosts[shape].num_blocks[1] = 0;
+  level->exchange_ghosts[shape].allocated_blocks[0] = 0;
+  level->exchange_ghosts[shape].allocated_blocks[1] = 0;
   for(stage=0;stage<=1;stage++){
     // stage=0... traverse the list and calculate the buffer sizes
     // stage=1... allocate MPI send buffers, traverse the list, and populate the unpack/local lists...
     int neighbor;
     for(neighbor=0;neighbor<numSendRanks;neighbor++){
       if(stage==1){
-             level->exchange_ghosts[justFaces].send_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[justFaces].send_sizes[neighbor]*sizeof(double));
-          if(level->exchange_ghosts[justFaces].send_sizes[neighbor]>0)
-          if(level->exchange_ghosts[justFaces].send_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_buffers[neighbor]\n",justFaces);exit(0);}
-      memset(level->exchange_ghosts[justFaces].send_buffers[neighbor],                0,level->exchange_ghosts[justFaces].send_sizes[neighbor]*sizeof(double));
+             level->exchange_ghosts[shape].send_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double));
+          if(level->exchange_ghosts[shape].send_sizes[neighbor]>0)
+          if(level->exchange_ghosts[shape].send_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_buffers[neighbor]\n",shape);exit(0);}
+      memset(level->exchange_ghosts[shape].send_buffers[neighbor],                0,level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double));
       }
-      level->exchange_ghosts[justFaces].send_ranks[neighbor]=sendRanks[neighbor];
-      level->exchange_ghosts[justFaces].send_sizes[neighbor]=0;
+      level->exchange_ghosts[shape].send_ranks[neighbor]=sendRanks[neighbor];
+      level->exchange_ghosts[shape].send_sizes[neighbor]=0;
     }
     for(ghost=0;ghost<numGhosts;ghost++){
       int  dim_i=-1, dim_j=-1, dim_k=-1;
@@ -548,7 +556,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       int LocalExchange; // 0 = pack list, 1 = local exchange list
       if(ghostsToSend[ghost].recvRank != level->my_rank){
         LocalExchange=0; // pack
-        neighbor=0;while(level->exchange_ghosts[justFaces].send_ranks[neighbor] != ghostsToSend[ghost].recvRank)neighbor++;
+        neighbor=0;while(level->exchange_ghosts[shape].send_ranks[neighbor] != ghostsToSend[ghost].recvRank)neighbor++;
       }else{
         LocalExchange=1; // local
         neighbor=-1;
@@ -556,7 +564,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
    
       if(stage==1){ 
       if(LocalExchange) // append to the local exchange list...
-      append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[1]),&(level->exchange_ghosts[justFaces].allocated_blocks[1]),&(level->exchange_ghosts[justFaces].num_blocks[1]),
+      append_block_to_list(&(level->exchange_ghosts[shape].blocks[1]),&(level->exchange_ghosts[shape].allocated_blocks[1]),&(level->exchange_ghosts[shape].num_blocks[1]),
         /* dim.i         = */ dim_i,
         /* dim.j         = */ dim_j,
         /* dim.k         = */ dim_k,
@@ -582,7 +590,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* subtype       = */ 0  
       );
       else // append to the MPI pack list...
-      append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[0]),&(level->exchange_ghosts[justFaces].allocated_blocks[0]),&(level->exchange_ghosts[justFaces].num_blocks[0]),
+      append_block_to_list(&(level->exchange_ghosts[shape].blocks[0]),&(level->exchange_ghosts[shape].allocated_blocks[0]),&(level->exchange_ghosts[shape].num_blocks[0]),
         /* dim.i         = */ dim_i,
         /* dim.j         = */ dim_j,
         /* dim.k         = */ dim_k,
@@ -595,8 +603,8 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* read.kStride  = */ level->my_boxes[ghostsToSend[ghost].sendBox].kStride,
         /* read.scale    = */ 1,
         /* write.box     = */ -1,
-        /* write.ptr     = */ level->exchange_ghosts[justFaces].send_buffers[neighbor], // NOTE, 1. count _sizes, 2. allocate _buffers, 3. populate blocks
-        /* write.i       = */ level->exchange_ghosts[justFaces].send_sizes[neighbor], // current offset in the MPI send buffer
+        /* write.ptr     = */ level->exchange_ghosts[shape].send_buffers[neighbor], // NOTE, 1. count _sizes, 2. allocate _buffers, 3. populate blocks
+        /* write.i       = */ level->exchange_ghosts[shape].send_sizes[neighbor], // current offset in the MPI send buffer
         /* write.j       = */ 0,
         /* write.k       = */ 0,
         /* write.jStride = */ dim_i,       // contiguous block
@@ -607,7 +615,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
         /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
         /* subtype       = */ 0  
       );}
-      if(neighbor>=0)level->exchange_ghosts[justFaces].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
+      if(neighbor>=0)level->exchange_ghosts[shape].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
     } // ghost for-loop
   } // stage for-loop
 
@@ -677,31 +685,31 @@ void build_exchange_ghosts(level_type *level, int justFaces){
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // in a two-stage process, traverse the list of ghosts and allocate the unpack lists as well as the MPI buffers, and then populate the unpack list
-  level->exchange_ghosts[justFaces].num_recvs     =                  numRecvRanks;
-  level->exchange_ghosts[justFaces].recv_ranks    =     (int*)malloc(numRecvRanks*sizeof(int));
-  level->exchange_ghosts[justFaces].recv_sizes    =     (int*)malloc(numRecvRanks*sizeof(int));
-  level->exchange_ghosts[justFaces].recv_buffers  = (double**)malloc(numRecvRanks*sizeof(double*));
+  level->exchange_ghosts[shape].num_recvs     =                  numRecvRanks;
+  level->exchange_ghosts[shape].recv_ranks    =     (int*)malloc(numRecvRanks*sizeof(int));
+  level->exchange_ghosts[shape].recv_sizes    =     (int*)malloc(numRecvRanks*sizeof(int));
+  level->exchange_ghosts[shape].recv_buffers  = (double**)malloc(numRecvRanks*sizeof(double*));
   if(numRecvRanks>0){
-  if(level->exchange_ghosts[justFaces].recv_ranks  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_ranks\n",justFaces);exit(0);}
-  if(level->exchange_ghosts[justFaces].recv_sizes  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_sizes\n",justFaces);exit(0);}
-  if(level->exchange_ghosts[justFaces].recv_buffers==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_buffers\n",justFaces);exit(0);}
+  if(level->exchange_ghosts[shape].recv_ranks  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_ranks\n",shape);exit(0);}
+  if(level->exchange_ghosts[shape].recv_sizes  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_sizes\n",shape);exit(0);}
+  if(level->exchange_ghosts[shape].recv_buffers==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_buffers\n",shape);exit(0);}
   }
-  level->exchange_ghosts[justFaces].blocks[2] = NULL;
-  level->exchange_ghosts[justFaces].num_blocks[2] = 0;
-  level->exchange_ghosts[justFaces].allocated_blocks[2] = 0;
+  level->exchange_ghosts[shape].blocks[2] = NULL;
+  level->exchange_ghosts[shape].num_blocks[2] = 0;
+  level->exchange_ghosts[shape].allocated_blocks[2] = 0;
   for(stage=0;stage<=1;stage++){
     // stage=0... traverse the list and calculate the buffer sizes
     // stage=1... allocate MPI recv buffers, traverse the list, and populate the unpack/local lists...
     int neighbor;
     for(neighbor=0;neighbor<numRecvRanks;neighbor++){
       if(stage==1){
-             level->exchange_ghosts[justFaces].recv_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[justFaces].recv_sizes[neighbor]*sizeof(double));
-          if(level->exchange_ghosts[justFaces].recv_sizes[neighbor]>0)
-          if(level->exchange_ghosts[justFaces].recv_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_buffers[neighbor]\n",justFaces);exit(0);}
-      memset(level->exchange_ghosts[justFaces].recv_buffers[neighbor],                0,level->exchange_ghosts[justFaces].recv_sizes[neighbor]*sizeof(double));
+             level->exchange_ghosts[shape].recv_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double));
+          if(level->exchange_ghosts[shape].recv_sizes[neighbor]>0)
+          if(level->exchange_ghosts[shape].recv_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_buffers[neighbor]\n",shape);exit(0);}
+      memset(level->exchange_ghosts[shape].recv_buffers[neighbor],                0,level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double));
       }
-      level->exchange_ghosts[justFaces].recv_ranks[neighbor]=recvRanks[neighbor];
-      level->exchange_ghosts[justFaces].recv_sizes[neighbor]=0;
+      level->exchange_ghosts[shape].recv_ranks[neighbor]=recvRanks[neighbor];
+      level->exchange_ghosts[shape].recv_sizes[neighbor]=0;
     }
     for(ghost=0;ghost<numGhosts;ghost++){
       int  dim_i=-1, dim_j=-1, dim_k=-1;
@@ -729,14 +737,14 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       }
  
       // determine if this ghost requires a pack or local exchange 
-      neighbor=0;while(level->exchange_ghosts[justFaces].recv_ranks[neighbor] != ghostsToRecv[ghost].sendRank)neighbor++;
-      if(stage==1)append_block_to_list(&(level->exchange_ghosts[justFaces].blocks[2]),&(level->exchange_ghosts[justFaces].allocated_blocks[2]),&(level->exchange_ghosts[justFaces].num_blocks[2]),
+      neighbor=0;while(level->exchange_ghosts[shape].recv_ranks[neighbor] != ghostsToRecv[ghost].sendRank)neighbor++;
+      if(stage==1)append_block_to_list(&(level->exchange_ghosts[shape].blocks[2]),&(level->exchange_ghosts[shape].allocated_blocks[2]),&(level->exchange_ghosts[shape].num_blocks[2]),
       /*dim.i         = */ dim_i,
       /*dim.j         = */ dim_j,
       /*dim.k         = */ dim_k,
       /*read.box      = */ -1,
-      /*read.ptr      = */ level->exchange_ghosts[justFaces].recv_buffers[neighbor], // NOTE, 1. count _sizes, 2. allocate _buffers, 3. populate blocks
-      /*read.i        = */ level->exchange_ghosts[justFaces].recv_sizes[neighbor], // current offset in the MPI recv buffer
+      /*read.ptr      = */ level->exchange_ghosts[shape].recv_buffers[neighbor], // NOTE, 1. count _sizes, 2. allocate _buffers, 3. populate blocks
+      /*read.i        = */ level->exchange_ghosts[shape].recv_sizes[neighbor], // current offset in the MPI recv buffer
       /*read.j        = */ 0,
       /*read.k        = */ 0,
       /*read.jStride  = */ dim_i,       // contiguous block
@@ -755,7 +763,7 @@ void build_exchange_ghosts(level_type *level, int justFaces){
       /* blockcopy_k  = */ BLOCKCOPY_TILE_K, // default
       /* subtype      = */ 0  
       );
-      if(neighbor>=0)level->exchange_ghosts[justFaces].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
+      if(neighbor>=0)level->exchange_ghosts[shape].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
     } // ghost for-loop
   } // stage for-loop
 
@@ -769,17 +777,15 @@ void build_exchange_ghosts(level_type *level, int justFaces){
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // malloc MPI requests/status arrays
   #ifdef USE_MPI
-  level->exchange_ghosts[justFaces].requests = (MPI_Request*)malloc((level->exchange_ghosts[justFaces].num_sends+level->exchange_ghosts[justFaces].num_recvs)*sizeof(MPI_Request));
-  level->exchange_ghosts[justFaces].status   = (MPI_Status *)malloc((level->exchange_ghosts[justFaces].num_sends+level->exchange_ghosts[justFaces].num_recvs)*sizeof(MPI_Status ));
-  if((level->exchange_ghosts[justFaces].num_sends+level->exchange_ghosts[justFaces].num_recvs)>0){
-  if(level->exchange_ghosts[justFaces].requests==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].requests\n",justFaces);exit(0);}
-  if(level->exchange_ghosts[justFaces].status  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].status\n",justFaces);exit(0);}
+  level->exchange_ghosts[shape].requests = (MPI_Request*)malloc((level->exchange_ghosts[shape].num_sends+level->exchange_ghosts[shape].num_recvs)*sizeof(MPI_Request));
+  level->exchange_ghosts[shape].status   = (MPI_Status *)malloc((level->exchange_ghosts[shape].num_sends+level->exchange_ghosts[shape].num_recvs)*sizeof(MPI_Status ));
+  if((level->exchange_ghosts[shape].num_sends+level->exchange_ghosts[shape].num_recvs)>0){
+  if(level->exchange_ghosts[shape].requests==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].requests\n",shape);exit(0);}
+  if(level->exchange_ghosts[shape].status  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].status\n",shape);exit(0);}
   }
   #endif
 
-
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  //print_communicator(4,level->my_rank,0,&level->exchange_ghosts[justFaces]);
 }
 
 
@@ -924,7 +930,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->my_rank        = my_rank;
   level->num_ranks      = num_ranks;
   level->boundary_condition.type = domain_boundary_condition;
-  level->alpha_is_zero  = -1;
+  level->must_subtract_mean = -1;
   level->num_threads      = omp_threads;
   // intra-box threading...
   level->threads_per_box  = omp_threads;
@@ -1063,10 +1069,9 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->exchange_ghosts[1].num_blocks[0]=0;
   level->exchange_ghosts[1].num_blocks[1]=0;
   level->exchange_ghosts[1].num_blocks[2]=0;
-  build_exchange_ghosts(level,0); // faces, edges, corners
-  build_exchange_ghosts(level,1); // justFaces
-  build_boundary_conditions(level,0); // faces, edges, corners
-  build_boundary_conditions(level,1); // just faces
+  int shape;
+  for(shape=0;shape<STENCIL_MAX_SHAPES;shape++)build_exchange_ghosts(    level,shape); // build ghost zone exchange mini program for each stencil shape
+  for(shape=0;shape<STENCIL_MAX_SHAPES;shape++)build_boundary_conditions(level,shape); // build boundary conditions mini program for each stencil shape
 
 
   // duplicate MPI_COMM_WORLD to be the communicator for each level

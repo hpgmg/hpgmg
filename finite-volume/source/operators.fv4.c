@@ -44,7 +44,7 @@
   #error This implementation does not support fusion of the boundary conditions with the operator
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs(level_type * level, int x_id, int justFaces){apply_BCs_v4(level,x_id,justFaces);}
+void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_v4(level,x_id,shape);}
 //------------------------------------------------------------------------------------------------------------------------------
 #define Dinv_ijk() Dinv[ijk]        // simply retrieve it rather than recalculating it
 //------------------------------------------------------------------------------------------------------------------------------
@@ -132,11 +132,12 @@ void apply_BCs(level_type * level, int x_id, int justFaces){apply_BCs_v4(level,x
   )
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-int stencil_get_radius()  {return(2);} // stencil reaches out 2 cells
 #ifdef STENCIL_VARIABLE_COEFFICIENT
-int stencil_is_star_shaped(){return(0);} // technically, just needs faces and edges, but not corners
+int stencil_get_radius(){return(2);} // stencil reaches out 2 cells
+int stencil_get_shape(){return(STENCIL_SHAPE_NO_CORNERS);} // needs faces and edges, but not corners
 #else
-int stencil_is_star_shaped(){return(1);} // 13pt needs only the faces
+int stencil_get_radius(){return(2);} // stencil reaches out 2 cells
+int stencil_get_shape(){return(STENCIL_SHAPE_STAR);} // needs just faces
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
@@ -153,17 +154,17 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   //initialize_problem(level,level->h,a,b); // approach used for testing smooth beta's; destroys the black box nature of the solver
 
   // exchange alpha/beta/...  (must be done before calculating Dinv)
-  exchange_boundary(level,VECTOR_ALPHA ,0); // must be 0(faces,edges,corners) for CA version or 27pt
-  exchange_boundary(level,VECTOR_BETA_I,0);
-  exchange_boundary(level,VECTOR_BETA_J,0);
-  exchange_boundary(level,VECTOR_BETA_K,0);
+  exchange_boundary(level,VECTOR_ALPHA ,STENCIL_SHAPE_BOX); // safe
+  exchange_boundary(level,VECTOR_BETA_I,STENCIL_SHAPE_BOX);
+  exchange_boundary(level,VECTOR_BETA_J,STENCIL_SHAPE_BOX);
+  exchange_boundary(level,VECTOR_BETA_K,STENCIL_SHAPE_BOX);
 
   // black box rebuild of D^{-1}, l1^{-1}, dominant eigenvalue, ...
   rebuild_operator_blackbox(level,a,b,4);
 
   // exchange Dinv/L1inv/...
-  exchange_boundary(level,VECTOR_DINV ,0); // must be 0(faces,edges,corners) for CA version
-  exchange_boundary(level,VECTOR_L1INV,0);
+  exchange_boundary(level,VECTOR_DINV ,STENCIL_SHAPE_BOX); // safe
+  exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
 }
 
 

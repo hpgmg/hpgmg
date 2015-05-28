@@ -16,9 +16,17 @@
 #include <mpi.h>
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
+// supported boundary conditions
 #define BC_PERIODIC  0
 #define BC_DIRICHLET 1
 //------------------------------------------------------------------------------------------------------------------------------
+// regiment communication by defining a series of stencil shapes...
+#define STENCIL_SHAPE_BOX         0	// faces, edges, and corners
+#define STENCIL_SHAPE_STAR        1	// just faces
+#define STENCIL_SHAPE_NO_CORNERS  2	// faces and edges, but no corners
+#define STENCIL_MAX_SHAPES        3
+//------------------------------------------------------------------------------------------------------------------------------
+// regiment threading around the 'block' or 'tile' concepts.  Define default tilings...
 #ifndef BLOCKCOPY_TILE_I
 #define BLOCKCOPY_TILE_I 10000
 #else
@@ -31,6 +39,7 @@
 #define BLOCKCOPY_TILE_K 8
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
+// FP data for a vector within a box is padded to ensure alignment
 #ifndef BOX_ALIGN_JSTRIDE
 #define BOX_ALIGN_JSTRIDE   2  // j-stride(unit stride dimension including ghosts and padding) is a multiple of BOX_ALIGN_JSTRIDE... useful for SIMD in j+/-1
 #endif
@@ -112,19 +121,19 @@ typedef struct {
 
   struct {
     int                type;			// BC_PERIODIC or BC_DIRICHLET
-    int    allocated_blocks[2];			// number of blocks allocated (not necessarily used) for boundary conditions on this level for [0=all,1=justFaces]
-    int          num_blocks[2];			// number of blocks used for boundary conditions on this level for [0=all,1=justFaces]
-    blockCopy_type * blocks[2];			// pointer to array of blocks used for boundary conditions on this level for [0=all,1=justFaces]
+    int    allocated_blocks[STENCIL_MAX_SHAPES];// number of blocks allocated (not necessarily used) for boundary conditions on this level for [shape]
+    int          num_blocks[STENCIL_MAX_SHAPES];// number of blocks used for boundary conditions on this level for [shape]
+    blockCopy_type * blocks[STENCIL_MAX_SHAPES];// pointer to array of blocks used for boundary conditions on this level for [shape]
   } boundary_condition;				// boundary conditions on this level
 
-  communicator_type exchange_ghosts[2];		// mini program that performs a neighbor ghost zone exchange for [0=all,1=justFaces]
-  communicator_type restriction[4];		// mini program that performs restriction and agglomeration for [0=cell centered, 1=i-face, 2=j-face, 3-k-face]
-  communicator_type interpolation;		// mini program that performs interpolation and dissemination...
+  communicator_type exchange_ghosts[STENCIL_MAX_SHAPES];// mini program that performs a neighbor ghost zone exchange for [shape]
+  communicator_type restriction[4];			// mini program that performs restriction and agglomeration for [0=cell centered, 1=i-face, 2=j-face, 3-k-face]
+  communicator_type interpolation;			// mini program that performs interpolation and dissemination...
   #ifdef USE_MPI
   MPI_Comm MPI_COMM_ALLREDUCE;			// MPI sub communicator for just the ranks that have boxes on this level or any subsequent level... 
   #endif
   double dominant_eigenvalue_of_DinvA;		// estimate on the dominate eigenvalue of D^{-1}A
-  int alpha_is_zero;				// useful for determining Poisson... (a==0) && (alpha_is_zero)
+  int must_subtract_mean;			// e.g. Poisson with Periodic BC's
   double    * __restrict__ RedBlack_FP[2];	// Red/Black Mask (i.e. 0.0 or 1.0) for even/odd planes (dim_with_ghosts^2).  
 
   int num_threads;

@@ -9,10 +9,10 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
 
     // exchange the ghost zone...
     #ifdef GSRB_OOP // out-of-place GSRB ping pongs between x and VECTOR_TEMP
-    if((s&1)==0){exchange_boundary(level,       x_id,stencil_is_star_shaped());apply_BCs(level,       x_id,stencil_is_star_shaped());}
-            else{exchange_boundary(level,VECTOR_TEMP,stencil_is_star_shaped());apply_BCs(level,VECTOR_TEMP,stencil_is_star_shaped());}
+    if((s&1)==0){exchange_boundary(level,       x_id,stencil_get_shape());apply_BCs(level,       x_id,stencil_get_shape());}
+            else{exchange_boundary(level,VECTOR_TEMP,stencil_get_shape());apply_BCs(level,VECTOR_TEMP,stencil_get_shape());}
     #else // in-place GSRB only operates on x
-                 exchange_boundary(level,       x_id,stencil_is_star_shaped());apply_BCs(level,        x_id,stencil_is_star_shaped());
+                 exchange_boundary(level,       x_id,stencil_get_shape());apply_BCs(level,        x_id,stencil_get_shape());
     #endif
 
     // apply the smoother...
@@ -101,7 +101,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
           double Ax     = apply_op_ijk(x_n);
           double lambda =     Dinv_ijk();
           x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);
-      }else{
+        }else{
           x_np1[ijk] = x_n[ijk]; // copy old value when sweep color != cell color
       }}}}
       #else

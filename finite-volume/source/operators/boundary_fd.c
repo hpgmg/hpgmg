@@ -3,7 +3,7 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs_linear(level_type * level, int x_id, int justFaces){
+void apply_BCs_linear(level_type * level, int x_id, int shape){
   // For cell-centered, we need to fill in the ghost zones to apply any BC's
   // This code does a simple piecewise linear interpolation for homogeneous dirichlet (0 on boundary)
   // Nominally, this is first performed across faces, then to edges, then to corners.  
@@ -21,6 +21,7 @@ void apply_BCs_linear(level_type * level, int x_id, int justFaces){
   //   .       |       |          .       |       |
   //
   //
+  if(shape>=STENCIL_MAX_SHAPES)shape=STENCIL_SHAPE_BOX;  // shape must be < STENCIL_MAX_SHAPES in order to safely index into boundary_condition.blocks[]
   if(level->boundary_condition.type == BC_PERIODIC)return; // no BC's to apply !
 
   const int   faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
@@ -29,22 +30,22 @@ void apply_BCs_linear(level_type * level, int x_id, int justFaces){
 
   int buffer;
   uint64_t _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[justFaces])
-  for(buffer=0;buffer<level->boundary_condition.num_blocks[justFaces];buffer++){
+  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
+  for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     double scale = 1.0;
-    if(  faces[level->boundary_condition.blocks[justFaces][buffer].subtype])scale=-1.0;
-    if(  edges[level->boundary_condition.blocks[justFaces][buffer].subtype])scale= 1.0;
-    if(corners[level->boundary_condition.blocks[justFaces][buffer].subtype])scale=-1.0;
+    if(  faces[level->boundary_condition.blocks[shape][buffer].subtype])scale=-1.0;
+    if(  edges[level->boundary_condition.blocks[shape][buffer].subtype])scale= 1.0;
+    if(corners[level->boundary_condition.blocks[shape][buffer].subtype])scale=-1.0;
 
     int i,j,k;
-    const int       box = level->boundary_condition.blocks[justFaces][buffer].read.box; 
-    const int     dim_i = level->boundary_condition.blocks[justFaces][buffer].dim.i;
-    const int     dim_j = level->boundary_condition.blocks[justFaces][buffer].dim.j;
-    const int     dim_k = level->boundary_condition.blocks[justFaces][buffer].dim.k;
-    const int       ilo = level->boundary_condition.blocks[justFaces][buffer].read.i;
-    const int       jlo = level->boundary_condition.blocks[justFaces][buffer].read.j;
-    const int       klo = level->boundary_condition.blocks[justFaces][buffer].read.k;
-    const int normal = 26-level->boundary_condition.blocks[justFaces][buffer].subtype; // invert the normal vector
+    const int       box = level->boundary_condition.blocks[shape][buffer].read.box; 
+    const int     dim_i = level->boundary_condition.blocks[shape][buffer].dim.i;
+    const int     dim_j = level->boundary_condition.blocks[shape][buffer].dim.j;
+    const int     dim_k = level->boundary_condition.blocks[shape][buffer].dim.k;
+    const int       ilo = level->boundary_condition.blocks[shape][buffer].read.i;
+    const int       jlo = level->boundary_condition.blocks[shape][buffer].read.j;
+    const int       klo = level->boundary_condition.blocks[shape][buffer].read.k;
+    const int normal = 26-level->boundary_condition.blocks[shape][buffer].subtype; // invert the normal vector
  
     // hard code for box to box BC's 
     const int jStride = level->my_boxes[box].jStride;
@@ -89,13 +90,14 @@ void apply_BCs_linear(level_type * level, int x_id, int justFaces){
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs_quadratic(level_type * level, int x_id, int justFaces){
+void apply_BCs_quadratic(level_type * level, int x_id, int shape){
   // For cell-centered, we need to fill in the ghost zones to apply any BC's
   // This code does a simple piecewise quadratic interpolation for homogeneous dirichlet (0 on boundary)
   // Nominally, this is first performed across faces, then to edges, then to corners.  
   //
+  if(shape>=STENCIL_MAX_SHAPES)shape=STENCIL_SHAPE_BOX;  // shape must be < STENCIL_MAX_SHAPES in order to safely index into boundary_condition.blocks[]
   if(level->boundary_condition.type == BC_PERIODIC)return; // no BC's to apply !
-  if(level->box_dim<2){apply_BCs_linear(level,x_id,justFaces);return;}
+  if(level->box_dim<2){apply_BCs_linear(level,x_id,shape);return;}
 
   const int   faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
   const int   edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
@@ -103,17 +105,17 @@ void apply_BCs_quadratic(level_type * level, int x_id, int justFaces){
 
   int buffer;
   uint64_t _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[justFaces])
-  for(buffer=0;buffer<level->boundary_condition.num_blocks[justFaces];buffer++){
+  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
+  for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     int i,j,k;
-    const int       box = level->boundary_condition.blocks[justFaces][buffer].read.box; 
-    const int     dim_i = level->boundary_condition.blocks[justFaces][buffer].dim.i;
-    const int     dim_j = level->boundary_condition.blocks[justFaces][buffer].dim.j;
-    const int     dim_k = level->boundary_condition.blocks[justFaces][buffer].dim.k;
-    const int       ilo = level->boundary_condition.blocks[justFaces][buffer].read.i;
-    const int       jlo = level->boundary_condition.blocks[justFaces][buffer].read.j;
-    const int       klo = level->boundary_condition.blocks[justFaces][buffer].read.k;
-    const int normal = 26-level->boundary_condition.blocks[justFaces][buffer].subtype; // invert the normal vector
+    const int       box = level->boundary_condition.blocks[shape][buffer].read.box; 
+    const int     dim_i = level->boundary_condition.blocks[shape][buffer].dim.i;
+    const int     dim_j = level->boundary_condition.blocks[shape][buffer].dim.j;
+    const int     dim_k = level->boundary_condition.blocks[shape][buffer].dim.k;
+    const int       ilo = level->boundary_condition.blocks[shape][buffer].read.i;
+    const int       jlo = level->boundary_condition.blocks[shape][buffer].read.j;
+    const int       klo = level->boundary_condition.blocks[shape][buffer].read.k;
+    const int normal = 26-level->boundary_condition.blocks[shape][buffer].subtype; // invert the normal vector
  
     // hard code for box to box BC's 
     const int jStride = level->my_boxes[box].jStride;

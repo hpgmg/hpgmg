@@ -1,4 +1,5 @@
+- fix deallocation routines
 - cubical problem size -> rectahedral problem size ... init problem, restriction rules, etc...
-- move removal of constants from solution for poisson w/periodic to end of solver (instead of per v-cycle)
+- rectahedral problem size -> arbitrary problem shape...
 - cycleTime:  uint64_t nanoseconds to double seconds.  cycles.* convert to double
 - more efficient ghost zone exchange (box intersection algebra) when communicating edges and corners

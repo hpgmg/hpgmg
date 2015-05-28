@@ -13,7 +13,6 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void CG(level_type * level, int x_id, int R_id, double a, double b, double desired_reduction_in_norm){
   // Algorithm 9.1 in Iterative Methods for Sparse Linear Systems(Yousef Saad)
-  // FIX, cc poisson with periodic BC's has null space issue... need to subtract the mean...
   int  r0_id = VECTORS_RESERVED+0;
   int   r_id = VECTORS_RESERVED+1;
   int   p_id = VECTORS_RESERVED+2;
@@ -25,6 +24,12 @@ void CG(level_type * level, int x_id, int R_id, double a, double b, double desir
   int CGFailed    = 0;
   int CGConverged = 0;
   residual(level,r0_id,x_id,R_id,a,b);                                          // r0[] = R_id[] - A(x_id)
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  if(level->must_subtract_mean == 1){
+    double mean_of_r0 = mean(level,r0_id);
+    shift_vector(level,r0_id,r0_id,-mean_of_r0);
+  }
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   scale_vector(level,r_id,1.0,r0_id);                                           // r[] = r0[]
   #ifdef KRYLOV_DIAGONAL_PRECONDITION                                           //
   mul_vectors(level,z_id,1.0,VECTOR_DINV,r0_id);                                // z[] = Dinv[]*r0[]
@@ -44,6 +49,12 @@ void CG(level_type * level, int x_id, int R_id, double a, double b, double desir
     if(isinf(alpha)){CGFailed=1;break;}                                         //   ???
     add_vectors(level,x_id,1.0,x_id, alpha,p_id );                              //   x_id[] = x_id[] + alpha*p[]
     add_vectors(level,r_id,1.0,r_id,-alpha,Ap_id);                              //   r[]    = r[]    - alpha*Ap[]   (intermediate residual?)
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(level->must_subtract_mean == 1){
+      double mean_of_r = mean(level,r_id);
+      shift_vector(level,r_id,r_id,-mean_of_r);
+    }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     double norm_of_r = norm(level,r_id);                                        //   norm of intermediate residual
     if(norm_of_r == 0.0){CGConverged=1;break;}                                  //
     if(norm_of_r < desired_reduction_in_norm*norm_of_r0){CGConverged=1;break;}  //

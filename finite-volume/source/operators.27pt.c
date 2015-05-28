@@ -38,9 +38,7 @@
   #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs(level_type * level, int x_id, int justFaces){
-  apply_BCs_linear(level,x_id,justFaces);
-}
+void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_linear(level,x_id,shape);}
 //------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_COEF0 (-4.2666666666666666666)  // -128.0/30.0;
 #define STENCIL_COEF1 ( 0.4666666666666666666)  //   14.0/30.0;
@@ -92,8 +90,8 @@ void apply_BCs(level_type * level, int x_id, int justFaces){
   )						\
 )
 //------------------------------------------------------------------------------------------------------------------------------
-int stencil_get_radius()    {return(1);} // 27pt = dense 3^3
-int stencil_is_star_shaped(){return(0);} // needs faces, edges, and corners
+int stencil_get_radius(){return(1);} // 27pt = dense 3^3
+int stencil_get_shape(){return(STENCIL_SHAPE_BOX);} // needs faces, edges, and corners
 //------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
   if(level->my_rank==0){fprintf(stdout,"  rebuilding 27pt CC operator for level...  h=%e  ",level->h);}
@@ -110,10 +108,10 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange alpha/beta/...  (must be done before calculating Dinv)
-  exchange_boundary(level,VECTOR_ALPHA ,0); // must be 0(faces,edges,corners) for CA version or 27pt
-  exchange_boundary(level,VECTOR_BETA_I,0);
-  exchange_boundary(level,VECTOR_BETA_J,0);
-  exchange_boundary(level,VECTOR_BETA_K,0);
+  exchange_boundary(level,VECTOR_ALPHA ,STENCIL_SHAPE_BOX); // safe
+  exchange_boundary(level,VECTOR_BETA_I,STENCIL_SHAPE_BOX);
+  exchange_boundary(level,VECTOR_BETA_J,STENCIL_SHAPE_BOX);
+  exchange_boundary(level,VECTOR_BETA_K,STENCIL_SHAPE_BOX);
 
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -181,15 +179,19 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange Dinv/L1inv/...
-  exchange_boundary(level,VECTOR_DINV ,0); // must be 0(faces,edges,corners) for CA version
-  exchange_boundary(level,VECTOR_L1INV,0);
+  exchange_boundary(level,VECTOR_DINV ,STENCIL_SHAPE_BOX); // safe
+  exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 #ifdef  USE_GSRB
-#error 27-point operator cannot use GSRB
+#define GSRB_OOP
+#define NUM_SMOOTHS      2 // RBRB
+#include "operators/gsrb.c"
+//#ifdef  USE_GSRB
+//#error 27-point operator cannot use GSRB
 #elif   USE_CHEBY
 #define NUM_SMOOTHS      1
 #define CHEBYSHEV_DEGREE 4 // i.e. one degree-4 polynomial smoother

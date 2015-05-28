@@ -84,9 +84,6 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
     for(j=0;j<=dim_j;j++){ // include high face
     for(i=0;i<=dim_i;i++){ // include high face
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-      // FIX... move to quadrature version to initialize the problem.  
-      // i.e. the value of an array element is the average value of the function over the cell (finite volume)
-      //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
       int ijk = (i+ghosts) + (j+ghosts)*jStride + (k+ghosts)*kStride;
       double x = hLevel*( (double)(i+level->my_boxes[box].low.i) + 0.5 ); // +0.5 to get to the center of cell
       double y = hLevel*( (double)(j+level->my_boxes[box].low.j) + 0.5 );
@@ -121,9 +118,6 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
     }}}
   }
-
-  // quick test for Poisson...
-  if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
 
 }
 //------------------------------------------------------------------------------------------------------------------------------

@@ -20,8 +20,8 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   int block,s;
   for(s=0;s<NUM_SMOOTHS;s++){
     // exchange ghost zone data... Jacobi ping pongs between x_id and VECTOR_TEMP
-    if((s&1)==0){exchange_boundary(level,       x_id,stencil_is_star_shaped());apply_BCs(level,       x_id,stencil_is_star_shaped());}
-            else{exchange_boundary(level,VECTOR_TEMP,stencil_is_star_shaped());apply_BCs(level,VECTOR_TEMP,stencil_is_star_shaped());}
+    if((s&1)==0){exchange_boundary(level,       x_id,stencil_get_shape());apply_BCs(level,       x_id,stencil_get_shape());}
+            else{exchange_boundary(level,VECTOR_TEMP,stencil_get_shape());apply_BCs(level,VECTOR_TEMP,stencil_get_shape());}
 
     // apply the smoother... Jacobi ping pongs between x_id and VECTOR_TEMP
     uint64_t _timeStart = CycleTime();

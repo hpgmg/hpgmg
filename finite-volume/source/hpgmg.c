@@ -183,7 +183,7 @@ int main(int argc, char **argv){
   double h0=1.0/( (double)boxes_in_i*(double)box_dim );
   initialize_problem(&fine_grid,h0,a,b); // calculate VECTOR_ALPHA, VECTOR_BETA, and VECTOR_UTRUE
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if( ((a==0.0)||(fine_grid.alpha_is_zero==1)) && (fine_grid.boundary_condition.type == BC_PERIODIC) ){ 
+  if( ((a==0.0)||(dot(&fine_grid,VECTOR_ALPHA,VECTOR_ALPHA)==0.0)) && (fine_grid.boundary_condition.type == BC_PERIODIC) ){ 
     // Poisson w/ periodic BC's... 
     // nominally, u shifted by any constant is still a valid solution.  
     // However, by convention, we assume u sums to zero.

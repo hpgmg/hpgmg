@@ -140,7 +140,7 @@ static inline void interpolation_v4_block(level_type *level_f, int id_f, double 
     const double c044=read[read_ijk-2+dj2+dk2], c144=read[read_ijk-1+dj2+dk2], c244=read[read_ijk+dj2+dk2], c344=read[read_ijk+1+dj2+dk2], c444=read[read_ijk+2+dj2+dk2];
 
     // interpolate in i to create fine i / coarse jk points...
-    const double f0c00 = ( c200 + c1*(c100-c300) + c2*(c000-c400) );
+    const double f0c00 = ( c200 + c1*(c100-c300) + c2*(c000-c400) ); // same as original 5pt stencil...  f0c00 = ( c2*c000 + c1*c100 + c200 - c1*c300 - c2*c400 )
     const double f1c00 = ( c200 - c1*(c100-c300) - c2*(c000-c400) );
     const double f0c10 = ( c210 + c1*(c110-c310) + c2*(c010-c410) );
     const double f1c10 = ( c210 - c1*(c110-c310) - c2*(c010-c410) );
@@ -250,8 +250,8 @@ static inline void interpolation_v4_block(level_type *level_f, int id_f, double 
 //------------------------------------------------------------------------------------------------------------------------------
 // perform a (inter-level) volumetric quartic interpolation
 void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){
-    exchange_boundary(level_c,id_c,0);
-         apply_BCs_v4(level_c,id_c,0);
+    exchange_boundary(level_c,id_c,STENCIL_SHAPE_BOX);
+         apply_BCs_v4(level_c,id_c,STENCIL_SHAPE_BOX);
 
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;

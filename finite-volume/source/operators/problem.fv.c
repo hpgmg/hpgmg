@@ -133,8 +133,5 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
     }}}
   }
 
-  // quick test for Poisson...
-  if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
-
 }
 //------------------------------------------------------------------------------------------------------------------------------

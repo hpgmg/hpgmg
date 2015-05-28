@@ -88,7 +88,22 @@ static inline void interpolation_v2_block(level_type *level_f, int id_f, double 
     const double c022=read[read_ijk-1+read_jStride+read_kStride], c122=read[read_ijk  +read_jStride+read_kStride], c222=read[read_ijk+1+read_jStride+read_kStride];
 
     // interpolate in i to create fine i / coarse jk points...
-    const double f0c00 = ( c100 + c1*(c000-c200) );
+    //
+    // +-------+-------+-------+      :.......+---+---+.......:
+    // |       |       |       |      :       |   |   |       :
+    // |   c   |   c   |   c   |      :       | f | f |       :
+    // |       |       |       |      :       |   |   |       :
+    // +-------+-------+-------+      :.......+---+---+.......:
+    // |       |       |       |      :       |   |   |       :
+    // |   c   |   c   |   c   |  ->  :       | f | f |       :
+    // |       |       |       |      :       |   |   |       :
+    // +-------+-------+-------+      :.......+---+---+.......:
+    // |       |       |       |      :       |   |   |       :
+    // |   c   |   c   |   c   |      :       | f | f |       :
+    // |       |       |       |      :       |   |   |       :
+    // +-------+-------+-------+      :.......+---+---+.......:
+    //
+    const double f0c00 = ( c100 + c1*(c000-c200) ); // same as original 3pt stencil... f0c00 = ( c1*c000 + c100 - c1*c200 );
     const double f1c00 = ( c100 - c1*(c000-c200) );
     const double f0c10 = ( c110 + c1*(c010-c210) );
     const double f1c10 = ( c110 - c1*(c010-c210) );
@@ -110,6 +125,21 @@ static inline void interpolation_v2_block(level_type *level_f, int id_f, double 
     const double f1c22 = ( c122 - c1*(c022-c222) );
 
     // interpolate in j to create fine ij / coarse k points...
+    //
+    // :.......+---+---+.......:      :.......:.......:.......:
+    // :       |   |   |       :      :       :       :       :
+    // :       |   |   |       :      :       :       :       :
+    // :       |   |   |       :      :       :       :       :
+    // :.......+---+---+.......:      :.......+---+---+.......:
+    // :       |   |   |       :      :       |   |   |       :
+    // :       |   |   |       :  ->  :       +---+---+       :
+    // :       |   |   |       :      :       |   |   |       :
+    // :.......+---+---+.......:      :.......+---+---+.......:
+    // :       |   |   |       :      :       :       :       :
+    // :       |   |   |       :      :       :       :       :
+    // :       |   |   |       :      :       :       :       :
+    // :.......+---+---+.......:      :.......:.......:.......:
+    //
     const double f00c0 = ( f0c10 + c1*(f0c00-f0c20) );
     const double f10c0 = ( f1c10 + c1*(f1c00-f1c20) );
     const double f01c0 = ( f0c10 - c1*(f0c00-f0c20) );
@@ -153,8 +183,8 @@ static inline void interpolation_v2_block(level_type *level_f, int id_f, double 
 //------------------------------------------------------------------------------------------------------------------------------
 // perform a (inter-level) volumetric quadratic interpolation
 void interpolation_v2(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){
-    exchange_boundary(level_c,id_c,0);
-         apply_BCs_v2(level_c,id_c,0);
+    exchange_boundary(level_c,id_c,STENCIL_SHAPE_BOX);
+         apply_BCs_v2(level_c,id_c,STENCIL_SHAPE_BOX);
 
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;

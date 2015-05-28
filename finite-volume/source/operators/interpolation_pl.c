@@ -67,8 +67,8 @@ static inline void interpolation_pl_block(level_type *level_f, int id_f, double 
 //------------------------------------------------------------------------------------------------------------------------------
 // perform a (inter-level) piecewise linear interpolation
 void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){
-  exchange_boundary(level_c,id_c,0);
-   apply_BCs_linear(level_c,id_c,0);
+  exchange_boundary(level_c,id_c,STENCIL_SHAPE_BOX);
+   apply_BCs_linear(level_c,id_c,STENCIL_SHAPE_BOX);
 
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;

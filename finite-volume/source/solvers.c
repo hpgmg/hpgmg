@@ -26,18 +26,25 @@
 void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b, double desired_reduction_in_norm){ 
   if(!level->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  if(level->must_subtract_mean==-1){
+    level->must_subtract_mean=0;
+    int alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
+    if( (level->boundary_condition.type==BC_PERIODIC) && ((a==0) || (alpha_is_zero)) )level->must_subtract_mean = 1; // Poisson with Periodic BCs
+  }
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #if 0
   if( (level->dim.i==1)&&(level->dim.j==1)&&(level->dim.k==1) ){
     // I have reduced the system to 1 equation and 1 unknown and know D^{-1} exactly
-    // therefore A^{-1} == D^{-1}
+    // therefore A^{-1} == D^{-1} = 1/a00
     // u = A^{-1}f == D^{-1}f
     mul_vectors(level,u_id,1.0,VECTOR_DINV,f_id); // u = A^{-1}f = D^{-1}f 
-    // FIX, cc poisson with periodic BC's has null space issue... need to subtract the mean...
+    if(level->must_subtract_mean == 1){
+      double mean_of_u = mean(level,u_id);
+      shift_vector(level,u_id,u_id,-mean_of_u);
+    }
     return;
   }
   #endif
-  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(level->alpha_is_zero==-1)level->alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);  // haven't determined if alpha[] == 0
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef USE_BICGSTAB
     BiCGStab(level,u_id,f_id,a,b,desired_reduction_in_norm);
@@ -49,29 +56,28 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
     CACG(level,u_id,f_id,a,b,desired_reduction_in_norm);
   #else 
     // just point relaxation via multiple smooth()'s
-    // FIX, cc poisson with periodic BC's has null space issue... need to subtract the mean...
-    #if 1 
-                     residual(level,VECTOR_TEMP,u_id,f_id,a,b);
-                  mul_vectors(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
-     double norm_of_r0 = norm(level,VECTOR_TEMP);
+    if(level->must_subtract_mean == 1){
+      double mean_of_u = mean(level,u_id);
+      shift_vector(level,u_id,u_id,-mean_of_u);
+    }
+    residual(level,VECTOR_TEMP,u_id,f_id,a,b);
+    //mul_vectors(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+    double norm_of_r0 = norm(level,VECTOR_TEMP);
     int s=0,maxSmoothsBottom=200,converged=0;
     while( (s<maxSmoothsBottom) && !converged){
       s++;
       level->Krylov_iterations++;
-                       smooth(level,u_id,f_id,a,b);
-                     residual(level,VECTOR_TEMP,u_id,f_id,a,b);
-                  mul_vectors(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
+      smooth(level,u_id,f_id,a,b);
+      if(level->must_subtract_mean == 1){
+        double mean_of_u = mean(level,u_id);
+        shift_vector(level,u_id,u_id,-mean_of_u);
+      }
+      residual(level,VECTOR_TEMP,u_id,f_id,a,b);
+      //mul_vectors(level,VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
       double norm_of_r = norm(level,VECTOR_TEMP);
       if(norm_of_r == 0.0){converged=1;break;}
       if(norm_of_r < desired_reduction_in_norm*norm_of_r0){converged=1;break;}
     }
-    #else
-    int s=0;int maxSmoothsBottom=10;
-    while( (s<maxSmoothsBottom) ){
-      smooth(level,u_id,f_id,a,b);
-      s++;
-    }
-    #endif
   #endif
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 }

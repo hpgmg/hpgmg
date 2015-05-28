@@ -88,8 +88,8 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
     color_vector(level,x_id,colors_in_each_dim,icolor,jcolor,kcolor);
 
     // exchange the boundary of x in preparation for Ax
-    exchange_boundary(level,x_id,stencil_is_star_shaped());
-            apply_BCs(level,x_id,stencil_is_star_shaped());
+    exchange_boundary(level,x_id,stencil_get_shape());
+            apply_BCs(level,x_id,stencil_get_shape());
  
     // apply the operator and add to Aii and AbsAij 
     PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)

@@ -7,8 +7,8 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
   int box,s;
   for(s=0;s<2*NUM_SMOOTHS;s++){ // there are two sweeps per GSRB smooth
     // exchange the ghost zone...
-    exchange_boundary(level,phi_id,stencil_is_star_shaped());
-            apply_BCs(level,phi_id,stencil_is_star_shaped());
+    exchange_boundary(level,phi_id,stencil_get_shape());
+            apply_BCs(level,phi_id,stencil_get_shape());
 
     // apply the smoother...
     uint64_t _timeStart = CycleTime();
