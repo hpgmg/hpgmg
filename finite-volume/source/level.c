@@ -237,16 +237,68 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
                           int blockcopy_tile_i, int blockcopy_tile_j, int blockcopy_tile_k, 
                           int subtype
                          ){
-  int ii,jj,kk;
   // Take a dim_j x dim_k iteration space and tile it into smaller faces of size blockcopy_tile_j x blockcopy_tile_k
   // This increases the number of blockCopies in the ghost zone exchange and thereby increases the thread-level parallelism
-  // FIX... move from lexicographical ordering of tiles to recursive (e.g. z-mort)
 
+  #if 0
+  // use recursive (z-mort) ordering of tiles in order to improve locality on deep memory hierarchies...
+  int doRecursion=0;
+  if(dim_i > blockcopy_tile_i)doRecursion=1;
+  if(dim_j > blockcopy_tile_j)doRecursion=1;
+  if(dim_k > blockcopy_tile_k)doRecursion=1;
+  if( read_scale != 1)doRecursion=0; // disable recursion for restriction
+  if(write_scale != 1)doRecursion=0; // disable recursion for interpolation
+  if(doRecursion){
+    int mid_i = (dim_i + 1)/2;
+    int mid_j = (dim_j + 1)/2;
+    int mid_k = (dim_k + 1)/2;
+        mid_i = blockcopy_tile_i*( (mid_i+blockcopy_tile_i-1)/blockcopy_tile_i);
+        mid_j = blockcopy_tile_j*( (mid_j+blockcopy_tile_j-1)/blockcopy_tile_j);
+        mid_k = blockcopy_tile_k*( (mid_k+blockcopy_tile_k-1)/blockcopy_tile_k);
+     if(mid_i>dim_i)mid_i=dim_i;
+     if(mid_j>dim_j)mid_j=dim_j;
+     if(mid_k>dim_k)mid_k=dim_k;
+    append_block_to_list(blocks,allocated_blocks,num_blocks,      mid_i,      mid_j,      mid_k,
+                          read_box, read_ptr, read_i      , read_j      , read_k      , read_jStride, read_kStride, read_scale,
+                         write_box,write_ptr,write_i      ,write_j      ,write_k      ,write_jStride,write_kStride,write_scale,
+                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
+    append_block_to_list(blocks,allocated_blocks,num_blocks,dim_i-mid_i,      mid_j,      mid_k,
+                          read_box, read_ptr, read_i+mid_i, read_j      , read_k      , read_jStride, read_kStride, read_scale,
+                         write_box,write_ptr,write_i+mid_i,write_j      ,write_k      ,write_jStride,write_kStride,write_scale,
+                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
+    append_block_to_list(blocks,allocated_blocks,num_blocks,      mid_i,dim_j-mid_j,      mid_k,
+                          read_box, read_ptr, read_i      , read_j+mid_j, read_k      , read_jStride, read_kStride, read_scale,
+                         write_box,write_ptr,write_i      ,write_j+mid_j,write_k      ,write_jStride,write_kStride,write_scale,
+                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
+    append_block_to_list(blocks,allocated_blocks,num_blocks,dim_i-mid_i,dim_j-mid_j,      mid_k,
+                          read_box, read_ptr, read_i+mid_i, read_j+mid_j, read_k      , read_jStride, read_kStride, read_scale,
+                         write_box,write_ptr,write_i+mid_i,write_j+mid_j,write_k      ,write_jStride,write_kStride,write_scale,
+                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
+    append_block_to_list(blocks,allocated_blocks,num_blocks,      mid_i,      mid_j,dim_k-mid_k,
+                          read_box, read_ptr, read_i      , read_j      , read_k+mid_k, read_jStride, read_kStride, read_scale,
+                         write_box,write_ptr,write_i      ,write_j      ,write_k+mid_k,write_jStride,write_kStride,write_scale,
+                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
+    append_block_to_list(blocks,allocated_blocks,num_blocks,dim_i-mid_i,      mid_j,dim_k-mid_k,
+                          read_box, read_ptr, read_i+mid_i, read_j      , read_k+mid_k, read_jStride, read_kStride, read_scale,
+                         write_box,write_ptr,write_i+mid_i,write_j      ,write_k+mid_k,write_jStride,write_kStride,write_scale,
+                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
+    append_block_to_list(blocks,allocated_blocks,num_blocks,      mid_i,dim_j-mid_j,dim_k-mid_k,
+                          read_box, read_ptr, read_i      , read_j+mid_j, read_k+mid_k, read_jStride, read_kStride, read_scale,
+                         write_box,write_ptr,write_i      ,write_j+mid_j,write_k+mid_k,write_jStride,write_kStride,write_scale,
+                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
+    append_block_to_list(blocks,allocated_blocks,num_blocks,dim_i-mid_i,dim_j-mid_j,dim_k-mid_k,
+                          read_box, read_ptr, read_i+mid_i, read_j+mid_j, read_k+mid_k, read_jStride, read_kStride, read_scale,
+                         write_box,write_ptr,write_i+mid_i,write_j+mid_j,write_k+mid_k,write_jStride,write_kStride,write_scale,
+                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
+    return;
+  }
+  #endif
   // read_/write_scale are used to stride appropriately when read and write loop iterations spaces are different 
   // ghostZone:     read_scale=1, write_scale=1
   // interpolation: read_scale=1, write_scale=2
   // restriction:   read_scale=2, write_scale=1
   // FIX... dim_i,j,k -> read_dim_i,j,k, write_dim_i,j,k
+  int ii,jj,kk;
   for(kk=0;kk<dim_k;kk+=blockcopy_tile_k){
   for(jj=0;jj<dim_j;jj+=blockcopy_tile_j){
   for(ii=0;ii<dim_i;ii+=blockcopy_tile_i){
@@ -344,6 +396,41 @@ void build_boundary_conditions(level_type *level, int shape){
       case STENCIL_SHAPE_NO_CORNERS:if(            corners[dir])regionIsOutside=0;break; // these stencils don't need BC's enforced on edges
     }
 
+    // default tile sizes...
+    // NOTE, BC's may never tile smaller than the ghost zone depth
+    int blockcopy_i = (BLOCKCOPY_TILE_I < level->box_ghosts) ? level->box_ghosts : BLOCKCOPY_TILE_I;
+    int blockcopy_j = (BLOCKCOPY_TILE_J < level->box_ghosts) ? level->box_ghosts : BLOCKCOPY_TILE_J;
+    int blockcopy_k = (BLOCKCOPY_TILE_K < level->box_ghosts) ? level->box_ghosts : BLOCKCOPY_TILE_K;
+
+    #if 0
+    // 2D tiling of faces
+    // 1D tiling of edges
+    // corners use defaults
+    switch(dir){
+      case  1:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=10000;break; //  i edge
+      case  3:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=10000;break; //  j edge
+      case  4:blockcopy_i=    8;blockcopy_j=    8;blockcopy_k=10000;break; // ij face
+      case  5:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=10000;break; //  j edge
+      case  7:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=10000;break; //  i edge
+
+      case  9:blockcopy_i=10000;blockcopy_j=10000;blockcopy_k=    8;break; //  k edge
+      case 10:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=    8;break; // ik face
+      case 11:blockcopy_i=10000;blockcopy_j=10000;blockcopy_k=    8;break; //  k edge
+      case 12:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=    8;break; // jk face
+
+      case 14:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=    8;break; // jk face
+      case 15:blockcopy_i=10000;blockcopy_j=10000;blockcopy_k=    8;break; //  k edge
+      case 16:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=    8;break; // ik face
+      case 17:blockcopy_i=10000;blockcopy_j=10000;blockcopy_k=    8;break; //  k edge
+
+      case 19:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=10000;break; //  i edge
+      case 21:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=10000;break; //  j edge
+      case 22:blockcopy_i=    8;blockcopy_j=    8;blockcopy_k=10000;break; // ij face
+      case 23:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=10000;break; //  j edge
+      case 25:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=10000;break; //  i edge
+    }
+    #endif
+
     if(regionIsOutside){
     append_block_to_list(&(level->boundary_condition.blocks[shape]),&(level->boundary_condition.allocated_blocks[shape]),&(level->boundary_condition.num_blocks[shape]),
       /* dim.i         = */ dim_i,
@@ -365,9 +452,9 @@ void build_boundary_conditions(level_type *level, int shape){
       /* write.jStride = */ level->my_boxes[box].jStride,
       /* write.kStride = */ level->my_boxes[box].kStride,
       /* write.scale   = */ 1,
-      /* blockcopy_i   = */ BLOCKCOPY_TILE_I < level->box_ghosts ? level->box_ghosts : BLOCKCOPY_TILE_I,  // BC's may never tile smaller than the ghost zone depth
-      /* blockcopy_j   = */ BLOCKCOPY_TILE_J < level->box_ghosts ? level->box_ghosts : BLOCKCOPY_TILE_J,  // BC's may never tile smaller than the ghost zone depth
-      /* blockcopy_k   = */ BLOCKCOPY_TILE_K < level->box_ghosts ? level->box_ghosts : BLOCKCOPY_TILE_K,  // BC's may never tile smaller than the ghost zone depth
+      /* blockcopy_i   = */ blockcopy_i,
+      /* blockcopy_j   = */ blockcopy_j,
+      /* blockcopy_k   = */ blockcopy_k,
       /* subtype       = */ normal
     );
   }}}}}
@@ -410,8 +497,15 @@ void build_exchange_ghosts(level_type *level, int shape){
   int    edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
   int  corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
+  // initialize to defaults...
   level->exchange_ghosts[shape].num_recvs           = 0;
   level->exchange_ghosts[shape].num_sends           = 0;
+  level->exchange_ghosts[shape].recv_ranks          = NULL;
+  level->exchange_ghosts[shape].send_ranks          = NULL;
+  level->exchange_ghosts[shape].recv_sizes          = NULL;
+  level->exchange_ghosts[shape].send_sizes          = NULL;
+  level->exchange_ghosts[shape].recv_buffers        = NULL;
+  level->exchange_ghosts[shape].send_buffers        = NULL;
   level->exchange_ghosts[shape].blocks[0]           = NULL;
   level->exchange_ghosts[shape].blocks[1]           = NULL;
   level->exchange_ghosts[shape].blocks[2]           = NULL;
@@ -421,6 +515,10 @@ void build_exchange_ghosts(level_type *level, int shape){
   level->exchange_ghosts[shape].allocated_blocks[0] = 0;
   level->exchange_ghosts[shape].allocated_blocks[1] = 0;
   level->exchange_ghosts[shape].allocated_blocks[2] = 0;
+  #ifdef USE_MPI
+  level->exchange_ghosts[shape].requests            = NULL;
+  level->exchange_ghosts[shape].status              = NULL;
+  #endif
 
   int    n,CommunicateThisDir[27];for(n=0;n<27;n++)CommunicateThisDir[n] = faces[n] + edges[n] + corners[n];// to be safe, communicate everything
   switch(shape){
@@ -975,6 +1073,10 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
   // Build and auxilarlly data structure that flattens boxes into blocks...
   for(box=0;box<level->num_my_boxes;box++){
+    int blockcopy_i = BLOCKCOPY_TILE_I;
+    int blockcopy_j = BLOCKCOPY_TILE_J;
+    int blockcopy_k = BLOCKCOPY_TILE_K;
+
     append_block_to_list(&(level->my_blocks),&(level->allocated_blocks),&(level->num_my_blocks),
       /* dim.i         = */ level->my_boxes[box].dim,
       /* dim.j         = */ level->my_boxes[box].dim,
@@ -995,9 +1097,9 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
       /* write.jStride = */ level->my_boxes[box].jStride,
       /* write.kStride = */ level->my_boxes[box].kStride,
       /* write.scale   = */ 1,
-      /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
-      /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
-      /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
+      /* blockcopy_i   = */ blockcopy_i,
+      /* blockcopy_j   = */ blockcopy_j,
+      /* blockcopy_k   = */ blockcopy_k,
       /* subtype       = */ 0  
     );
   }
@@ -1030,48 +1132,32 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
 
   // build an assist structure for Gauss Seidel Red Black that would facilitate unrolling and SIMDization...
+  level->RedBlack_FP = NULL;
   if(level->num_my_boxes){
     int i,j;
     int kStride = level->my_boxes[0].kStride;
     int jStride = level->my_boxes[0].jStride;
-
-    //posix_memalign((void**)&(level->RedBlack_FP[0]  ),64,kStride*sizeof(double  )); // even planes
-    //posix_memalign((void**)&(level->RedBlack_FP[1]  ),64,kStride*sizeof(double  ));
-           level->RedBlack_FP[0] = (double*)malloc(kStride*sizeof(double));
-           level->RedBlack_FP[1] = (double*)malloc(kStride*sizeof(double));
-    memset(level->RedBlack_FP[0],0,kStride*sizeof(double));
-    memset(level->RedBlack_FP[1],0,kStride*sizeof(double));
-            level->memory_allocated += kStride*sizeof(double);
-            level->memory_allocated += kStride*sizeof(double);
- 
+    level->RedBlack_FP = (double*)malloc(2*kStride*sizeof(double));
+    level->memory_allocated +=           2*kStride*sizeof(double);
     for(j=0-level->box_ghosts;j<level->box_dim+level->box_ghosts;j++){
     for(i=0-level->box_ghosts;i<level->box_dim+level->box_ghosts;i++){
       int ij = (i+level->box_ghosts) + (j+level->box_ghosts)*jStride;
-      if(((i+level->my_boxes[box].low.i)^(j+level->my_boxes[box].low.j)^(level->my_boxes[box].low.k))&0x1){
-        level->RedBlack_FP[0][ij]=1.0;
-        level->RedBlack_FP[1][ij]=0.0;
+      if((i^j^1)&0x1){
+        level->RedBlack_FP[ij        ]=1.0;
+        level->RedBlack_FP[ij+kStride]=0.0;
       }else{
-        level->RedBlack_FP[0][ij]=0.0;
-        level->RedBlack_FP[1][ij]=1.0;
+        level->RedBlack_FP[ij        ]=0.0;
+        level->RedBlack_FP[ij+kStride]=1.0;
       }
     }}
   }
 
 
-  // create mini programs that affect ghost zone exchanges
-  level->exchange_ghosts[0].num_recvs    =0;
-  level->exchange_ghosts[0].num_sends    =0;
-  level->exchange_ghosts[0].num_blocks[0]=0;
-  level->exchange_ghosts[0].num_blocks[1]=0;
-  level->exchange_ghosts[0].num_blocks[2]=0;
-  level->exchange_ghosts[1].num_recvs    =0;
-  level->exchange_ghosts[1].num_sends    =0;
-  level->exchange_ghosts[1].num_blocks[0]=0;
-  level->exchange_ghosts[1].num_blocks[1]=0;
-  level->exchange_ghosts[1].num_blocks[2]=0;
   int shape;
-  for(shape=0;shape<STENCIL_MAX_SHAPES;shape++)build_exchange_ghosts(    level,shape); // build ghost zone exchange mini program for each stencil shape
-  for(shape=0;shape<STENCIL_MAX_SHAPES;shape++)build_boundary_conditions(level,shape); // build boundary conditions mini program for each stencil shape
+  // create mini program for each stencil shape to perform a ghost zone exchange...
+  for(shape=0;shape<STENCIL_MAX_SHAPES;shape++)build_exchange_ghosts(    level,shape);
+  // create mini program for each stencil shape to perform a boundary condition...
+  for(shape=0;shape<STENCIL_MAX_SHAPES;shape++)build_boundary_conditions(level,shape);
 
 
   // duplicate MPI_COMM_WORLD to be the communicator for each level
@@ -1173,12 +1259,99 @@ void max_level_timers(level_type *level){
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
 void destroy_level(level_type *level){
-  // FIX !!!
-  if(level->rank_of_box)free(level->rank_of_box);
+  int i,j;
+  if(level->my_rank==0){fprintf(stdout,"attempting to destroy the %5d^3 level... ",level->dim.i);fflush(stdout);}
+
+  // misc restructions...
+  if(level->rank_of_box )free(level->rank_of_box);
+  if(level->my_boxes    )free(level->my_boxes);
+  if(level->my_blocks   )free(level->my_blocks);
+  if(level->RedBlack_FP )free(level->RedBlack_FP);
+
+  // FP vector data...
   #ifdef VECTOR_MALLOC_BULK
   if(level->vectors_base)free(level->vectors_base);
+  if(level->vectors     )free(level->vectors);
   #else
-  int c;for(c=0;c<level->numVectors;c++)if(level->vectors[c])free(level->vectors[c]);
+  for(i=0;i<level->numVectors;i++)if(level->vectors[i])free(level->vectors[i]);
+  if(level->vectors     )free(level->vectors);
   #endif
-  if(level->vectors)free(level->vectors);
+
+  // boundary condition mini program...
+  for(i=0;i<STENCIL_MAX_SHAPES;i++){
+    if(level->boundary_condition.blocks[i])free(level->boundary_condition.blocks[i]);
+  }
+
+  // ghost zone exchange mini programs...
+  for(i=0;i<STENCIL_MAX_SHAPES;i++){
+    if(level->exchange_ghosts[i].num_recvs>0){
+    for(j=0;j<level->exchange_ghosts[i].num_recvs;j++)if(level->exchange_ghosts[i].recv_buffers[j])free(level->exchange_ghosts[i].recv_buffers[j]);
+    if(level->exchange_ghosts[i].recv_buffers)free(level->exchange_ghosts[i].recv_buffers);
+    if(level->exchange_ghosts[i].recv_ranks  )free(level->exchange_ghosts[i].recv_ranks  );
+    if(level->exchange_ghosts[i].recv_sizes  )free(level->exchange_ghosts[i].recv_sizes  );
+    }
+    if(level->exchange_ghosts[i].num_sends>0){
+    for(j=0;j<level->exchange_ghosts[i].num_sends;j++)if(level->exchange_ghosts[i].send_buffers[j])free(level->exchange_ghosts[i].send_buffers[j]);
+    if(level->exchange_ghosts[i].send_buffers)free(level->exchange_ghosts[i].send_buffers);
+    if(level->exchange_ghosts[i].send_ranks  )free(level->exchange_ghosts[i].send_ranks  );
+    if(level->exchange_ghosts[i].send_sizes  )free(level->exchange_ghosts[i].send_sizes  );
+    }
+    if(level->exchange_ghosts[i].blocks[0]   )free(level->exchange_ghosts[i].blocks[0]   );
+    if(level->exchange_ghosts[i].blocks[1]   )free(level->exchange_ghosts[i].blocks[1]   );
+    if(level->exchange_ghosts[i].blocks[2]   )free(level->exchange_ghosts[i].blocks[2]   );
+    #ifdef USE_MPI
+    if(level->exchange_ghosts[i].requests    )free(level->exchange_ghosts[i].requests    );
+    if(level->exchange_ghosts[i].status      )free(level->exchange_ghosts[i].status      );
+    #endif
+  }
+
+  // restriction mini programs...
+  for(i=0;i<4;i++){
+    if(level->restriction[i].num_recvs>0){
+    //for(j=0;j<level->restriction[i].num_recvs;j++)if(level->restriction[i].recv_buffers[j])free(level->restriction[i].recv_buffers[j]);
+    if(level->restriction[i].recv_buffers[0])free(level->restriction[i].recv_buffers[0]); // allocated in bulk
+    if(level->restriction[i].recv_buffers   )free(level->restriction[i].recv_buffers   );
+    if(level->restriction[i].recv_ranks     )free(level->restriction[i].recv_ranks     );
+    if(level->restriction[i].recv_sizes     )free(level->restriction[i].recv_sizes     );
+    }
+    if(level->restriction[i].num_sends>0){
+    //for(j=0;j<level->restriction[i].num_sends;j++)if(level->restriction[i].send_buffers[j])free(level->restriction[i].send_buffers[j]);
+    if(level->restriction[i].send_buffers[0])free(level->restriction[i].send_buffers[0]); // allocated in bulk
+    if(level->restriction[i].send_buffers   )free(level->restriction[i].send_buffers   );
+    if(level->restriction[i].send_ranks     )free(level->restriction[i].send_ranks     );
+    if(level->restriction[i].send_sizes     )free(level->restriction[i].send_sizes     );
+    }
+    if(level->restriction[i].blocks[0]      )free(level->restriction[i].blocks[0]      );
+    if(level->restriction[i].blocks[1]      )free(level->restriction[i].blocks[1]      );
+    if(level->restriction[i].blocks[2]      )free(level->restriction[i].blocks[2]      );
+    #ifdef USE_MPI
+    if(level->restriction[i].requests       )free(level->restriction[i].requests       );
+    if(level->restriction[i].status         )free(level->restriction[i].status         );
+    #endif
+  }
+
+  // interpolation mini programs...
+  if(level->interpolation.num_recvs>0){
+  //for(j=0;j<level->interpolation.num_recvs;j++)if(level->interpolation.recv_buffers[j])free(level->interpolation.recv_buffers[j]);
+  if(level->interpolation.recv_buffers[0])free(level->interpolation.recv_buffers[0]); // allocated in bulk
+  if(level->interpolation.recv_buffers   )free(level->interpolation.recv_buffers   );
+  if(level->interpolation.recv_ranks     )free(level->interpolation.recv_ranks     );
+  if(level->interpolation.recv_sizes     )free(level->interpolation.recv_sizes     );
+  }
+  if(level->interpolation.num_sends>0){
+  //for(j=0;j<level->interpolation.num_sends;j++)if(level->interpolation.send_buffers[j])free(level->interpolation.send_buffers[j]);
+  if(level->interpolation.send_buffers[0])free(level->interpolation.send_buffers[0]); // allocated in bulk
+  if(level->interpolation.send_buffers   )free(level->interpolation.send_buffers   );
+  if(level->interpolation.send_ranks     )free(level->interpolation.send_ranks     );
+  if(level->interpolation.send_sizes     )free(level->interpolation.send_sizes     );
+  }
+  if(level->interpolation.blocks[0]      )free(level->interpolation.blocks[0]      );
+  if(level->interpolation.blocks[1]      )free(level->interpolation.blocks[1]      );
+  if(level->interpolation.blocks[2]      )free(level->interpolation.blocks[2]      );
+  #ifdef USE_MPI
+  if(level->interpolation.requests       )free(level->interpolation.requests       );
+  if(level->interpolation.status         )free(level->interpolation.status         );
+  #endif
+
+  if(level->my_rank==0){fprintf(stdout,"done\n");}
 }

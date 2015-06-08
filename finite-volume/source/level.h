@@ -134,7 +134,7 @@ typedef struct {
   #endif
   double dominant_eigenvalue_of_DinvA;		// estimate on the dominate eigenvalue of D^{-1}A
   int must_subtract_mean;			// e.g. Poisson with Periodic BC's
-  double    * __restrict__ RedBlack_FP[2];	// Red/Black Mask (i.e. 0.0 or 1.0) for even/odd planes (dim_with_ghosts^2).  
+  double    * __restrict__ RedBlack_FP;	        // Red/Black Mask (i.e. 0.0 or 1.0) for even/odd planes (2*kStride).  
 
   int num_threads;
   int concurrent_boxes;

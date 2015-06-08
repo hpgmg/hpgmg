@@ -275,7 +275,7 @@ int main(int argc, char **argv){
   }
   richardson_error(&MG_h,0,VECTOR_U);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  // MGDestroy()
+  MGDestroy(&MG_h);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef USE_MPI
   #ifdef USE_HPM // IBM performance counters for BGQ...

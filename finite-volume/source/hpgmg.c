@@ -262,7 +262,7 @@ int main(int argc, char **argv){
   double fine_error = error(&fine_grid,VECTOR_U,VECTOR_UTRUE);
   if(my_rank==0){fprintf(stdout,"h = %22.15e  ||error|| = %22.15e\n\n",h0,fine_error);fflush(stdout);}
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  // MGDestroy()
+  MGDestroy(&all_grids);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef USE_MPI
   #ifdef USE_HPM // IBM performance counters for BGQ...

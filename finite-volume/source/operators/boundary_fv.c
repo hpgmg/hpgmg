@@ -123,7 +123,8 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
     // hard code for box to box BC's 
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
-    double * __restrict__  x = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride);
+    double * __restrict__  x  = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride);
+    double * __restrict__  xn = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride); // physically the same, but use different pointers for read/write
 
     // zero out entire ghost region when not all points will be updated...
     if(box_ghosts>1){
@@ -131,7 +132,7 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
     for(j=0;j<dim_j;j++){
     for(i=0;i<dim_i;i++){
       int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-      x[ijk] = 0.0;
+      xn[ijk] = 0.0;
     }}}}
 
     // apply the appropriate BC subtype (face, edge, corner)...
@@ -154,10 +155,11 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
         case 16:rlo=ilo;dim_r=dim_i;rStride=      1;slo=klo;dim_s=dim_k;sStride=kStride;t=box_dim;tStride=jStride;dt=-tStride;break; // ik face, high j
         case 22:rlo=ilo;dim_r=dim_i;rStride=      1;slo=jlo;dim_s=dim_j;sStride=jStride;t=box_dim;tStride=kStride;dt=-tStride;break; // ij face, high k
       }
+      // FIX... optimize for rStride==1 (unit-stride)
       for(s=0;s<dim_s;s++){
       for(r=0;r<dim_r;r++){
         int ijk = (r+rlo)*rStride + (s+slo)*sStride + (t)*tStride;
-        x[ijk] = -2.5*x[ijk+dt] + 0.5*x[ijk+2*dt];
+        xn[ijk] = -2.5*x[ijk+dt] + 0.5*x[ijk+2*dt];
       }}
     }else
     if(edges[subtype]){
@@ -190,12 +192,13 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
         case 23:rlo=jlo;dim_r=dim_j;rStride=jStride;s=box_dim;sStride=      1;t=box_dim;tStride=kStride;ds=-sStride;dt=-tStride;break; // j-edge, high i, high k
         case 25:rlo=ilo;dim_r=dim_i;rStride=      1;s=box_dim;sStride=jStride;t=box_dim;tStride=kStride;ds=-sStride;dt=-tStride;break; // i-edge, high j, high k
       }
+      // FIX... optimize for rStride==1 (unit-stride)
       for(r=0;r<dim_r;r++){
         int ijk = (r+rlo)*rStride + (s)*sStride + (t)*tStride;
-        x[ijk] =   6.25*x[ijk+  ds+  dt] 
-                 - 1.25*x[ijk+2*ds+  dt]
-                 - 1.25*x[ijk+  ds+2*dt]
-                 + 0.25*x[ijk+2*ds+2*dt];
+        xn[ijk] =   6.25*x[ijk+  ds+  dt] 
+                  - 1.25*x[ijk+2*ds+  dt]
+                  - 1.25*x[ijk+  ds+2*dt]
+                  + 0.25*x[ijk+2*ds+2*dt];
       }
     }else
     if(corners[subtype]){
@@ -229,14 +232,14 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
         case 26:i=box_dim;j=box_dim;k=box_dim;di=-1;dj=-jStride;dk=-kStride;break; // high i, high j, high k
       }
       int ijk = (i) + (j)*jStride + (k)*kStride;
-      x[ijk] =  -15.625*x[ijk+  di+  dj+  dk] 
-                + 3.125*x[ijk+2*di+  dj+  dk] 
-                + 3.125*x[ijk+  di+2*dj+  dk] 
-                + 3.125*x[ijk+  di+  dj+2*dk] 
-                - 0.625*x[ijk+2*di+2*dj+  dk] 
-                - 0.625*x[ijk+  di+2*dj+2*dk] 
-                - 0.625*x[ijk+2*di+  dj+2*dk] 
-                + 0.125*x[ijk+2*di+2*dj+2*dk];
+      xn[ijk] =  -15.625*x[ijk+  di+  dj+  dk] 
+                 + 3.125*x[ijk+2*di+  dj+  dk] 
+                 + 3.125*x[ijk+  di+2*dj+  dk] 
+                 + 3.125*x[ijk+  di+  dj+2*dk] 
+                 - 0.625*x[ijk+2*di+2*dj+  dk] 
+                 - 0.625*x[ijk+  di+2*dj+2*dk] 
+                 - 0.625*x[ijk+2*di+  dj+2*dk] 
+                 + 0.125*x[ijk+2*di+2*dj+2*dk];
     }
   }
   level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
@@ -279,7 +282,8 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
     // hard code for box to box BC's 
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
-    double * __restrict__  x = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride);
+    double * __restrict__  x  = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride);
+    double * __restrict__  xn = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride); // physically the same, but use different pointers for read/write
 
     double OneTwelfth = 1.0/12.0;
 
@@ -289,7 +293,7 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
     for(j=0;j<dim_j;j++){
     for(i=0;i<dim_i;i++){
       int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-      x[ijk] = 0.0;
+      xn[ijk] = 0.0;
     }}}}
 
     // apply the appropriate BC subtype (face, edge, corner)...
@@ -312,11 +316,13 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
         case 16:rlo=ilo;dim_r=dim_i;rStride=      1;slo=klo;dim_s=dim_k;sStride=kStride;t=box_dim;tStride=jStride;dt=-tStride;break; // ik face, high j
         case 22:rlo=ilo;dim_r=dim_i;rStride=      1;slo=jlo;dim_s=dim_j;sStride=jStride;t=box_dim;tStride=kStride;dt=-tStride;break; // ij face, high k
       }
+      // FIX... optimize for rStride==1 (unit-stride)
       for(s=0;s<dim_s;s++){
       for(r=0;r<dim_r;r++){
         int ijk = (r+rlo)*rStride + (s+slo)*sStride + (t)*tStride;
-        x[ijk   ] = OneTwelfth*(  -77.0*x[ijk+dt] +  43.0*x[ijk+2*dt] -  17.0*x[ijk+3*dt] +  3.0*x[ijk+4*dt] );
-        x[ijk-dt] = OneTwelfth*( -505.0*x[ijk+dt] + 335.0*x[ijk+2*dt] - 145.0*x[ijk+3*dt] + 27.0*x[ijk+4*dt] );
+        double x1=x[ijk+dt], x2=x[ijk+2*dt], x3=x[ijk+3*dt], x4=x[ijk+4*dt];
+        xn[ijk   ] = OneTwelfth*(  -77.0*x1 +  43.0*x2 -  17.0*x3 +  3.0*x4 );
+        xn[ijk-dt] = OneTwelfth*( -505.0*x1 + 335.0*x2 - 145.0*x3 + 27.0*x4 );
       }}
     }else
     if(edges[subtype]){
@@ -371,24 +377,25 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
         case 23:rlo=jlo;dim_r=dim_j;rStride=jStride;s=box_dim;sStride=      1;t=box_dim;tStride=kStride;ds=-sStride;dt=-tStride;break; // j-edge, high i, high k
         case 25:rlo=ilo;dim_r=dim_i;rStride=      1;s=box_dim;sStride=jStride;t=box_dim;tStride=kStride;ds=-sStride;dt=-tStride;break; // i-edge, high j, high k
       }
+      // FIX... optimize for rStride==1 (unit-stride)
       for(r=0;r<dim_r;r++){
         int ijk = (r+rlo)*rStride + (s)*sStride + (t)*tStride;
         double x11 = x[ijk+  ds+  dt], x21 = x[ijk+2*ds+  dt], x31 = x[ijk+3*ds+  dt], x41 = x[ijk+4*ds+  dt];
         double x12 = x[ijk+  ds+2*dt], x22 = x[ijk+2*ds+2*dt], x32 = x[ijk+3*ds+2*dt], x42 = x[ijk+4*ds+2*dt];
         double x13 = x[ijk+  ds+3*dt], x23 = x[ijk+2*ds+3*dt], x33 = x[ijk+3*ds+3*dt], x43 = x[ijk+4*ds+3*dt];
         double x14 = x[ijk+  ds+4*dt], x24 = x[ijk+2*ds+4*dt], x34 = x[ijk+3*ds+4*dt], x44 = x[ijk+4*ds+4*dt];
-           double n1 = OneTwelfth*(  -77.0*x11 +  43.0*x21 -  17.0*x31 +  3.0*x41 );
-           double n2 = OneTwelfth*(  -77.0*x12 +  43.0*x22 -  17.0*x32 +  3.0*x42 );
-           double n3 = OneTwelfth*(  -77.0*x13 +  43.0*x23 -  17.0*x33 +  3.0*x43 );
-           double n4 = OneTwelfth*(  -77.0*x14 +  43.0*x24 -  17.0*x34 +  3.0*x44 );
-           double f1 = OneTwelfth*( -505.0*x11 + 335.0*x21 - 145.0*x31 + 27.0*x41 );
-           double f2 = OneTwelfth*( -505.0*x12 + 335.0*x22 - 145.0*x32 + 27.0*x42 );
-           double f3 = OneTwelfth*( -505.0*x13 + 335.0*x23 - 145.0*x33 + 27.0*x43 );
-           double f4 = OneTwelfth*( -505.0*x14 + 335.0*x24 - 145.0*x34 + 27.0*x44 );
-        x[ijk      ] = OneTwelfth*(  -77.0*n1  +  43.0*n2  -  17.0*n3  +  3.0*n4  );
-        x[ijk   -dt] = OneTwelfth*( -505.0*n1  + 335.0*n2  - 145.0*n3  + 27.0*n4  );
-        x[ijk-ds   ] = OneTwelfth*(  -77.0*f1  +  43.0*f2  -  17.0*f3  +  3.0*f4  );
-        x[ijk-ds-dt] = OneTwelfth*( -505.0*f1  + 335.0*f2  - 145.0*f3  + 27.0*f4  );
+            double n1 = OneTwelfth*(  -77.0*x11 +  43.0*x21 -  17.0*x31 +  3.0*x41 );
+            double n2 = OneTwelfth*(  -77.0*x12 +  43.0*x22 -  17.0*x32 +  3.0*x42 );
+            double n3 = OneTwelfth*(  -77.0*x13 +  43.0*x23 -  17.0*x33 +  3.0*x43 );
+            double n4 = OneTwelfth*(  -77.0*x14 +  43.0*x24 -  17.0*x34 +  3.0*x44 );
+            double f1 = OneTwelfth*( -505.0*x11 + 335.0*x21 - 145.0*x31 + 27.0*x41 );
+            double f2 = OneTwelfth*( -505.0*x12 + 335.0*x22 - 145.0*x32 + 27.0*x42 );
+            double f3 = OneTwelfth*( -505.0*x13 + 335.0*x23 - 145.0*x33 + 27.0*x43 );
+            double f4 = OneTwelfth*( -505.0*x14 + 335.0*x24 - 145.0*x34 + 27.0*x44 );
+        xn[ijk      ] = OneTwelfth*(  -77.0*n1  +  43.0*n2  -  17.0*n3  +  3.0*n4  );
+        xn[ijk   -dt] = OneTwelfth*( -505.0*n1  + 335.0*n2  - 145.0*n3  + 27.0*n4  );
+        xn[ijk-ds   ] = OneTwelfth*(  -77.0*f1  +  43.0*f2  -  17.0*f3  +  3.0*f4  );
+        xn[ijk-ds-dt] = OneTwelfth*( -505.0*f1  + 335.0*f2  - 145.0*f3  + 27.0*f4  );
       }
     }else
     if(corners[subtype]){
@@ -519,14 +526,14 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
       double fff = OneTwelfth*( -505.0*ff1 + 335.0*ff2 - 145.0*ff3 + 27.0*ff4 );
 
       // commit to the 8 ghost zones in this corner...
-      x[ijk         ] = nnn;
-      x[ijk      -dk] = nnf;
-      x[ijk   -dj   ] = nfn;
-      x[ijk   -dj-dk] = nff;
-      x[ijk-di      ] = fnn;
-      x[ijk-di   -dk] = fnf;
-      x[ijk-di-dj   ] = ffn;
-      x[ijk-di-dj-dk] = fff;
+      xn[ijk         ] = nnn;
+      xn[ijk      -dk] = nnf;
+      xn[ijk   -dj   ] = nfn;
+      xn[ijk   -dj-dk] = nff;
+      xn[ijk-di      ] = fnn;
+      xn[ijk-di   -dk] = fnf;
+      xn[ijk-di-dj   ] = ffn;
+      xn[ijk-di-dj-dk] = fff;
     }
   }
   level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);

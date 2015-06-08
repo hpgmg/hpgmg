@@ -135,8 +135,16 @@ void MGResetTimers(mg_type *all_grids){
 void build_interpolation(mg_type *all_grids){
   int level;
   for(level=0;level<all_grids->num_levels;level++){
+
+  // initialize to defaults...
   all_grids->levels[level]->interpolation.num_recvs           = 0;
   all_grids->levels[level]->interpolation.num_sends           = 0;
+  all_grids->levels[level]->interpolation.recv_ranks          = NULL;
+  all_grids->levels[level]->interpolation.send_ranks          = NULL;
+  all_grids->levels[level]->interpolation.recv_sizes          = NULL;
+  all_grids->levels[level]->interpolation.send_sizes          = NULL;
+  all_grids->levels[level]->interpolation.recv_buffers        = NULL;
+  all_grids->levels[level]->interpolation.send_buffers        = NULL;
   all_grids->levels[level]->interpolation.blocks[0]           = NULL;
   all_grids->levels[level]->interpolation.blocks[1]           = NULL;
   all_grids->levels[level]->interpolation.blocks[2]           = NULL;
@@ -146,6 +154,10 @@ void build_interpolation(mg_type *all_grids){
   all_grids->levels[level]->interpolation.allocated_blocks[0] = 0;
   all_grids->levels[level]->interpolation.allocated_blocks[1] = 0;
   all_grids->levels[level]->interpolation.allocated_blocks[2] = 0;
+  #ifdef USE_MPI
+  all_grids->levels[level]->interpolation.requests            = NULL;
+  all_grids->levels[level]->interpolation.status              = NULL;
+  #endif
 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -418,8 +430,16 @@ void build_interpolation(mg_type *all_grids){
 void build_restriction(mg_type *all_grids, int restrictionType){
   int level;
   for(level=0;level<all_grids->num_levels;level++){
+
+  // initialize to defaults...
   all_grids->levels[level]->restriction[restrictionType].num_recvs           = 0;
   all_grids->levels[level]->restriction[restrictionType].num_sends           = 0;
+  all_grids->levels[level]->restriction[restrictionType].recv_ranks          = NULL;
+  all_grids->levels[level]->restriction[restrictionType].send_ranks          = NULL;
+  all_grids->levels[level]->restriction[restrictionType].recv_sizes          = NULL;
+  all_grids->levels[level]->restriction[restrictionType].send_sizes          = NULL;
+  all_grids->levels[level]->restriction[restrictionType].recv_buffers        = NULL;
+  all_grids->levels[level]->restriction[restrictionType].send_buffers        = NULL;
   all_grids->levels[level]->restriction[restrictionType].blocks[0]           = NULL;
   all_grids->levels[level]->restriction[restrictionType].blocks[1]           = NULL;
   all_grids->levels[level]->restriction[restrictionType].blocks[2]           = NULL;
@@ -429,6 +449,10 @@ void build_restriction(mg_type *all_grids, int restrictionType){
   all_grids->levels[level]->restriction[restrictionType].num_blocks[0]       = 0; // number of unpack/insert operations  = number of boxes on level+1 that I don't own and restrict to 
   all_grids->levels[level]->restriction[restrictionType].num_blocks[1]       = 0; // number of unpack/insert operations  = number of boxes on level+1 that I own and restrict to
   all_grids->levels[level]->restriction[restrictionType].num_blocks[2]       = 0; // number of unpack/insert operations  = number of boxes on level-1 that I don't own that restrict to me
+  #ifdef USE_MPI
+  all_grids->levels[level]->restriction[restrictionType].requests            = NULL;
+  all_grids->levels[level]->restriction[restrictionType].status              = NULL;
+  #endif
 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -930,6 +954,14 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+void MGDestroy(mg_type *all_grids){
+  int level;
+  for(level=0;level<all_grids->num_levels;level++)destroy_level(all_grids->levels[level]);
+  if(all_grids->levels)free(all_grids->levels);
+}
+
+
+//------------------------------------------------------------------------------------------------------------------------------
 void richardson_error(mg_type *all_grids, int levelh, int u_id){
   // in FV...
   // +-------+   +---+---+   +-------+   +-------+
@@ -938,7 +970,7 @@ void richardson_error(mg_type *all_grids, int levelh, int u_id){
   // |       |   | c | d |   |       |   |   4   |
   // +-------+   +---+---+   +-------+   +-------+
   //
-  if(all_grids->my_rank==0){fprintf(stdout,"performing Richardson error analysis...\n");fflush(stdout);}
+  if(all_grids->my_rank==0){fprintf(stdout,"\nPerforming Richardson error analysis...\n");fflush(stdout);}
   restriction(all_grids->levels[levelh+1],VECTOR_TEMP,all_grids->levels[levelh  ],u_id,RESTRICT_CELL); // temp^2h = R u^h
   restriction(all_grids->levels[levelh+2],VECTOR_TEMP,all_grids->levels[levelh+1],u_id,RESTRICT_CELL); // temp^4h = R u^2h
   add_vectors(all_grids->levels[levelh+1],VECTOR_TEMP,1.0,u_id,-1.0,VECTOR_TEMP);                      // temp^2h = u^2h - temp^2h = u^2h - R u^h
@@ -948,7 +980,7 @@ void richardson_error(mg_type *all_grids, int levelh, int u_id){
   // estimate the error^h using ||u^2h - R u^h||
   if(all_grids->my_rank==0){fprintf(stdout,"  h = %22.15e  ||error|| = %22.15e\n",all_grids->levels[levelh]->h,norm_of_u2h_minus_uh);fflush(stdout);}
   // log( ||u^4h - R u^2h|| / ||u^2h - R u^h|| ) / log(2) is an estimate of the order of the method (e.g. 4th order)
-  if(all_grids->my_rank==0){fprintf(stdout,"  order = %0.3f\n",log(norm_of_u4h_minus_u2h / norm_of_u2h_minus_uh) / log(2) );fflush(stdout);}
+  if(all_grids->my_rank==0){fprintf(stdout,"  order = %0.3f\n\n",log(norm_of_u4h_minus_u2h / norm_of_u2h_minus_uh) / log(2) );fflush(stdout);}
 }
 
 
