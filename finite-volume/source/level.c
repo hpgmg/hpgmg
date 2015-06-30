@@ -80,6 +80,41 @@ int qsortInt(const void *a, const void *b){
                return( 0);
 }
 
+int qsortBlock(const void *a, const void *b){
+  blockCopy_type *ba = (blockCopy_type*)a;
+  blockCopy_type *bb = (blockCopy_type*)b;
+
+  if(ba->write.box >= 0){
+    // sort by box...
+    if(ba->write.box < bb->write.box)return(-1);
+    if(ba->write.box > bb->write.box)return( 1);
+    // now sort by k
+    if(ba->write.k   < bb->write.k  )return(-1);
+    if(ba->write.k   > bb->write.k  )return( 1);
+    // now sort by j
+    if(ba->write.j   < bb->write.j  )return(-1);
+    if(ba->write.j   > bb->write.j  )return( 1);
+    // now sort by i
+    if(ba->write.i   < bb->write.i  )return(-1);
+    if(ba->write.i   > bb->write.i  )return( 1);
+  }else if(ba->read.box >= 0){
+    // sort by box...
+    if(ba->read.box  < bb->read.box )return(-1);
+    if(ba->read.box  > bb->read.box )return( 1);
+    // now sort by k
+    if(ba->read.k    < bb->read.k   )return(-1);
+    if(ba->read.k    > bb->read.k   )return( 1);
+    // now sort by j
+    if(ba->read.j    < bb->read.j   )return(-1);
+    if(ba->read.j    > bb->read.j   )return( 1);
+    // now sort by i
+    if(ba->read.i    < bb->read.i   )return(-1);
+    if(ba->read.i    > bb->read.i   )return( 1);
+  }
+                                     return( 0);
+}
+
+
 //------------------------------------------------------------------------------------------------------------------------------
 // should implement a 3D hilbert curve on non pow2 (but cubical) domain sizes
 //void decompose_level_hilbert(int *rank_of_box, int jStride, int kStride, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int rank_lo, int ranks){
@@ -161,6 +196,46 @@ void decompose_level_bisection_special(int *rank_of_box, int jStride, int kStrid
   fprintf(stderr,"decompose_level_bisection_special failed !!!\n");exit(0);
 }
 
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------
+int decompose_level_zmort(int *rank_of_box, int boxes_in_i, int boxes_in_j, int boxes_in_k, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int ranks, int sfc_offset, int sfc_max_length){
+  // FIX... verify idim, jdim, and kdim are powers of two !!!
+
+  // invalid cases...
+  if(idim<1)return(sfc_offset);
+  if(jdim<1)return(sfc_offset);
+  if(kdim<1)return(sfc_offset);
+  if(ilo <0)return(sfc_offset);
+  if(jlo <0)return(sfc_offset);
+  if(klo <0)return(sfc_offset);
+
+  // base case... 
+  if( (idim==1) && (jdim==1) && (kdim==1) ){
+    if( (ilo<boxes_in_i) && (jlo<boxes_in_j) && (klo<boxes_in_k) ){
+      // deemed a valid box (could be augmented for irregular domains)
+      int b = ilo + jlo*boxes_in_i + klo*boxes_in_i*boxes_in_j;
+      rank_of_box[b] = ((uint64_t)ranks*(uint64_t)(sfc_offset))/(uint64_t)sfc_max_length; // sfc_max_length is the precomputed maximum length
+      return(sfc_offset+1);
+    }
+    return(sfc_offset); // region outside valid domain;  sfc_offset is unchanged
+  }
+
+  // bisect in 3D...
+  int imid = ilo + (idim/2);
+  int jmid = jlo + (jdim/2);
+  int kmid = klo + (kdim/2);
+
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jlo ,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jlo ,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jmid,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jmid,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jlo ,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jlo ,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jmid,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jmid,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  return(sfc_offset);
+
+}
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
 void decompose_level_bisection(int *rank_of_box, int jStride, int kStride, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int ranks, int sfc_offset, int sfc_max_length){
@@ -459,6 +534,10 @@ void build_boundary_conditions(level_type *level, int shape){
     );
   }}}}}
 
+  #ifdef BLOCK_SPATIAL_SORT
+  // sort all the resultant blocks by box,k,j,i (good locality)
+  qsort(level->boundary_condition.blocks[shape],level->boundary_condition.num_blocks[shape],sizeof(blockCopy_type),qsortBlock);
+  #endif
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -884,6 +963,12 @@ void build_exchange_ghosts(level_type *level, int shape){
   #endif
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  #ifdef BLOCK_SPATIAL_SORT
+  // sort all the resultant blocks by box,k,j,i (good locality)
+  qsort(level->exchange_ghosts[shape].blocks[0],level->exchange_ghosts[shape].num_blocks[0],sizeof(blockCopy_type),qsortBlock);
+  qsort(level->exchange_ghosts[shape].blocks[1],level->exchange_ghosts[shape].num_blocks[1],sizeof(blockCopy_type),qsortBlock);
+  qsort(level->exchange_ghosts[shape].blocks[2],level->exchange_ghosts[shape].num_blocks[2],sizeof(blockCopy_type),qsortBlock);
+  #endif
 }
 
 
@@ -913,7 +998,7 @@ void create_vectors(level_type *level, int numVectors){
     level->memory_allocated += malloc_size;
     if((numVectors>0)&&(level->vectors_base==NULL)){fprintf(stderr,"malloc failed - level->vectors_base\n");exit(0);}
     double * tmpbuf = level->vectors_base;
-    while( (uint64_t)(tmpbuf+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & 0xff ){tmpbuf++;} // allign first *non-ghost* zone element of first component to a 256-Byte boundary
+    while( (uint64_t)(tmpbuf+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & 0xff ){tmpbuf++;} // align first *non-ghost* zone element of first component to a 256-Byte boundary
     uint64_t ofs;
     #ifdef _OPENMP
     #pragma omp parallel for
@@ -1052,6 +1137,12 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   // parallelize the grid (i.e. assign a process rank to each box)...
   #ifdef DECOMPOSE_LEX
   decompose_level_lex(level->rank_of_box,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,num_ranks);
+  #elif DECOMPOSE_ZMORT
+  // function mandates idim, jdim, and kdim are powers of two, but is smart enough to only apply the SFC within the valid domain
+  int idim_padded=1;while(idim_padded<level->boxes_in.i)idim_padded*=2;;
+  int jdim_padded=1;while(jdim_padded<level->boxes_in.j)jdim_padded*=2;;
+  int kdim_padded=1;while(kdim_padded<level->boxes_in.k)kdim_padded*=2;;
+  decompose_level_zmort(level->rank_of_box,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,0,0,idim_padded,jdim_padded,kdim_padded,num_ranks,0,level->boxes_in.i*level->boxes_in.j*level->boxes_in.k);
   #elif DECOMPOSE_BISECTION_SPECIAL
   decompose_level_bisection_special(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,num_ranks);
   #else
@@ -1262,7 +1353,10 @@ void destroy_level(level_type *level){
   int i,j;
   if(level->my_rank==0){fprintf(stdout,"attempting to destroy the %5d^3 level... ",level->dim.i);fflush(stdout);}
 
-  // misc restructions...
+  // box ...
+  for(i=0;i<level->num_my_boxes;i++)if(level->my_boxes[i].vectors)free(level->my_boxes[i].vectors);
+
+  // misc ...
   if(level->rank_of_box )free(level->rank_of_box);
   if(level->my_boxes    )free(level->my_boxes);
   if(level->my_blocks   )free(level->my_blocks);

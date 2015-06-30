@@ -9,6 +9,10 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+//------------------------------------------------------------------------------------------------------------------------------
 #include "timers.h"
 #include "defines.h"
 #include "level.h"
@@ -92,7 +96,7 @@ void apply_BCs(level_type * level, int x_id, int shape){
 #if defined(STENCIL_FUSE_DINV) && defined(STENCIL_FUSE_BC)
 #define Dinv_ijk() calculate_Dinv() // recalculate it
 #else
-#define Dinv_ijk() Dinv[ijk]        // simply retriev it rather than recalculating it
+#define Dinv_ijk() Dinv[ijk]        // simply retrieve it rather than recalculating it
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 #ifdef STENCIL_FUSE_BC

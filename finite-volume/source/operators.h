@@ -47,8 +47,6 @@ double                     error(level_type * level, int id_a, int id_b);
 void                color_vector(level_type * level, int id, int colors, int icolor, int jcolor, int kcolor);
 void               random_vector(level_type * level, int id);
 //------------------------------------------------------------------------------------------------------------------------------
-  void      project_cell_to_face(level_type * level, int id_cell, int id_face, int dir);
-//------------------------------------------------------------------------------------------------------------------------------
   void                    matmul(level_type * level, double *C, int *id_A, int *id_B, int rows, int cols, int A_equals_B_transpose);
 //------------------------------------------------------------------------------------------------------------------------------
   void        initialize_problem(level_type * level, double hLevel, double a, double b);

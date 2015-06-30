@@ -605,28 +605,47 @@ void extrapolate_betas(level_type * level){
     //   .       .       .       .       .      |/
     //  .................................       +-----> i
     //
-    const int biStride = dj*jStride + dk*kStride;
-    const int bjStride = di         + dk*kStride;
-    const int bkStride = di         + dj*jStride;
+    const int biStride =      dj*jStride + dk*kStride;
+    const int bjStride = di              + dk*kStride;
+    const int bkStride = di + dj*jStride             ;
 
-    for(k=0;k<dim_k;k++){
-    for(j=0;j<dim_j;j++){
-    for(i=0;i<dim_i;i++){
-      int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-      #if 1
-      // linear extrapolation...
-      // seems to be sufficient in guaranteeing 4th order overall
-      if( (subtype==14) || (subtype==12) ){/*face normal to i should have been filled via RESTRIC_I*/}else beta_i[ijk] = 2.0*beta_i[ijk+biStride] - 1.0*beta_i[ijk+2*biStride];
-      if( (subtype==16) || (subtype==10) ){/*face normal to j should have been filled via RESTRIC_J*/}else beta_j[ijk] = 2.0*beta_j[ijk+bjStride] - 1.0*beta_j[ijk+2*bjStride];
-      if( (subtype==22) || (subtype== 4) ){/*face normal to k should have been filled via RESTRIC_K*/}else beta_k[ijk] = 2.0*beta_k[ijk+bkStride] - 1.0*beta_k[ijk+2*bkStride];
-      #else
+    // note, 
+    //   the face values normal to i should have been filled via RESTRICT_I (skip them)
+    //   the face values normal to j should have been filled via RESTRICT_J (skip them)
+    //   the face values normal to k should have been filled via RESTRICT_K (skip them)
+    if(level->box_dim>=5){
+      // quartic extrapolation... 
+      for(k=0;k<dim_k;k++){
+      for(j=0;j<dim_j;j++){
+      for(i=0;i<dim_i;i++){
+        int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+        if( (subtype!=14) && (subtype!=12) ){beta_i[ijk] = 5.0*beta_i[ijk+biStride] - 10.0*beta_i[ijk+2*biStride] + 10.0*beta_i[ijk+3*biStride] - 5.0*beta_i[ijk+4*biStride] + beta_i[ijk+5*biStride];}
+        if( (subtype!=16) && (subtype!=10) ){beta_j[ijk] = 5.0*beta_j[ijk+bjStride] - 10.0*beta_j[ijk+2*bjStride] + 10.0*beta_j[ijk+3*bjStride] - 5.0*beta_j[ijk+4*bjStride] + beta_j[ijk+5*bjStride];}
+        if( (subtype!=22) && (subtype!= 4) ){beta_k[ijk] = 5.0*beta_k[ijk+bkStride] - 10.0*beta_k[ijk+2*bkStride] + 10.0*beta_k[ijk+3*bkStride] - 5.0*beta_k[ijk+4*bkStride] + beta_k[ijk+5*bkStride];}
+      }}}
+    }else 
+    if(level->box_dim>=4){
       // cubic extrapolation... 
-      // FIX... what if box dimension < 4 ???  
-      if( (subtype==14) || (subtype==12) ){/*face normal to i should have been filled via RESTRIC_I*/}else beta_i[ijk] = 4.0*beta_i[ijk+biStride] - 6.0*beta_i[ijk+2*biStride] + 4.0*beta_i[ijk+3*biStride] - beta_i[ijk+4*biStride];
-      if( (subtype==16) || (subtype==10) ){/*face normal to j should have been filled via RESTRIC_J*/}else beta_j[ijk] = 4.0*beta_j[ijk+bjStride] - 6.0*beta_j[ijk+2*bjStride] + 4.0*beta_j[ijk+3*bjStride] - beta_j[ijk+4*bjStride];
-      if( (subtype==22) || (subtype== 4) ){/*face normal to k should have been filled via RESTRIC_K*/}else beta_k[ijk] = 4.0*beta_k[ijk+bkStride] - 6.0*beta_k[ijk+2*bkStride] + 4.0*beta_k[ijk+3*bkStride] - beta_k[ijk+4*bkStride];
-      #endif
-    }}}
+      for(k=0;k<dim_k;k++){
+      for(j=0;j<dim_j;j++){
+      for(i=0;i<dim_i;i++){
+        int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+        if( (subtype!=14) && (subtype!=12) ){beta_i[ijk] = 4.0*beta_i[ijk+biStride] - 6.0*beta_i[ijk+2*biStride] + 4.0*beta_i[ijk+3*biStride] - beta_i[ijk+4*biStride];}
+        if( (subtype!=16) && (subtype!=10) ){beta_j[ijk] = 4.0*beta_j[ijk+bjStride] - 6.0*beta_j[ijk+2*bjStride] + 4.0*beta_j[ijk+3*bjStride] - beta_j[ijk+4*bjStride];}
+        if( (subtype!=22) && (subtype!= 4) ){beta_k[ijk] = 4.0*beta_k[ijk+bkStride] - 6.0*beta_k[ijk+2*bkStride] + 4.0*beta_k[ijk+3*bkStride] - beta_k[ijk+4*bkStride];}
+      }}}
+    }else 
+    if(level->box_dim>=2){
+      // linear extrapolation...
+      for(k=0;k<dim_k;k++){
+      for(j=0;j<dim_j;j++){
+      for(i=0;i<dim_i;i++){
+        int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+        if( (subtype!=14) && (subtype!=12) ){beta_i[ijk] = 2.0*beta_i[ijk+biStride] - beta_i[ijk+2*biStride];}
+        if( (subtype!=16) && (subtype!=10) ){beta_j[ijk] = 2.0*beta_j[ijk+bjStride] - beta_j[ijk+2*bjStride];}
+        if( (subtype!=22) && (subtype!= 4) ){beta_k[ijk] = 2.0*beta_k[ijk+bkStride] - beta_k[ijk+2*bkStride];}
+      }}}
+    }
 
   }
   level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);

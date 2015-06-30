@@ -345,10 +345,18 @@ void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
-void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir){
+double error(level_type * level, int id_a, int id_b){
+  double h3 = level->h * level->h * level->h;
+               add_vectors(level,VECTOR_TEMP,1.0,id_a,-1.0,id_b);            // VECTOR_TEMP = id_a - id_b
+  double   max =      norm(level,VECTOR_TEMP);                return(max);   // max norm of error function
+  double    L2 = sqrt( dot(level,VECTOR_TEMP,VECTOR_TEMP)*h3);return( L2);   // normalized L2 error ?
+}
+
+
+//------------------------------------------------------------------------------------------------------------------------------
+void color_vector(level_type * level, int id, int colors_in_each_dim, int icolor, int jcolor, int kcolor){
   uint64_t _timeStart = CycleTime();
   int box;
-
   PRAGMA_THREAD_ACROSS_BOXES(level,box)
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
@@ -356,31 +364,43 @@ void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir)
     const int kStride = level->my_boxes[box].kStride;
     const int  ghosts = level->my_boxes[box].ghosts;
     const int     dim = level->my_boxes[box].dim;
-    double * __restrict__ grid_cell = level->my_boxes[box].vectors[id_cell] + ghosts*(1+jStride+kStride);
-    double * __restrict__ grid_face = level->my_boxes[box].vectors[id_face] + ghosts*(1+jStride+kStride);
-    int stride;
-    switch(dir){
-      case 0: stride =       1;break;//i-direction
-      case 1: stride = jStride;break;//j-direction
-      case 2: stride = kStride;break;//k-direction
-    }
+    double * __restrict__ grid = level->my_boxes[box].vectors[id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+
     PRAGMA_THREAD_WITHIN_A_BOX(level,i,j,k)
-    for(k=0;k<=dim;k++){ // <= to ensure you do low and high faces
-    for(j=0;j<=dim;j++){
-    for(i=0;i<=dim;i++){
+    for(k=0;k<dim;k++){double sk=0.0;if( ((k+boxlowk+kcolor)%colors_in_each_dim) == 0 )sk=1.0; // if colors_in_each_dim==1 (don't color), all cells are set to 1.0
+    for(j=0;j<dim;j++){double sj=0.0;if( ((j+boxlowj+jcolor)%colors_in_each_dim) == 0 )sj=1.0;
+    for(i=0;i<dim;i++){double si=0.0;if( ((i+boxlowi+icolor)%colors_in_each_dim) == 0 )si=1.0;
       int ijk = i + j*jStride + k*kStride;
-      grid_face[ijk] = 0.5*(grid_cell[ijk-stride] + grid_cell[ijk]); // simple linear interpolation
+      grid[ijk] = si*sj*sk;
     }}}
   }
-
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-double error(level_type * level, int id_a, int id_b){
-  double h3 = level->h * level->h * level->h;
-               add_vectors(level,VECTOR_TEMP,1.0,id_a,-1.0,id_b);            // VECTOR_TEMP = id_a - id_b
-  double   max =      norm(level,VECTOR_TEMP);                return(max);   // max norm of error function
-  double    L2 = sqrt( dot(level,VECTOR_TEMP,VECTOR_TEMP)*h3);return( L2);   // normalized L2 error ?
+void random_vector(level_type * level, int id){
+  uint64_t _timeStart = CycleTime();
+  int box;
+  PRAGMA_THREAD_ACROSS_BOXES(level,box)
+  for(box=0;box<level->num_my_boxes;box++){
+    int i,j,k;
+    const int jStride = level->my_boxes[box].jStride;
+    const int kStride = level->my_boxes[box].kStride;
+    const int  ghosts = level->my_boxes[box].ghosts;
+    const int     dim = level->my_boxes[box].dim;
+    double * __restrict__ grid = level->my_boxes[box].vectors[id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+
+    PRAGMA_THREAD_WITHIN_A_BOX(level,i,j,k)
+    for(k=0;k<dim;k++){
+    for(j=0;j<dim;j++){
+    for(i=0;i<dim;i++){
+      int ijk = i + j*jStride + k*kStride;
+      grid[ijk] = -0.500 + 1.0*(i^j^k^0x1);
+    }}}
+  }
+  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 }
+
+
+//------------------------------------------------------------------------------------------------------------------------------

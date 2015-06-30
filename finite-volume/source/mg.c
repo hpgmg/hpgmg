@@ -50,8 +50,12 @@ int qsortRP(const void *a, const void*b){
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 void MGPrintTiming(mg_type *all_grids){
   int level,num_levels = all_grids->num_levels;
+  #ifdef CALIBRATE_TIMER
   uint64_t _timeStart=CycleTime();sleep(1);uint64_t _timeEnd=CycleTime();
   double SecondsPerCycle = (double)1.0/(double)(_timeEnd-_timeStart);
+  #else
+  double SecondsPerCycle = 1e-9;
+  #endif
   double scale = SecondsPerCycle/(double)all_grids->MGSolves_performed; // prints average performance per MGSolve
 
    

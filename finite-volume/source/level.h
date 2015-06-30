@@ -58,7 +58,7 @@ typedef struct {
   // coordinates in the write grid to insert data
   // if read/write.box<0, then use write/read.ptr, otherwise use boxes[box].vectors[id]
   // Thus, you can do grid->grid, grid->buf, buf->grid, or buf->buf
-} blockCopy_type;
+} __attribute__((aligned(64))) blockCopy_type;
 
 
 //------------------------------------------------------------------------------------------------------------------------------

@@ -443,45 +443,6 @@ void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
-void project_cell_to_face(level_type * level, int id_cell, int id_face, int dir){
-  uint64_t _timeStart = CycleTime();
-  int block;
-
-  PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
-  for(block=0;block<level->num_my_blocks;block++){
-    const int box = level->my_blocks[block].read.box;
-    const int ilo = level->my_blocks[block].read.i;
-    const int jlo = level->my_blocks[block].read.j;
-    const int klo = level->my_blocks[block].read.k;
-    const int ihi = level->my_blocks[block].dim.i + ilo;
-    const int jhi = level->my_blocks[block].dim.j + jlo;
-    const int khi = level->my_blocks[block].dim.k + klo;
-    int i,j,k;
-    const int jStride = level->my_boxes[box].jStride;
-    const int kStride = level->my_boxes[box].kStride;
-    const int  ghosts = level->my_boxes[box].ghosts;
-    double * __restrict__ grid_cell = level->my_boxes[box].vectors[id_cell] + ghosts*(1+jStride+kStride);
-    double * __restrict__ grid_face = level->my_boxes[box].vectors[id_face] + ghosts*(1+jStride+kStride);
-    int stride=0;
-    switch(dir){
-      case 0: stride =       1;break;//i-direction
-      case 1: stride = jStride;break;//j-direction
-      case 2: stride = kStride;break;//k-direction
-    }
-
-    for(k=klo;k<=khi;k++){ // <= to ensure you do low and high faces
-    for(j=jlo;j<=jhi;j++){
-    for(i=ilo;i<=ihi;i++){
-      int ijk = i + j*jStride + k*kStride;
-      grid_face[ijk] = 0.5*(grid_cell[ijk-stride] + grid_cell[ijk]); // simple linear interpolation
-    }}}
-  }
-
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
-}
-
-
-//------------------------------------------------------------------------------------------------------------------------------
 double error(level_type * level, int id_a, int id_b){
   double h3 = level->h * level->h * level->h;
                add_vectors(level,VECTOR_TEMP,1.0,id_a,-1.0,id_b);            // VECTOR_TEMP = id_a - id_b

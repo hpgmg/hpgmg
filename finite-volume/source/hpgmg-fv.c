@@ -46,7 +46,7 @@
 #include "operators.h"
 #include "solvers.h"
 //------------------------------------------------------------------------------------------------------------------------------
-void bench_hpgmg(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol){
+void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dtol, double rtol){
      int     doTiming;
      int    minSolves = 10; // do at least minSolves MGSolves
   double timePerSolve = 0;
@@ -126,30 +126,28 @@ int main(int argc, char **argv){
     //requested_threading_model = MPI_THREAD_FUNNELED;
     //requested_threading_model = MPI_THREAD_SERIALIZED;
     //requested_threading_model = MPI_THREAD_MULTIPLE;
-  //MPI_Init(&argc, &argv);
   #ifdef _OPENMP
       requested_threading_model = MPI_THREAD_FUNNELED;
     //requested_threading_model = MPI_THREAD_SERIALIZED;
     //requested_threading_model = MPI_THREAD_MULTIPLE;
-  //MPI_Init_thread(&argc, &argv, requested_threading_model, &actual_threading_model);
   #endif
   MPI_Init_thread(&argc, &argv, requested_threading_model, &actual_threading_model);
   MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 //if(actual_threading_model>requested_threading_model)actual_threading_model=requested_threading_model;
   if(my_rank==0){
-       if(requested_threading_model == MPI_THREAD_MULTIPLE  )printf("Requested MPI_THREAD_MULTIPLE, ");
-  else if(requested_threading_model == MPI_THREAD_SINGLE    )printf("Requested MPI_THREAD_SINGLE, ");
-  else if(requested_threading_model == MPI_THREAD_FUNNELED  )printf("Requested MPI_THREAD_FUNNELED, ");
-  else if(requested_threading_model == MPI_THREAD_SERIALIZED)printf("Requested MPI_THREAD_SERIALIZED, ");
-  else if(requested_threading_model == MPI_THREAD_MULTIPLE  )printf("Requested MPI_THREAD_MULTIPLE, ");
-  else                                                       printf("Requested Unknown MPI Threading Model (%d), ",requested_threading_model);
-       if(actual_threading_model    == MPI_THREAD_MULTIPLE  )printf("got MPI_THREAD_MULTIPLE\n");
-  else if(actual_threading_model    == MPI_THREAD_SINGLE    )printf("got MPI_THREAD_SINGLE\n");
-  else if(actual_threading_model    == MPI_THREAD_FUNNELED  )printf("got MPI_THREAD_FUNNELED\n");
-  else if(actual_threading_model    == MPI_THREAD_SERIALIZED)printf("got MPI_THREAD_SERIALIZED\n");
-  else if(actual_threading_model    == MPI_THREAD_MULTIPLE  )printf("got MPI_THREAD_MULTIPLE\n");
-  else                                                       printf("got Unknown MPI Threading Model (%d)\n",actual_threading_model);
+       if(requested_threading_model == MPI_THREAD_MULTIPLE  )fprintf(stdout,"Requested MPI_THREAD_MULTIPLE, ");
+  else if(requested_threading_model == MPI_THREAD_SINGLE    )fprintf(stdout,"Requested MPI_THREAD_SINGLE, ");
+  else if(requested_threading_model == MPI_THREAD_FUNNELED  )fprintf(stdout,"Requested MPI_THREAD_FUNNELED, ");
+  else if(requested_threading_model == MPI_THREAD_SERIALIZED)fprintf(stdout,"Requested MPI_THREAD_SERIALIZED, ");
+  else if(requested_threading_model == MPI_THREAD_MULTIPLE  )fprintf(stdout,"Requested MPI_THREAD_MULTIPLE, ");
+  else                                                       fprintf(stdout,"Requested Unknown MPI Threading Model (%d), ",requested_threading_model);
+       if(actual_threading_model    == MPI_THREAD_MULTIPLE  )fprintf(stdout,"got MPI_THREAD_MULTIPLE\n");
+  else if(actual_threading_model    == MPI_THREAD_SINGLE    )fprintf(stdout,"got MPI_THREAD_SINGLE\n");
+  else if(actual_threading_model    == MPI_THREAD_FUNNELED  )fprintf(stdout,"got MPI_THREAD_FUNNELED\n");
+  else if(actual_threading_model    == MPI_THREAD_SERIALIZED)fprintf(stdout,"got MPI_THREAD_SERIALIZED\n");
+  else if(actual_threading_model    == MPI_THREAD_MULTIPLE  )fprintf(stdout,"got MPI_THREAD_MULTIPLE\n");
+  else                                                       fprintf(stdout,"got Unknown MPI Threading Model (%d)\n",actual_threading_model);
   }
   #ifdef USE_HPM // IBM HPM counters for BGQ...
   HPM_Init();
@@ -164,7 +162,7 @@ int main(int argc, char **argv){
            log2_box_dim=atoi(argv[1]);
      target_boxes_per_rank=atoi(argv[2]);
   }else{
-    if(my_rank==0){printf("usage: ./a.out  [log2_box_dim]  [target_boxes_per_rank]\n");}
+    if(my_rank==0){fprintf(stderr,"usage: ./a.out  [log2_box_dim]  [target_boxes_per_rank]\n");}
     #ifdef USE_MPI
     MPI_Finalize();
     #endif
@@ -172,7 +170,7 @@ int main(int argc, char **argv){
   }
 
   if(log2_box_dim<4){
-    if(my_rank==0){printf("log2_box_dim must be at least 4\n");}
+    if(my_rank==0){fprintf(stderr,"log2_box_dim must be at least 4\n");}
     #ifdef USE_MPI
     MPI_Finalize();
     #endif
@@ -180,7 +178,7 @@ int main(int argc, char **argv){
   }
 
   if(target_boxes_per_rank<1){
-    if(my_rank==0){printf("target_boxes_per_rank must be at least 1\n");}
+    if(my_rank==0){fprintf(stderr,"target_boxes_per_rank must be at least 1\n");}
     #ifdef USE_MPI
     MPI_Finalize();
     #endif
@@ -211,7 +209,7 @@ int main(int argc, char **argv){
     }
   }
   if(boxes_in_i<1){
-    if(my_rank==0){printf("failed to find an acceptable problem size\n");}
+    if(my_rank==0){fprintf(stderr,"failed to find an acceptable problem size\n");}
     #ifdef USE_MPI
     MPI_Finalize();
     #endif
@@ -256,7 +254,7 @@ int main(int argc, char **argv){
 //double dtol=1e-15;double rtol=  0.0; // converged if ||D^{-1}(b-Ax)|| < dtol
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifndef TEST_ERROR
-  bench_hpgmg(&MG_h,0,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
+  bench_hpgmg(&MG_h,0,a,b,dtol,rtol);
   #endif
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // solve A^h u^h = f^h

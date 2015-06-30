@@ -93,8 +93,8 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       for(k=klo;k<khi;k++){
       for(j=jlo;j<jhi;j++){
       for(i=ilo;i<ihi;i++){
+        int ijk = i + j*jStride + k*kStride;
         if((i^j^k^color000^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
-          int ijk = i + j*jStride + k*kStride;
           double Ax     = apply_op_ijk(x_n);
           double lambda =     Dinv_ijk();
           x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);

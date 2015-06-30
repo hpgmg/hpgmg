@@ -107,80 +107,92 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
 
 
   // loop through packed list of MPI receives and prepost Irecv's...
-  _timeStart = CycleTime();
-  #ifdef USE_MPI_THREAD_MULTIPLE
-  #pragma omp parallel for schedule(dynamic,1)
-  #endif
-  for(n=0;n<level_c->restriction[restrictionType].num_recvs;n++){
-    MPI_Irecv(level_c->restriction[restrictionType].recv_buffers[n],
-              level_c->restriction[restrictionType].recv_sizes[n],
-              MPI_DOUBLE,
-              level_c->restriction[restrictionType].recv_ranks[n],
-              my_tag,
-              MPI_COMM_WORLD,
-              &recv_requests[n]
-    );
+  if(level_c->restriction[restrictionType].num_recvs>0){
+    _timeStart = CycleTime();
+    #ifdef USE_MPI_THREAD_MULTIPLE
+    #pragma omp parallel for schedule(dynamic,1)
+    #endif
+    for(n=0;n<level_c->restriction[restrictionType].num_recvs;n++){
+      MPI_Irecv(level_c->restriction[restrictionType].recv_buffers[n],
+                level_c->restriction[restrictionType].recv_sizes[n],
+                MPI_DOUBLE,
+                level_c->restriction[restrictionType].recv_ranks[n],
+                my_tag,
+                MPI_COMM_WORLD,
+                &recv_requests[n]
+      );
+    }
+    _timeEnd = CycleTime();
+    level_f->cycles.restriction_recv += (_timeEnd-_timeStart);
   }
-  _timeEnd = CycleTime();
-  level_f->cycles.restriction_recv += (_timeEnd-_timeStart);
 
 
   // pack MPI send buffers...
-  _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[0])
-  for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[0];buffer++){
-    restriction_pc_block(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[0][buffer],restrictionType);
+  if(level_f->restriction[restrictionType].num_blocks[0]>0){
+    _timeStart = CycleTime();
+    PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[0])
+    for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[0];buffer++){
+      restriction_pc_block(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[0][buffer],restrictionType);
+    }
+    _timeEnd = CycleTime();
+    level_f->cycles.restriction_pack += (_timeEnd-_timeStart);
   }
-  _timeEnd = CycleTime();
-  level_f->cycles.restriction_pack += (_timeEnd-_timeStart);
 
  
   // loop through MPI send buffers and post Isend's...
-  _timeStart = CycleTime();
-  #ifdef USE_MPI_THREAD_MULTIPLE
-  #pragma omp parallel for schedule(dynamic,1)
-  #endif
-  for(n=0;n<level_f->restriction[restrictionType].num_sends;n++){
-    MPI_Isend(level_f->restriction[restrictionType].send_buffers[n],
-              level_f->restriction[restrictionType].send_sizes[n],
-              MPI_DOUBLE,
-              level_f->restriction[restrictionType].send_ranks[n],
-              my_tag,
-              MPI_COMM_WORLD,
-              &send_requests[n]
-    );
+  if(level_f->restriction[restrictionType].num_sends>0){
+    _timeStart = CycleTime();
+    #ifdef USE_MPI_THREAD_MULTIPLE
+    #pragma omp parallel for schedule(dynamic,1)
+    #endif
+    for(n=0;n<level_f->restriction[restrictionType].num_sends;n++){
+      MPI_Isend(level_f->restriction[restrictionType].send_buffers[n],
+                level_f->restriction[restrictionType].send_sizes[n],
+                MPI_DOUBLE,
+                level_f->restriction[restrictionType].send_ranks[n],
+                my_tag,
+                MPI_COMM_WORLD,
+                &send_requests[n]
+      );
+    }
+    _timeEnd = CycleTime();
+    level_f->cycles.restriction_send += (_timeEnd-_timeStart);
   }
-  _timeEnd = CycleTime();
-  level_f->cycles.restriction_send += (_timeEnd-_timeStart);
   #endif
 
 
   // perform local restriction[restrictionType]... try and hide within Isend latency... 
-  _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[1])
-  for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[1];buffer++){
-    restriction_pc_block(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[1][buffer],restrictionType);
+  if(level_f->restriction[restrictionType].num_blocks[1]>0){
+    _timeStart = CycleTime();
+    PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[1])
+    for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[1];buffer++){
+      restriction_pc_block(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[1][buffer],restrictionType);
+    }
+    _timeEnd = CycleTime();
+    level_f->cycles.restriction_local += (_timeEnd-_timeStart);
   }
-  _timeEnd = CycleTime();
-  level_f->cycles.restriction_local += (_timeEnd-_timeStart);
 
 
   // wait for MPI to finish...
   #ifdef USE_MPI 
-  _timeStart = CycleTime();
-  if(nMessages)MPI_Waitall(nMessages,level_f->restriction[restrictionType].requests,level_f->restriction[restrictionType].status);
-  _timeEnd = CycleTime();
-  level_f->cycles.restriction_wait += (_timeEnd-_timeStart);
+  if(nMessages){
+    _timeStart = CycleTime();
+    MPI_Waitall(nMessages,level_f->restriction[restrictionType].requests,level_f->restriction[restrictionType].status);
+    _timeEnd = CycleTime();
+    level_f->cycles.restriction_wait += (_timeEnd-_timeStart);
+  }
 
 
   // unpack MPI receive buffers 
-  _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->restriction[restrictionType].num_blocks[2])
-  for(buffer=0;buffer<level_c->restriction[restrictionType].num_blocks[2];buffer++){
-    CopyBlock(level_c,id_c,&level_c->restriction[restrictionType].blocks[2][buffer]);
+  if(level_c->restriction[restrictionType].num_blocks[2]>0){
+    _timeStart = CycleTime();
+    PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->restriction[restrictionType].num_blocks[2])
+    for(buffer=0;buffer<level_c->restriction[restrictionType].num_blocks[2];buffer++){
+      CopyBlock(level_c,id_c,&level_c->restriction[restrictionType].blocks[2][buffer]);
+    }
+    _timeEnd = CycleTime();
+    level_f->cycles.restriction_unpack += (_timeEnd-_timeStart);
   }
-  _timeEnd = CycleTime();
-  level_f->cycles.restriction_unpack += (_timeEnd-_timeStart);
   #endif
  
  

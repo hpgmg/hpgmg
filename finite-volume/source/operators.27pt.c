@@ -9,6 +9,10 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+//------------------------------------------------------------------------------------------------------------------------------
 #include "timers.h"
 #include "defines.h"
 #include "level.h"
@@ -38,7 +42,8 @@
   #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_linear(level,x_id,shape);}
+void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_quadratic(level,x_id,shape);} // 27pt uses cell centered, not cell averaged
+//void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_v2(level,x_id,shape);}
 //------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_COEF0 (-4.2666666666666666666)  // -128.0/30.0;
 #define STENCIL_COEF1 ( 0.4666666666666666666)  //   14.0/30.0;
@@ -51,11 +56,8 @@ void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_linear(level,x
 #ifdef STENCIL_FUSE_BC
   #error This implementation does not support fusion of the boundary conditions with the operator
 #endif
-#ifndef USE_PERIODIC_BC
-  #warning 27pt SHOULD use -DUSE_PERIODIC_BC as D^{-1} is calculated assuming periodic BCs
-#endif
 //------------------------------------------------------------------------------------------------------------------------------
-#define Dinv_ijk() Dinv[ijk]        // simply retriev it rather than recalculating it
+#define Dinv_ijk() Dinv[ijk]        // simply retrieve it rather than recalculating it
 //------------------------------------------------------------------------------------------------------------------------------
 #define apply_op_ijk(x)				\
 (						\
@@ -94,9 +96,6 @@ int stencil_get_radius(){return(1);} // 27pt = dense 3^3
 int stencil_get_shape(){return(STENCIL_SHAPE_BOX);} // needs faces, edges, and corners
 //------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
-  if(level->my_rank==0){fprintf(stdout,"  rebuilding 27pt CC operator for level...  h=%e  ",level->h);}
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // form restriction of alpha[], beta_*[] coefficients from fromLevel
   if(fromLevel != NULL){
     restriction(level,VECTOR_ALPHA ,fromLevel,VECTOR_ALPHA ,RESTRICT_CELL  );
@@ -105,93 +104,27 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     restriction(level,VECTOR_BETA_K,fromLevel,VECTOR_BETA_K,RESTRICT_FACE_K);
   } // else case assumes alpha/beta have been set
 
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange alpha/beta/...  (must be done before calculating Dinv)
   exchange_boundary(level,VECTOR_ALPHA ,STENCIL_SHAPE_BOX); // safe
   exchange_boundary(level,VECTOR_BETA_I,STENCIL_SHAPE_BOX);
   exchange_boundary(level,VECTOR_BETA_J,STENCIL_SHAPE_BOX);
   exchange_boundary(level,VECTOR_BETA_K,STENCIL_SHAPE_BOX);
 
+  // black box rebuild of D^{-1}, l1^{-1}, dominant eigenvalue, ...
+  rebuild_operator_blackbox(level,a,b,2);
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  // calculate Dinv, L1inv, and estimate the dominant Eigenvalue
-  uint64_t _timeStart = CycleTime();
-  int block;
-
-  double dominant_eigenvalue = -1e9;
-
-  PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,block,level->num_my_blocks,dominant_eigenvalue)
-  for(block=0;block<level->num_my_blocks;block++){
-    const int box = level->my_blocks[block].read.box;
-    const int ilo = level->my_blocks[block].read.i;
-    const int jlo = level->my_blocks[block].read.j;
-    const int klo = level->my_blocks[block].read.k;
-    const int ihi = level->my_blocks[block].dim.i + ilo;
-    const int jhi = level->my_blocks[block].dim.j + jlo;
-    const int khi = level->my_blocks[block].dim.k + klo;
-    int i,j,k;
-    const int jStride = level->my_boxes[box].jStride;
-    const int kStride = level->my_boxes[box].kStride;
-    const int  ghosts = level->my_boxes[box].ghosts;
-    double h2inv = 1.0/(level->h*level->h);
-    double * __restrict__ alpha  = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);
-    double * __restrict__ beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride);
-    double * __restrict__ beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + ghosts*(1+jStride+kStride);
-    double * __restrict__ beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + ghosts*(1+jStride+kStride);
-    double * __restrict__   Dinv = level->my_boxes[box].vectors[VECTOR_DINV  ] + ghosts*(1+jStride+kStride);
-    double * __restrict__  L1inv = level->my_boxes[box].vectors[VECTOR_L1INV ] + ghosts*(1+jStride+kStride);
-    double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID ] + ghosts*(1+jStride+kStride);
-    double block_eigenvalue = -1e9;
-
-    for(k=klo;k<khi;k++){
-    for(j=jlo;j<jhi;j++){
-    for(i=ilo;i<ihi;i++){ 
-      int ijk = i + j*jStride + k*kStride;
-      // radius of Gershgorin disc is the sum of the absolute values of the off-diagonal elements...
-                      double sumAbsAij = fabs(b*h2inv*6.0*STENCIL_COEF1) + fabs(b*h2inv*12.0*STENCIL_COEF2) + fabs(b*h2inv*8.0*STENCIL_COEF3);
-      // center of Gershgorin disc is the diagonal element...
-                            double Aii = a - b*h2inv*( STENCIL_COEF0 );
-                             Dinv[ijk] = 1.0/Aii;					// inverse of the diagonal Aii
-                          //L1inv[ijk] = 1.0/(Aii+sumAbsAij);				// inverse of the L1 row norm... L1inv = ( D+D^{L1} )^{-1}
-      // as suggested by eq 6.5 in Baker et al, "Multigrid smoothers for ultra-parallel computing: additional theory and discussion"...
-      if(Aii>=1.5*sumAbsAij)L1inv[ijk] = 1.0/(Aii              ); 			//
-                       else L1inv[ijk] = 1.0/(Aii+0.5*sumAbsAij);			// 
-      double Di = (Aii + sumAbsAij)/Aii;if(Di>block_eigenvalue)block_eigenvalue=Di;	// upper limit to Gershgorin disc == bound on dominant eigenvalue
-    }}}
-    if(block_eigenvalue>dominant_eigenvalue){dominant_eigenvalue = block_eigenvalue;}
-  }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
-
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  // Reduce the local estimates dominant eigenvalue to a global estimate
-  #ifdef USE_MPI
-  uint64_t _timeStartAllReduce = CycleTime();
-  double send = dominant_eigenvalue;
-  MPI_Allreduce(&send,&dominant_eigenvalue,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
-  uint64_t _timeEndAllReduce = CycleTime();
-  level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
-  #endif
-  if(level->my_rank==0){fprintf(stdout,"eigenvalue_max<%e\n",dominant_eigenvalue);}
-  level->dominant_eigenvalue_of_DinvA = dominant_eigenvalue;
-
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange Dinv/L1inv/...
   exchange_boundary(level,VECTOR_DINV ,STENCIL_SHAPE_BOX); // safe
   exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 #ifdef  USE_GSRB
+#warning GSRB is not recommended for the 27pt operator
 #define GSRB_OOP
 #define NUM_SMOOTHS      2 // RBRB
 #include "operators/gsrb.c"
-//#ifdef  USE_GSRB
-//#error 27-point operator cannot use GSRB
 #elif   USE_CHEBY
 #define NUM_SMOOTHS      1
 #define CHEBYSHEV_DEGREE 4 // i.e. one degree-4 polynomial smoother
@@ -203,25 +136,29 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #define NUM_SMOOTHS      6
 #include "operators/jacobi.c"
 #elif   USE_SYMGS
-#define NUM_SMOOTHS      2
+#define NUM_SMOOTHS      2 // FBFB
 #include "operators/symgs.c"
 #else
 #error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, -DUSE_JACOBI, -DUSE_L1JACOBI, or -DUSE_SYMGS
 #endif
 #include "operators/residual.c"
 #include "operators/apply_op.c"
+#include "operators/rebuild.c"
 //------------------------------------------------------------------------------------------------------------------------------
 #include "operators/blockCopy.c"
 #include "operators/misc.c"
 #include "operators/exchange_boundary.c"
-#include "operators/boundary_fd.c"
+#include "operators/boundary_fd.c" // 27pt uses cell centered, not cell averaged
+//#include "operators/boundary_fv.c"
 #include "operators/matmul.c"
 #include "operators/restriction.c"
-#include "operators/interpolation_pc.c"
-#include "operators/interpolation_pl.c"
+#include "operators/interpolation_pq.c"
+//#include "operators/interpolation_v2.c"
 //------------------------------------------------------------------------------------------------------------------------------
-void interpolation_vcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_pc(level_f,id_f,prescale_f,level_c,id_c);}
-void interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_pl(level_f,id_f,prescale_f,level_c,id_c);}
+void interpolation_vcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_pq(level_f,id_f,prescale_f,level_c,id_c);} // 27pt uses cell centered, not cell averaged
+void interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_pq(level_f,id_f,prescale_f,level_c,id_c);}
+//void interpolation_vcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_v2(level_f,id_f,prescale_f,level_c,id_c);}
+//void interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_v2(level_f,id_f,prescale_f,level_c,id_c);}
 //------------------------------------------------------------------------------------------------------------------------------
 #include "operators/problem.p6.c"
 //------------------------------------------------------------------------------------------------------------------------------
