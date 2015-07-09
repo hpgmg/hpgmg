@@ -47,7 +47,7 @@
 void apply_BCs(level_type * level, int x_id, int shape){
   #ifndef STENCIL_FUSE_BC
   // This is a failure mode if (trying to do communication-avoiding) && (BC!=BC_PERIODIC)
-  apply_BCs_linear(level,x_id,shape);
+  apply_BCs_p1(level,x_id,shape);
   #endif
 }
 //------------------------------------------------------------------------------------------------------------------------------
@@ -358,11 +358,11 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #include "operators/boundary_fd.c"
 #include "operators/matmul.c"
 #include "operators/restriction.c"
-#include "operators/interpolation_pc.c"
-#include "operators/interpolation_pl.c"
+#include "operators/interpolation_p0.c"
+#include "operators/interpolation_p1.c"
 //------------------------------------------------------------------------------------------------------------------------------
-void interpolation_vcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_pc(level_f,id_f,prescale_f,level_c,id_c);}
-void interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_pl(level_f,id_f,prescale_f,level_c,id_c);}
+void interpolation_vcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_p0(level_f,id_f,prescale_f,level_c,id_c);}
+void interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){interpolation_p1(level_f,id_f,prescale_f,level_c,id_c);}
 //------------------------------------------------------------------------------------------------------------------------------
 #include "operators/problem.p6.c"
 //------------------------------------------------------------------------------------------------------------------------------

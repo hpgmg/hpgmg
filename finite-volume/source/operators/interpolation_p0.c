@@ -3,13 +3,11 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-#include <math.h>
-//------------------------------------------------------------------------------------------------------------------------------
-static inline void interpolation_pl_block(level_type *level_f, int id_f, double prescale_f, level_type *level_c, int id_c, blockCopy_type *block){
+static inline void interpolation_p0_block(level_type *level_f, int id_f, double prescale_f, level_type *level_c, int id_c, blockCopy_type *block){
   // interpolate 3D array from read_i,j,k of read[] to write_i,j,k in write[]
-  int write_dim_i   = block->dim.i<<1; // calculate the dimensions of the resultant fine block
-  int write_dim_j   = block->dim.j<<1;
-  int write_dim_k   = block->dim.k<<1;
+  int   dim_i       = block->dim.i<<1; // calculate the dimensions of the resultant fine block
+  int   dim_j       = block->dim.j<<1;
+  int   dim_k       = block->dim.k<<1;
 
   int  read_i       = block->read.i;
   int  read_j       = block->read.j;
@@ -38,43 +36,25 @@ static inline void interpolation_pl_block(level_type *level_f, int id_f, double 
  
  
   int i,j,k;
-  for(k=0;k<write_dim_k;k++){int delta_k=-read_kStride;if(k&0x1)delta_k=read_kStride;
-  for(j=0;j<write_dim_j;j++){int delta_j=-read_jStride;if(j&0x1)delta_j=read_jStride;
-  for(i=0;i<write_dim_i;i++){int delta_i=           -1;if(i&0x1)delta_i=           1; // i.e. even points look backwards while odd points look forward
+  for(k=0;k<dim_k;k++){
+  for(j=0;j<dim_j;j++){
+  for(i=0;i<dim_i;i++){
     int write_ijk = ((i   )+write_i) + (((j   )+write_j)*write_jStride) + (((k   )+write_k)*write_kStride);
     int  read_ijk = ((i>>1)+ read_i) + (((j>>1)+ read_j)* read_jStride) + (((k>>1)+ read_k)* read_kStride);
-    //
-    // |   o   |   o   |
-    // +---+---+---+---+
-    // |   | x | x |   |
-    //
-    // CAREFUL !!!  you must guarantee you zero'd the MPI buffers(write[]) and destination boxes at some point to avoid 0.0*NaN or 0.0*inf
-    // piecewise linear interpolation... NOTE, BC's must have been previously applied
-    write[write_ijk] = prescale_f*write[write_ijk] + 
-        0.421875*read[read_ijk                        ] +
-        0.140625*read[read_ijk                +delta_k] +
-        0.140625*read[read_ijk        +delta_j        ] +
-        0.046875*read[read_ijk        +delta_j+delta_k] +
-        0.140625*read[read_ijk+delta_i                ] +
-        0.046875*read[read_ijk+delta_i        +delta_k] +
-        0.046875*read[read_ijk+delta_i+delta_j        ] +
-        0.015625*read[read_ijk+delta_i+delta_j+delta_k];
+    write[write_ijk] = prescale_f*write[write_ijk] + read[read_ijk]; // CAREFUL !!!  you must guarantee you zero'd the MPI buffers(write[]) and destination boxes at some point to avoid 0.0*NaN or 0.0*inf
   }}}
 
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-// perform a (inter-level) piecewise linear interpolation
-void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){
-  exchange_boundary(level_c,id_c,STENCIL_SHAPE_BOX);
-   apply_BCs_linear(level_c,id_c,STENCIL_SHAPE_BOX);
-
+// perform a (inter-level) piecewise constant interpolation
+void interpolation_p0(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;
+  int my_tag = (level_f->tag<<4) | 0x6;
   int buffer=0;
   int n;
-  int my_tag = (level_f->tag<<4) | 0x7;
 
 
   #ifdef USE_MPI
@@ -111,7 +91,7 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[0])
     for(buffer=0;buffer<level_c->interpolation.num_blocks[0];buffer++){
       // !!! prescale==0 because you don't want to increment the MPI buffer
-      interpolation_pl_block(level_f,id_f,0.0,level_c,id_c,&level_c->interpolation.blocks[0][buffer]);
+      interpolation_p0_block(level_f,id_f,0.0,level_c,id_c,&level_c->interpolation.blocks[0][buffer]);
     }
     _timeEnd = CycleTime();
     level_f->cycles.interpolation_pack += (_timeEnd-_timeStart);
@@ -145,7 +125,7 @@ void interpolation_pl(level_type * level_f, int id_f, double prescale_f, level_t
     _timeStart = CycleTime();
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[1])
     for(buffer=0;buffer<level_c->interpolation.num_blocks[1];buffer++){
-      interpolation_pl_block(level_f,id_f,prescale_f,level_c,id_c,&level_c->interpolation.blocks[1][buffer]);
+      interpolation_p0_block(level_f,id_f,prescale_f,level_c,id_c,&level_c->interpolation.blocks[1][buffer]);
     }
     _timeEnd = CycleTime();
     level_f->cycles.interpolation_local += (_timeEnd-_timeStart);

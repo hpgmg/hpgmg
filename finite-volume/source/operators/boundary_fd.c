@@ -3,7 +3,7 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs_linear(level_type * level, int x_id, int shape){
+void apply_BCs_p1(level_type * level, int x_id, int shape){
   // For cell-centered, we need to fill in the ghost zones to apply any BC's
   // This code does a simple piecewise linear interpolation for homogeneous dirichlet (0 on boundary)
   // Nominally, this is first performed across faces, then to edges, then to corners.  
@@ -90,14 +90,14 @@ void apply_BCs_linear(level_type * level, int x_id, int shape){
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs_quadratic(level_type * level, int x_id, int shape){
+void apply_BCs_p2(level_type * level, int x_id, int shape){
   // For cell-centered, we need to fill in the ghost zones to apply any BC's
   // This code does a simple piecewise quadratic interpolation for homogeneous dirichlet (0 on boundary)
   // Nominally, this is first performed across faces, then to edges, then to corners.  
   //
   if(shape>=STENCIL_MAX_SHAPES)shape=STENCIL_SHAPE_BOX;  // shape must be < STENCIL_MAX_SHAPES in order to safely index into boundary_condition.blocks[]
   if(level->boundary_condition.type == BC_PERIODIC)return; // no BC's to apply !
-  if(level->box_dim<2){apply_BCs_linear(level,x_id,shape);return;}
+  if(level->box_dim<2){apply_BCs_p1(level,x_id,shape);return;}
 
   const int   faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
   const int   edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};

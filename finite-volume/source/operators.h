@@ -25,8 +25,8 @@ int stencil_get_shape();
   void      interpolation_fcycle(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c); // interpolation used in the f-cycle to create a new initial guess for the next finner v-cycle
 //------------------------------------------------------------------------------------------------------------------------------
   void         exchange_boundary(level_type * level, int id_a, int shape);
-  void          apply_BCs_linear(level_type * level, int x_id, int shape);
-  void       apply_BCs_quadratic(level_type * level, int x_id, int shape);
+  void              apply_BCs_p1(level_type * level, int x_id, int shape);
+  void              apply_BCs_p2(level_type * level, int x_id, int shape);
   void              apply_BCs_v1(level_type * level, int x_id, int shape); // volumetric linear
   void              apply_BCs_v2(level_type * level, int x_id, int shape); // volumetric quadratic
   void              apply_BCs_v4(level_type * level, int x_id, int shape); // volumetric quartic
