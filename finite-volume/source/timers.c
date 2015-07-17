@@ -10,5 +10,5 @@
 // CycleTime in MPI is now defined as a preprocessor macro
 //#include "./timers/mpi.c"
 #else
-#error You need to include a custom timer routine
+#error no timer found.  You must compile with MPI, OpenMP, or include a custom timer routine
 #endif

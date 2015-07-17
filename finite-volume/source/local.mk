@@ -4,5 +4,5 @@ hpgmg-fv-y.c += $(call thisdir, \
 	operators.7pt.c \
 	mg.c \
 	solvers.c \
-	hpgmg.c \
+	hpgmg-fv.c \
 	)

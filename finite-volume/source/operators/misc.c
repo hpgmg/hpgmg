@@ -3,7 +3,7 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-void zero_vector(level_type * level, int component_id){
+void zero_vector(level_type * level, int id_a){
   // zero's the entire grid INCLUDING ghost zones...
   uint64_t _timeStart = CycleTime();
   int block;
@@ -31,7 +31,7 @@ void zero_vector(level_type * level, int component_id){
     if(jhi>=dim)jhi+=ghosts; 
     if(khi>=dim)khi+=ghosts; 
 
-    double * __restrict__ grid = level->my_boxes[box].vectors[component_id] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride);
 
     for(k=klo;k<khi;k++){
     for(j=jlo;j<jhi;j++){
@@ -94,7 +94,7 @@ void initialize_valid_region(level_type * level){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void init_vector(level_type * level, int component_id, double scalar){
+void init_vector(level_type * level, int id_a, double scalar){
   // initializes the grid to a scalar while zero'ing the ghost zones...
   uint64_t _timeStart = CycleTime();
   int block;
@@ -122,7 +122,7 @@ void init_vector(level_type * level, int component_id, double scalar){
     if(jhi>=dim)jhi+=ghosts; 
     if(khi>=dim)khi+=ghosts; 
 
-    double * __restrict__ grid = level->my_boxes[box].vectors[component_id] + ghosts*(1+jStride+kStride);
+    double * __restrict__ grid = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride);
 
     for(k=klo;k<khi;k++){
     for(j=jlo;j<jhi;j++){
@@ -137,7 +137,10 @@ void init_vector(level_type * level, int component_id, double scalar){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double scale_b, int id_b){ // c=scale_a*id_a + scale_b*id_b
+// add vectors id_a (scaled by scale_a) and id_b (scaled by scale_b) and store the result in vector id_c
+// i.e. c[] = scale_a*a[] + scale_b*b[]
+// note, only non ghost zone values are included in this calculation
+void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double scale_b, int id_b){
   uint64_t _timeStart = CycleTime();
 
   int block;
@@ -171,7 +174,10 @@ void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double 
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b){ // id_c=scale*id_a*id_b
+// multiply each element of vector id_a by vector id_b and scale, and place the result in vector id_c
+// i.e. c[]=scale*a[]*b[]
+// note, only non ghost zone values are included in this calculation
+void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b){
   uint64_t _timeStart = CycleTime();
 
   int block;
@@ -205,7 +211,10 @@ void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b)
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void invert_vector(level_type * level, int id_c, double scale_a, int id_a){ // c[]=scale_a/a[]
+// invert each element of vector id_a, scale by scale_a, and place the result in vector id_c
+// i.e. c[]=scale_a/a[]
+// note, only non ghost zone values are included in this calculation
+void invert_vector(level_type * level, int id_c, double scale_a, int id_a){
   uint64_t _timeStart = CycleTime();
 
   int block;
@@ -238,7 +247,10 @@ void invert_vector(level_type * level, int id_c, double scale_a, int id_a){ // c
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void scale_vector(level_type * level, int id_c, double scale_a, int id_a){ // c[]=scale_a*a[]
+// scale vector id_a by scale_a and place the result in vector id_c
+// i.e. c[]=scale_a*a[]
+// note, only non ghost zone values are included in this calculation
+void scale_vector(level_type * level, int id_c, double scale_a, int id_a){
   uint64_t _timeStart = CycleTime();
 
   int block;
@@ -271,6 +283,8 @@ void scale_vector(level_type * level, int id_c, double scale_a, int id_a){ // c[
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+// return the dot product of vectors id_a and id_b
+// note, only non ghost zone values are included in this calculation
 double dot(level_type * level, int id_a, int id_b){
   uint64_t _timeStart = CycleTime();
 
@@ -317,7 +331,9 @@ double dot(level_type * level, int id_a, int id_b){
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
-double norm(level_type * level, int component_id){ // implements the max norm
+// return the max (infinity) norm of the vector id_a.
+// note, only non ghost zone values are included in this calculation
+double norm(level_type * level, int id_a){ // implements the max norm
   uint64_t _timeStart = CycleTime();
 
   int block;
@@ -336,7 +352,7 @@ double norm(level_type * level, int component_id){ // implements the max norm
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
     const int  ghosts = level->my_boxes[box].ghosts;
-    double * __restrict__ grid   = level->my_boxes[box].vectors[component_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__ grid   = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     double block_norm = 0.0;
 
     for(k=klo;k<khi;k++){
@@ -363,6 +379,9 @@ double norm(level_type * level, int component_id){ // implements the max norm
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+// return the mean (arithmetic average value) of vector id_a
+// essentially, this is a l1 norm by a scaling by the inverse of the total (global) number of cells
+// note, only non ghost zone values are included in this calculation
 double mean(level_type * level, int id_a){
   uint64_t _timeStart = CycleTime();
 
@@ -411,6 +430,8 @@ double mean(level_type * level, int id_a){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+// add the scalar value shift_a to each element of vector id_a and store the result in vector id_c
+// note, only non ghost zone values are included in this calculation
 void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
   uint64_t _timeStart = CycleTime();
   int block;
@@ -443,6 +464,8 @@ void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
+// calculate the error between two vectors (id_a and id_b) using either the max (infinity) norm or the L2 norm
+// note, only non ghost zone values are included in this calculation
 double error(level_type * level, int id_a, int id_b){
   double h3 = level->h * level->h * level->h;
                add_vectors(level,VECTOR_TEMP,1.0,id_a,-1.0,id_b);            // VECTOR_TEMP = id_a - id_b
@@ -452,7 +475,19 @@ double error(level_type * level, int id_a, int id_b){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void color_vector(level_type * level, int id, int colors_in_each_dim, int icolor, int jcolor, int kcolor){
+// Color the vector id_a with 1's and 0's
+// The pattern is dictated by the number of colors in each dimension and the 'active' color (i,j,kcolor)
+// note, only non ghost zone values are included in this calculation
+//   e.g. colors_in_each_dim=3, icolor=1, jcolor=2...
+//   -+---+---+---+-
+//    | 0 | 1 | 0 |
+//   -+---+---+---+-
+//    | 0 | 0 | 0 |
+//   -+---+---+---+-
+//    | 0 | 0 | 0 |
+//   -+---+---+---+-
+//
+void color_vector(level_type * level, int id_a, int colors_in_each_dim, int icolor, int jcolor, int kcolor){
   uint64_t _timeStart = CycleTime();
   int block;
 
@@ -471,7 +506,7 @@ void color_vector(level_type * level, int id, int colors_in_each_dim, int icolor
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
     const int  ghosts = level->my_boxes[box].ghosts;
-    double * __restrict__ grid = level->my_boxes[box].vectors[id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__ grid = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     int i,j,k;
 
     for(k=klo;k<khi;k++){double sk=0.0;if( ((k+boxlowk+kcolor)%colors_in_each_dim) == 0 )sk=1.0; // if colors_in_each_dim==1 (don't color), all cells are set to 1.0
@@ -486,7 +521,10 @@ void color_vector(level_type * level, int id, int colors_in_each_dim, int icolor
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void random_vector(level_type * level, int id){
+// Initialize each element of vector id_a with a "random" value.  
+// For simplicity, random is defined as -1.0 or +1.0 and is based on whether the coordinates of the element are even or odd
+// note, only non ghost zone values are included in this calculation
+void random_vector(level_type * level, int id_a){
   uint64_t _timeStart = CycleTime();
   int block;
 
@@ -502,14 +540,14 @@ void random_vector(level_type * level, int id){
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
     const int  ghosts = level->my_boxes[box].ghosts;
-    double * __restrict__ grid = level->my_boxes[box].vectors[id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+    double * __restrict__ grid = level->my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
     int i,j,k;
 
     for(k=klo;k<khi;k++){
     for(j=jlo;j<jhi;j++){
     for(i=ilo;i<ihi;i++){
       int ijk = i + j*jStride + k*kStride;
-      grid[ijk] = -0.500 + 1.0*(i^j^k^0x1);
+      grid[ijk] = -1.000 + 2.0*(i^j^k^0x1);
     }}}
   }
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);

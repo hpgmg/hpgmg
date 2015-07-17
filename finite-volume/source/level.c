@@ -116,12 +116,11 @@ int qsortBlock(const void *a, const void *b){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-// should implement a 3D hilbert curve on non pow2 (but cubical) domain sizes
-//void decompose_level_hilbert(int *rank_of_box, int jStride, int kStride, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int rank_lo, int ranks){
-//}
-//------------------------------------------------------------------------------------------------------------------------------
 void decompose_level_lex(int *rank_of_box, int idim, int jdim, int kdim, int ranks){
   // simple lexicographical decomposition of the domain (i-j-k ordering)
+  // load balancing is easily realized
+  // unfortunately, each process will likely receive one or two long pencils of boxes. 
+  // as such, the resultant surface:volum ratio will likely be poor
   int boxes = idim*jdim*kdim;
   int i,j,k;
   for(k=0;k<kdim;k++){
@@ -131,10 +130,15 @@ void decompose_level_lex(int *rank_of_box, int idim, int jdim, int kdim, int ran
     rank_of_box[b] = ((uint64_t)ranks*(uint64_t)b)/(uint64_t)boxes; // ranks*b can be as larger than ranks^2... can over flow int
   }}} 
 }
+
+
 //---------------------------------------------------------------------------------------------------------------------------------------------------
 void decompose_level_bisection_special(int *rank_of_box, int jStride, int kStride, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int rank_lo, int ranks){
-  // recursive bisection (or prime-section) of the domain
-  // can lead to imbalance unless the number of processes and number of boxes per process are chosen well
+  // if possible, recursively partition the domain by a prime number (e.g. try an parition a 9^3 array into 3 equal pieces instead of 5x9^2 and 4x9^2)
+  // if not, default to simple bisection
+  // this function should ensure that each process receives a compact rectahedral collection of boxes
+  // however, load imbalance can occur
+  // the choice of whether to try and partition with the largest prime or smallest prime first is up to the user
 
   #define numPrimes 13
   //int primes[numPrimes] = {41,37,31,29,23,19,17,13,11,7,5,3,2};
@@ -198,46 +202,6 @@ void decompose_level_bisection_special(int *rank_of_box, int jStride, int kStrid
 
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
-int decompose_level_zmort(int *rank_of_box, int boxes_in_i, int boxes_in_j, int boxes_in_k, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int ranks, int sfc_offset, int sfc_max_length){
-  // FIX... verify idim, jdim, and kdim are powers of two !!!
-
-  // invalid cases...
-  if(idim<1)return(sfc_offset);
-  if(jdim<1)return(sfc_offset);
-  if(kdim<1)return(sfc_offset);
-  if(ilo <0)return(sfc_offset);
-  if(jlo <0)return(sfc_offset);
-  if(klo <0)return(sfc_offset);
-
-  // base case... 
-  if( (idim==1) && (jdim==1) && (kdim==1) ){
-    if( (ilo<boxes_in_i) && (jlo<boxes_in_j) && (klo<boxes_in_k) ){
-      // deemed a valid box (could be augmented for irregular domains)
-      int b = ilo + jlo*boxes_in_i + klo*boxes_in_i*boxes_in_j;
-      rank_of_box[b] = ((uint64_t)ranks*(uint64_t)(sfc_offset))/(uint64_t)sfc_max_length; // sfc_max_length is the precomputed maximum length
-      return(sfc_offset+1);
-    }
-    return(sfc_offset); // region outside valid domain;  sfc_offset is unchanged
-  }
-
-  // bisect in 3D...
-  int imid = ilo + (idim/2);
-  int jmid = jlo + (jdim/2);
-  int kmid = klo + (kdim/2);
-
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jlo ,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jlo ,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jmid,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jmid,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jlo ,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jlo ,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jmid,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jmid,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  return(sfc_offset);
-
-}
-
-//---------------------------------------------------------------------------------------------------------------------------------------------------
 void decompose_level_bisection(int *rank_of_box, int jStride, int kStride, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int ranks, int sfc_offset, int sfc_max_length){
 
   // base case... 
@@ -281,6 +245,56 @@ void decompose_level_bisection(int *rank_of_box, int jStride, int kStride, int i
   fprintf(stderr,"decompose_level_bisection failed !!!\n");exit(0);
 }
 
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------
+int decompose_level_zmort(int *rank_of_box, int boxes_in_i, int boxes_in_j, int boxes_in_k, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int ranks, int sfc_offset, int sfc_max_length){
+  // given a power of two bounding box (idim,jdim,kdim) recursively assign the boxes within the (boxes_in_i,boxes_in_j,boxes_in_k) domain using a Z-morton Space Filling Curve (SFC)
+  // sfc_offset is the current offset within the space filling curve
+  // sfc_max_length is the maximum length of the SFC.  Note, if this length exceeds boxes_in_i*boxes_in_j*boxes_in_k, then some processes with receive no work
+  // this function returns the new offset based on how many boxes it found within (ilo,jlo,klo) + (idim,jdim,kdim)
+  // idim, jdim, and kdim MUST BE powers of two !!!
+
+  // invalid cases...
+  if(idim<1)return(sfc_offset);
+  if(jdim<1)return(sfc_offset);
+  if(kdim<1)return(sfc_offset);
+  if(ilo <0)return(sfc_offset);
+  if(jlo <0)return(sfc_offset);
+  if(klo <0)return(sfc_offset);
+
+  // base case... 
+  if( (idim==1) && (jdim==1) && (kdim==1) ){
+    if( (ilo<boxes_in_i) && (jlo<boxes_in_j) && (klo<boxes_in_k) ){
+      // deemed a valid box (could be augmented for irregular domains)
+      int b = ilo + jlo*boxes_in_i + klo*boxes_in_i*boxes_in_j;
+      rank_of_box[b] = ((uint64_t)ranks*(uint64_t)(sfc_offset))/(uint64_t)sfc_max_length; // sfc_max_length is the precomputed maximum length
+      return(sfc_offset+1);
+    }
+    return(sfc_offset); // region outside valid domain;  sfc_offset is unchanged
+  }
+
+  // bisect in 3D...
+  int imid = ilo + (idim/2);
+  int jmid = jlo + (jdim/2);
+  int kmid = klo + (kdim/2);
+
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jlo ,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jlo ,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jmid,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jmid,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jlo ,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jlo ,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jmid,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jmid,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  return(sfc_offset);
+
+}
+//------------------------------------------------------------------------------------------------------------------------------
+//int decompose_level_hilbert(int *rank_of_box, int boxes_in_i, int boxes_in_j, int boxes_in_k, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int ranks, int sfc_offset, int sfc_max_length){
+// implements a 3D hilbert curve on the non-power of two domain using a power of two bounding box
+//}
+
+
 //---------------------------------------------------------------------------------------------------------------------------------------------------
 void print_decomposition(level_type *level){
   if(level->my_rank!=0)return;
@@ -302,6 +316,11 @@ void print_decomposition(level_type *level){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+// append the specified block (logical region) to the current list of blocks
+// each block may be tiled to...
+//  - create more parallelism across the list of blocks
+//  - limit parallelism within a block
+//  - limit the memory requirements for each block
 #ifndef BLOCK_LIST_MIN_SIZE
 #define BLOCK_LIST_MIN_SIZE 1000
 #endif
@@ -995,7 +1014,6 @@ void create_vectors(level_type *level, int numVectors){
     // allocate one aligned, double-precision array and divide it among vectors...
     uint64_t malloc_size = (uint64_t)numVectors*level->num_my_boxes*level->box_volume*sizeof(double) + 4096;
     level->vectors_base = (double*)malloc(malloc_size);
-    level->memory_allocated += malloc_size;
     if((numVectors>0)&&(level->vectors_base==NULL)){fprintf(stderr,"malloc failed - level->vectors_base\n");exit(0);}
     double * tmpbuf = level->vectors_base;
     while( (uint64_t)(tmpbuf+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & 0xff ){tmpbuf++;} // align first *non-ghost* zone element of first component to a 256-Byte boundary
@@ -1014,12 +1032,12 @@ void create_vectors(level_type *level, int numVectors){
     if(level->numVectors>0)free(level->vectors); // free any previously allocated vector array
     level->vectors = (double **)malloc(numVectors*sizeof(double*));
     if((numVectors>0)&&(level->vectors==NULL)){fprintf(stderr,"malloc failed - level->vectors\n");exit(0);}
-    int c;for(c=0;c<numVectors;c++){level->vectors[c] = tmpbuf + c*level->num_my_boxes*level->box_volume;}
+    uint64_t c;for(c=0;c<numVectors;c++){level->vectors[c] = tmpbuf + (uint64_t)c*level->num_my_boxes*level->box_volume;}
   #else
     // allocate vectors individually (simple, but may cause conflict misses)
     double ** old_vectors = level->vectors;
     level->vectors = (double **)malloc(numVectors*sizeof(double*));
-    int c;
+    uint64_t c;
     for(c=                0;c<level->numVectors;c++){level->vectors[c] = old_vectors[c];}
     for(c=level->numVectors;c<       numVectors;c++){
       level->vectors[c] = (double*)malloc((uint64_t)level->num_my_boxes*level->box_volume*sizeof(double));
@@ -1046,7 +1064,7 @@ void create_vectors(level_type *level, int numVectors){
       if(level->numVectors>0)free(level->my_boxes[box].vectors); // free previously allocated vector array
       level->my_boxes[box].vectors = (double **)malloc(numVectors*sizeof(double*));
       if((numVectors>0)&&(level->my_boxes[box].vectors==NULL)){fprintf(stderr,"malloc failed - level->my_boxes[box].vectors\n");exit(0);}
-      int c;for(c=0;c<numVectors;c++){level->my_boxes[box].vectors[c] = level->vectors[c] + box*level->box_volume;}
+      uint64_t c;for(c=0;c<numVectors;c++){level->my_boxes[box].vectors[c] = level->vectors[c] + (uint64_t)box*level->box_volume;}
       level->my_boxes[box].numVectors = numVectors;
       level->my_boxes[box].dim        = level->box_dim;
       level->my_boxes[box].ghosts     = level->box_ghosts;
@@ -1064,7 +1082,11 @@ void create_vectors(level_type *level, int numVectors){
   level->numVectors = numVectors;
 }
 
+
 //---------------------------------------------------------------------------------------------------------------------------------------------------
+// create a level by populating the basic data structure, distribute boxes within the level among processes, allocate memory, and create any auxilliaries
+// box_ghosts must be >= stencil_get_radius()
+// numVectors represents an estimate of the number of vectors needed in this level.  Additional vectors can be added via subsequent calls to create_vectors()
 void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int numVectors, int domain_boundary_condition, int my_rank, int num_ranks){
   int box;
   int TotalBoxes = boxes_in_i*boxes_in_i*boxes_in_i;
@@ -1079,7 +1101,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   }
 
   int omp_threads = 1;
-  int omp_nested  = 0;
 
   #ifdef _OPENMP
   #pragma omp parallel 
@@ -1087,7 +1108,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
     #pragma omp master
     {
       omp_threads = omp_get_num_threads();
-      omp_nested  = omp_get_nested();
     }
   }
   #endif
@@ -1097,7 +1117,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
     exit(0);
   }
 
-  level->memory_allocated = 0;
   level->box_dim        = box_dim;
   level->box_ghosts     = box_ghosts;
   level->numVectors     = 0; // no vectors have been allocated yet
@@ -1115,12 +1134,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->boundary_condition.type = domain_boundary_condition;
   level->must_subtract_mean = -1;
   level->num_threads      = omp_threads;
-  // intra-box threading...
-  level->threads_per_box  = omp_threads;
-  level->concurrent_boxes = 1;
-  // inter-box threading...
-  //level->threads_per_box  = 1;
-  //level->concurrent_boxes = omp_threads;
   level->my_blocks        = NULL;
   level->num_my_blocks    = 0;
   level->allocated_blocks = 0;
@@ -1130,24 +1143,32 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   // allocate 3D array of integers to hold the MPI rank of the corresponding box and initialize to -1 (unassigned)
      level->rank_of_box = (int*)malloc(level->boxes_in.i*level->boxes_in.j*level->boxes_in.k*sizeof(int));
   if(level->rank_of_box==NULL){fprintf(stderr,"malloc of level->rank_of_box failed\n");exit(0);}
-  level->memory_allocated +=       (level->boxes_in.i*level->boxes_in.j*level->boxes_in.k*sizeof(int));
   for(box=0;box<level->boxes_in.i*level->boxes_in.j*level->boxes_in.k;box++){level->rank_of_box[box]=-1;}  // -1 denotes that there is no actual box assigned to this region
 
 
-  // parallelize the grid (i.e. assign a process rank to each box)...
+  // parallelize the level (i.e. assign a process rank to each box)...
   #ifdef DECOMPOSE_LEX
+  // lexicographical ordering... good load balance, potentially high bisection bandwidth requirements, bad surface:volume ratio when #boxes/proc is large
+  if(my_rank==0){fprintf(stdout,"  Decomposing level via lexicographical ordering... ");fflush(stdout);}
   decompose_level_lex(level->rank_of_box,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,num_ranks);
-  #elif DECOMPOSE_ZMORT
-  // function mandates idim, jdim, and kdim are powers of two, but is smart enough to only apply the SFC within the valid domain
+  #elif DECOMPOSE_BISECTION_SPECIAL
+  // recursive partitioning by primes
+  if(my_rank==0){fprintf(stdout,"  Decomposing level via partitioning by primes... ");fflush(stdout);}
+  decompose_level_bisection_special(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,num_ranks);
+  #elif DECOMPOSE_BISECTION
+  // recursive bisection
+  if(my_rank==0){fprintf(stdout,"  Decomposing level via recursive bisection... ");fflush(stdout);}
+  decompose_level_bisection(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,num_ranks,0,level->boxes_in.i*level->boxes_in.j*level->boxes_in.k);
+  #else//#elif DECOMPOSE_ZMORT
+  // Function mandates idim, jdim, and kdim are powers of two, but is smart enough to only apply the SFC within the valid domain
+  // As such, create a power of two bounding box for a potentially non power of two domain...
+  if(my_rank==0){fprintf(stdout,"  Decomposing level via Z-mort ordering... ");fflush(stdout);}
   int idim_padded=1;while(idim_padded<level->boxes_in.i)idim_padded*=2;;
   int jdim_padded=1;while(jdim_padded<level->boxes_in.j)jdim_padded*=2;;
   int kdim_padded=1;while(kdim_padded<level->boxes_in.k)kdim_padded*=2;;
   decompose_level_zmort(level->rank_of_box,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,0,0,idim_padded,jdim_padded,kdim_padded,num_ranks,0,level->boxes_in.i*level->boxes_in.j*level->boxes_in.k);
-  #elif DECOMPOSE_BISECTION_SPECIAL
-  decompose_level_bisection_special(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,num_ranks);
-  #else
-  decompose_level_bisection(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,num_ranks,0,level->boxes_in.i*level->boxes_in.j*level->boxes_in.k);
   #endif
+  if(my_rank==0){fprintf(stdout,"done\n");fflush(stdout);}
 //print_decomposition(level);// for debug purposes only
 
 
@@ -1159,7 +1180,9 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
 
   // allocate flattened vector FP data and create pointers...
+  if(my_rank==0){fprintf(stdout,"  Allocating vectors... ");fflush(stdout);}
   create_vectors(level,numVectors);
+  if(my_rank==0){fprintf(stdout,"done\n");fflush(stdout);}
 
 
   // Build and auxilarlly data structure that flattens boxes into blocks...
@@ -1195,28 +1218,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
     );
   }
 
-  // Tune the OpenMP style of parallelism...
-  if(omp_nested){
-    #ifndef OMP_STENCILS_PER_THREAD
-    #define OMP_STENCILS_PER_THREAD 64
-    #endif
-                                             level->concurrent_boxes = level->num_my_boxes;
-    if(level->concurrent_boxes > omp_threads)level->concurrent_boxes = omp_threads;
-    if(level->concurrent_boxes <           1)level->concurrent_boxes = 1;
-    level->threads_per_box = omp_threads / level->concurrent_boxes;
-    if(level->threads_per_box > level->box_dim*level->box_dim)
-       level->threads_per_box = level->box_dim*level->box_dim; // JK collapse
-    if(level->threads_per_box > level->box_dim*level->box_dim*level->box_dim/OMP_STENCILS_PER_THREAD )
-       level->threads_per_box = level->box_dim*level->box_dim*level->box_dim/OMP_STENCILS_PER_THREAD;
-    if(level->threads_per_box<1)level->threads_per_box = 1;
-  }else{
-    if(level->num_my_boxes>8){level->concurrent_boxes=omp_threads;level->threads_per_box=1;}
-  }
-  if(my_rank==0){
-    if(omp_nested)fprintf(stdout,"  OMP_NESTED=TRUE  OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
-             else fprintf(stdout,"  OMP_NESTED=FALSE OMP_NUM_THREADS=%d ... %d teams of %d threads\n",omp_threads,level->concurrent_boxes,level->threads_per_box);
-  }
-
 
   // build an assists data structure which specifies which cells are within the domain (used with STENCIL_FUSE_BC)
   initialize_valid_region(level);
@@ -1229,7 +1230,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
     int kStride = level->my_boxes[0].kStride;
     int jStride = level->my_boxes[0].jStride;
     level->RedBlack_FP = (double*)malloc(2*kStride*sizeof(double));
-    level->memory_allocated +=           2*kStride*sizeof(double);
     for(j=0-level->box_ghosts;j<level->box_dim+level->box_ghosts;j++){
     for(i=0-level->box_ghosts;i<level->box_dim+level->box_ghosts;i++){
       int ij = (i+level->box_ghosts) + (j+level->box_ghosts)*jStride;
@@ -1253,7 +1253,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
   // duplicate MPI_COMM_WORLD to be the communicator for each level
   #ifdef USE_MPI
-  if(my_rank==0){fprintf(stdout,"  Duplicating MPI_COMM_WORLD...");fflush(stdout);}
+  if(my_rank==0){fprintf(stdout,"  Duplicating MPI_COMM_WORLD... ");fflush(stdout);}
   double time_start = MPI_Wtime();
   MPI_Comm_dup(MPI_COMM_WORLD,&level->MPI_COMM_ALLREDUCE);
   double time_end = MPI_Wtime();
@@ -1262,7 +1262,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   MPI_Allreduce(&time_in_comm_dup_send,&time_in_comm_dup,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
   if(my_rank==0){fprintf(stdout,"done (%0.6f seconds)\n",time_in_comm_dup);fflush(stdout);}
   #endif
-    
+
   // report on potential load imbalance
   int BoxesPerProcess = level->num_my_boxes;
   #ifdef USE_MPI
@@ -1275,6 +1275,8 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
+// zeros are the timers within this level
+// useful if one wishes to separate setup(build) timing from solve timing
 void reset_level_timers(level_type *level){
   // cycle counters information...
   level->cycles.smooth                  = 0;
@@ -1349,6 +1351,8 @@ void max_level_timers(level_type *level){
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
+// free all memory allocated by this level
+// n.b. in some cases a malloc was used as the basis for an array of pointers.  As such free(x[0])
 void destroy_level(level_type *level){
   int i,j;
   if(level->my_rank==0){fprintf(stdout,"attempting to destroy the %5d^3 level... ",level->dim.i);fflush(stdout);}

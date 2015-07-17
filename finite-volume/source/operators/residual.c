@@ -3,8 +3,9 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-// calculate res_id = rhs_id - A(x_id)
-
+// This routines calculates the residual (res=rhs-Ax) using the linear operator specified in the apply_op_ijk macro
+// This requires exchanging a ghost zone and/or enforcing a boundary condition.
+// NOTE, x_id must be distinct from rhs_id and res_id
 void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, double b){
   // exchange the boundary for x in prep for Ax...
   exchange_boundary(level,x_id,stencil_get_shape());

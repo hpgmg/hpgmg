@@ -90,11 +90,15 @@ void apply_BCs_v1(level_type * level, int x_id, int shape){
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
+// For cell-centered/averaged, one must fill in a ghost zone in order to affect a boundary condition
+// The argument shape indicates on which regions of the domain (not the individual boxes) must the boundary condition be enforced.
+//   If shape exceeds the range of defined shapes, the boundary condition will be applied to all faces, edges, and corners
+// This code performs a simple quadratic volume averages extrapolation for homogeneous dirichlet (0 on boundary)
+//   Nominally, this is first performed across faces, then to edges, then to corners.  
+//   In this implementation, these three steps are fused
+// This code will apply the BC only to the first ghost zone.  Subsequent (2nd, 3rd, ...) ghost zones will be zero'd
+// This code will drop order if one attempts to apply quadratic BC's to boxes of less than 2^3
 void apply_BCs_v2(level_type * level, int x_id, int shape){
-  // For cell-centered, we need to fill in the ghost zones to apply any BC's
-  // This code does a simple quadratic interpolation for homogeneous dirichlet (0 on boundary)
-  // Nominally, this is first performed across faces, then to edges, then to corners.  
-  // In this implementation, these three steps are fused
   const int box_dim    = level->box_dim;
   const int box_ghosts = level->box_ghosts;
   if(shape>=STENCIL_MAX_SHAPES)shape=STENCIL_SHAPE_BOX;  // shape must be < STENCIL_MAX_SHAPES in order to safely index into boundary_condition.blocks[]
@@ -247,11 +251,15 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+// For cell-centered/averaged, one must fill in a ghost zone in order to affect a boundary condition
+// The argument shape indicates on which regions of the domain (not the individual boxes) must the boundary condition be enforced.
+//   If shape exceeds the range of defined shapes, the boundary condition will be applied to all faces, edges, and corners
+// This code performs a simple quartic volume averages extrapolation for homogeneous dirichlet (0 on boundary)
+//   Nominally, this is first performed across faces, then to edges, then to corners.  
+//   In this implementation, these three steps are fused
+// It is considered an error to call this routine if the domain has less that two ghost zones
+// This code will drop order if one attempts to apply quartic BC's to boxes of less than 4^3
 void apply_BCs_v4(level_type * level, int x_id, int shape){
-  // For cell-centered, we need to fill in the ghost zones to apply any BC's
-  // This code does a simple quartic interpolation for homogeneous dirichlet (0 on boundary)
-  // Nominally, this is first performed across faces, then to edges, then to corners.  
-  // In this implementation, these three steps are fused
   const int box_dim    = level->box_dim;
   const int box_ghosts = level->box_ghosts;
   if(shape>=STENCIL_MAX_SHAPES)shape=STENCIL_SHAPE_BOX;  // shape must be < STENCIL_MAX_SHAPES in order to safely index into boundary_condition.blocks[]

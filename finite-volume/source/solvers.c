@@ -85,16 +85,16 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
 
 //------------------------------------------------------------------------------------------------------------------------------
 int IterativeSolver_NumVectors(){
-  // additionally number of grids required by an iterative solver...
+  // additionally number of vectors required by an iterative solver...
   #ifdef USE_BICGSTAB
-  return(8);                  // BiCGStab requires additional grids r0,r,p,s,Ap,As
+  return(8);                  // BiCGStab requires additional vectors r0,r,p,s,Ap,As
   #elif  USE_CG
-  return(5);                  // CG requires extra grids r0,r,p,Ap,z
+  return(5);                  // CG requires extra vectors r0,r,p,Ap,z
   #elif  USE_CABICGSTAB
-  return(4+4*CA_KRYLOV_S);    // CABiCGStab requires additional grids rt,p,r,P[2s+1],R[2s].
+  return(4+4*CA_KRYLOV_S);    // CABiCGStab requires additional vectors rt,p,r,P[2s+1],R[2s].
   #elif  USE_CACG
-  return(4+2*CA_KRYLOV_S);    // CACG requires additional grids r0,p,r,P[s+1],R[s].
+  return(4+2*CA_KRYLOV_S);    // CACG requires additional vectors r0,p,r,P[s+1],R[s].
   #endif
-  return(0);                  // simply doing multiple smooths requires no extra grids
+  return(0);                  // simply doing multiple smooths requires no extra vectors
 }
 //------------------------------------------------------------------------------------------------------------------------------

@@ -4,7 +4,7 @@
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
 static inline void restriction_pc_block(level_type *level_c, int id_c, level_type *level_f, int id_f, blockCopy_type *block, int restrictionType){
-  // restrict 3D array from read_i,j,k of read[] to write_i,j,k in write[]
+  // restrict 3D array from read_i,j,k of read[] to write_i,j,k in write[] using piecewise constant restriction (cell averaged)
   int   dim_i       = block->dim.i; // calculate the dimensions of the resultant coarse block
   int   dim_j       = block->dim.j;
   int   dim_k       = block->dim.k;
@@ -88,7 +88,12 @@ static inline void restriction_pc_block(level_type *level_c, int id_c, level_typ
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-// perform a (inter-level) restriction
+// perform a (inter-level) restriction on vector id_f of the fine level and stores the result in vector id_c on the coarse level
+// restrictionType specifies whether this is either cell-averaged restriction, or one of three face-averaged restrictions
+// piecewise constant restriction requires neither a ghost zone exchange nor a boundary condition
+// This is a rather bulk synchronous implementation which packs all MPI buffers before initiating any sends
+// Similarly, it waits for all remote data before copying any into local boxes.
+// It does however attempt to overlap local restriction with MPI
 void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, int restrictionType){
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;

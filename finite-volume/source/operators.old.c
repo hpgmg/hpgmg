@@ -44,6 +44,8 @@
   #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
+#warning operators.old.c represents an older, lower performance, less performance portable approach to smoothers/residual calculation.  It is strongly suggested you use the default operator file.
+//------------------------------------------------------------------------------------------------------------------------------
 void apply_BCs(level_type * level, int x_id, int shape){
   #ifndef STENCIL_FUSE_BC
   // This is a failure mode if (trying to do communication-avoiding) && (BC!=BC_PERIODIC)

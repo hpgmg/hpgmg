@@ -3,6 +3,24 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
+#if   defined(GSRB_FP)
+  #warning Overriding default GSRB implementation and using pre-computed 1.0/0.0 FP array for Red-Black to facilitate vectorization...
+#elif defined(GSRB_STRIDE2)
+  #if defined(GSRB_OOP)
+  #warning Overriding default GSRB implementation and using out-of-place and stride-2 accesses to minimize the number of flops
+  #else
+  #warning Overriding default GSRB implementation and using stride-2 accesses to minimize the number of flops
+  #endif
+#elif defined(GSRB_BRANCH)
+  #if defined(GSRB_OOP)
+  #warning Overriding default GSRB implementation and using out-of-place implementation with an if-then-else on loop indices...
+  #else
+  #warning Overriding default GSRB implementation and using if-then-else on loop indices...
+  #endif
+#else
+#define GSRB_STRIDE2 // default implementation
+#endif
+//------------------------------------------------------------------------------------------------------------------------------
 void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
   int box,s;
   for(s=0;s<2*NUM_SMOOTHS;s++){ // there are two sweeps per GSRB smooth
@@ -50,7 +68,6 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
           
 
       #if defined(GSRB_FP)
-      #warning GSRB using pre-computed 1.0/0.0 FP array for Red-Black to facilitate vectorization...
       PRAGMA_THREAD_WITHIN_A_BOX(level,i,j,k)
       for(k=0;k<dim;k++){
       for(j=0;j<dim;j++){
@@ -63,19 +80,18 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
         phi_new[ijk] = phi[ijk] + RedBlack[ij]*lambda*(rhs[ijk]-Ax);
         //phi_new[ijk] = ((i^j^k^color000)&1) ? phi[ijk] : phi[ijk] + lambda*(rhs[ijk]-Ax);
       }}}
+
+
       #elif defined(GSRB_STRIDE2)
       PRAGMA_THREAD_WITHIN_A_BOX(level,i,j,k)
       for(k=0;k<dim;k++){
       for(j=0;j<dim;j++){
         #ifdef GSRB_OOP
-        #warning GSRB using out-of-place and stride-2 accesses to minimize the number of flops
         // out-of-place must copy old value...
         for(i=0;i<dim;i++){
           int ijk = i + j*jStride + k*kStride; 
           phi_new[ijk] = phi[ijk];
         }
-        #else
-        #warning GSRB using stride-2 accesses to minimize the number of flops
         #endif
         for(i=((j^k^color000)&1);i<dim;i+=2){ // stride-2 GSRB
           int ijk = i + j*jStride + k*kStride; 
@@ -84,33 +100,31 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
           phi_new[ijk] = phi[ijk] + lambda*(rhs[ijk]-Ax);
         }
       }}
-      #elif defined(GSRB_OOP)
-      #warning GSRB using out-of-place implementation with an if-then-else on loop indices...
+
+
+      #elif defined(GSRB_BRANCH)
       PRAGMA_THREAD_WITHIN_A_BOX(level,i,j,k)
       for(k=0;k<dim;k++){
       for(j=0;j<dim;j++){
       for(i=0;i<dim;i++){
+        int ijk = i + j*jStride + k*kStride;
         if((i^j^k^color000^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
-          int ijk = i + j*jStride + k*kStride;
           double Ax     = apply_op_ijk(phi);
           double lambda =     Dinv_ijk();
           phi_new[ijk] = phi[ijk] + lambda*(rhs[ijk]-Ax);
+        #ifdef GSRB_OOP
         }else{
           phi_new[ijk] = phi[ijk]; // copy old value when sweep color != cell color
-      }}}}
+        #endif
+        }
+      }}}
+
+
       #else
-      #warning GSRB using if-then-else on loop indices for Red-Black because its easy to read...
-      PRAGMA_THREAD_WITHIN_A_BOX(level,i,j,k)
-      for(k=0;k<dim;k++){
-      for(j=0;j<dim;j++){
-      for(i=0;i<dim;i++){
-        if((i^j^k^color000^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
-          int ijk = i + j*jStride + k*kStride;
-          double Ax     = apply_op_ijk(phi);
-          double lambda =     Dinv_ijk();
-          phi_new[ijk] = phi[ijk] + lambda*(rhs[ijk]-Ax);
-      }}}}
+      #error no GSRB implementation was specified
       #endif
+
+
     } // boxes
     level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
   } // s-loop

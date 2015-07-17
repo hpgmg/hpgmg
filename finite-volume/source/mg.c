@@ -24,6 +24,7 @@
 #include "solvers.h"
 #include "mg.h"
 //------------------------------------------------------------------------------------------------------------------------------
+// structs/routines used to construct the restriction and prolognation lists and ensure a convention on how data is ordered within an MPI buffer
 typedef struct {
   int sendRank;
   int sendBoxID;
@@ -33,6 +34,7 @@ typedef struct {
   int recvBox;
   int i,j,k; // offsets used to index into the coarse box
 } RP_type;
+
 
 int qsortRP(const void *a, const void*b){
   RP_type *rpa = (RP_type*)a;
@@ -48,6 +50,8 @@ int qsortRP(const void *a, const void*b){
 
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
+// print out average time per solve and then decompose by function and level
+// note, in FMG, some levels are accessed more frequently.  This routine only prints time per solve in that level
 void MGPrintTiming(mg_type *all_grids){
   int level,num_levels = all_grids->num_levels;
   #ifdef CALIBRATE_TIMER
@@ -126,6 +130,7 @@ void MGPrintTiming(mg_type *all_grids){
 
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
+// zeros all timers within this MG hierarchy
 void MGResetTimers(mg_type *all_grids){
   int level;
   for(level=0;level<all_grids->num_levels;level++)reset_level_timers(all_grids->levels[level]);
@@ -136,6 +141,11 @@ void MGResetTimers(mg_type *all_grids){
 
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
+// build a list of operations and MPI buffers to affect distributed interpolation
+// the three lists constitute
+//   - buffer packing (i.e. interpolate a local box (or region of a box) and place the result in an MPI buffer)
+//   - local operations (i.e. interpolate a local box (or region of a box) and place the result in another local box)
+//   - buffer upacking (i.e. take interpolated data recieved from another process and use it to increment a local box)
 void build_interpolation(mg_type *all_grids){
   int level;
   for(level=0;level<all_grids->num_levels;level++){
@@ -431,6 +441,11 @@ void build_interpolation(mg_type *all_grids){
 
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
+// build a list of operations and MPI buffers to affect distributed restriction
+// the three lists constitute
+//   - buffer packing (i.e. restrict a local box and place the result in an MPI buffer to be sent to a remote coarse grid process)
+//   - local operations (i.e. restrict a local box and place the result in another local box or region of another local box)
+//   - buffer upacking (i.e. copy restricted data recieved from another process into a local box or region of a local box)
 void build_restriction(mg_type *all_grids, int restrictionType){
   int level;
   for(level=0;level<all_grids->num_levels;level++){
@@ -779,8 +794,15 @@ void build_restriction(mg_type *all_grids, int restrictionType){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+// given a fine grid input, build a hiearchy of MG levels
+// level 0 simply points to fine_grid.  All other levels are created
+// rebuild the restriction/interpolation lists for each coarse grid level
+// rebuild the operator on each coarse grid level
+// add extra vectors to the coarse grid once here instead of on every call to the coarse grid solve
+// NOTE, this routine presumes the fine_grid domain is cubical... fine_grid->dim.i==fine_grid->dim.j==fine_grid->dim.k
+// NOTE, as this function is not timed, it has not been optimzied for performance
 void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int minCoarseGridDim){
-  int  maxLevels=100;
+  int  maxLevels=100; // i.e. maximum problem size is (2^100)^3
   int     nProcs[100];
   int      dim_i[100];
   int boxes_in_i[100];
@@ -891,9 +913,6 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if(doRestrict)all_grids->num_levels++;
   }
   #endif
-  //if(all_grids->my_rank==0){for(level=0;level<all_grids->num_levels;level++){
-  //  printf("level %2d: %4d^3 using %4d^3.%4d^3 spread over %4d processes\n",level,dim_i[level],boxes_in_i[level],box_dim[level],nProcs[level]);
-  //}}
 
 
   // now build all the coarsened levels...
@@ -905,15 +924,18 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   }
 
 
-  // bottom solver (level = all_grids->num_levels-1) gets extra grids...
+  // bottom solver (level = all_grids->num_levels-1) gets extra vectors...
   create_vectors(all_grids->levels[all_grids->num_levels-1],all_grids->levels[all_grids->num_levels-1]->numVectors + IterativeSolver_NumVectors() );
 
+
   // build the restriction and interpolation communicators...
+  if(all_grids->my_rank==0){fprintf(stdout,"\n  Building restriction and interpolation lists... ");fflush(stdout);}
   build_restriction(all_grids,RESTRICT_CELL  ); // cell-centered
   build_restriction(all_grids,RESTRICT_FACE_I); // face-centered, normal to i
   build_restriction(all_grids,RESTRICT_FACE_J); // face-centered, normal to j
   build_restriction(all_grids,RESTRICT_FACE_K); // face-centered, normal to k
   build_interpolation(all_grids);
+  if(all_grids->my_rank==0){fprintf(stdout,"done\n");fflush(stdout);}
 
 
   // build subcommunicators...
@@ -922,7 +944,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   if(all_grids->my_rank==0){fprintf(stdout,"\n");}
   for(level=1;level<all_grids->num_levels;level++){
     double comm_split_start = MPI_Wtime();
-    if(all_grids->my_rank==0){fprintf(stdout,"  Building MPI subcommunicator for level %d...",level);fflush(stdout);}
+    if(all_grids->my_rank==0){fprintf(stdout,"  Building MPI subcommunicator for level %d... ",level);fflush(stdout);}
     all_grids->levels[level]->active=0;
     int ll;for(ll=level;ll<all_grids->num_levels;ll++)if(all_grids->levels[ll]->num_my_boxes>0)all_grids->levels[level]->active=1;
     MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->active,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_ALLREDUCE);
@@ -958,6 +980,8 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+// deallocate all memory created in the MG hierarchy
+// WARNING, this will free the fine_grid level as well (FIX?)
 void MGDestroy(mg_type *all_grids){
   int level;
   for(level=0;level<all_grids->num_levels;level++)destroy_level(all_grids->levels[level]);
@@ -966,6 +990,7 @@ void MGDestroy(mg_type *all_grids){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
+// perform a richardson error analysis to infer the order of the operator/solver
 void richardson_error(mg_type *all_grids, int levelh, int u_id){
   // in FV...
   // +-------+   +---+---+   +-------+   +-------+
@@ -974,7 +999,6 @@ void richardson_error(mg_type *all_grids, int levelh, int u_id){
   // |       |   | c | d |   |       |   |   4   |
   // +-------+   +---+---+   +-------+   +-------+
   //
-  if(all_grids->my_rank==0){fprintf(stdout,"\nPerforming Richardson error analysis...\n");fflush(stdout);}
   restriction(all_grids->levels[levelh+1],VECTOR_TEMP,all_grids->levels[levelh  ],u_id,RESTRICT_CELL); // temp^2h = R u^h
   restriction(all_grids->levels[levelh+2],VECTOR_TEMP,all_grids->levels[levelh+1],u_id,RESTRICT_CELL); // temp^4h = R u^2h
   add_vectors(all_grids->levels[levelh+1],VECTOR_TEMP,1.0,u_id,-1.0,VECTOR_TEMP);                      // temp^2h = u^2h - temp^2h = u^2h - R u^h
@@ -984,7 +1008,7 @@ void richardson_error(mg_type *all_grids, int levelh, int u_id){
   // estimate the error^h using ||u^2h - R u^h||
   if(all_grids->my_rank==0){fprintf(stdout,"  h = %22.15e  ||error|| = %22.15e\n",all_grids->levels[levelh]->h,norm_of_u2h_minus_uh);fflush(stdout);}
   // log( ||u^4h - R u^2h|| / ||u^2h - R u^h|| ) / log(2) is an estimate of the order of the method (e.g. 4th order)
-  if(all_grids->my_rank==0){fprintf(stdout,"  order = %0.3f\n\n",log(norm_of_u4h_minus_u2h / norm_of_u2h_minus_uh) / log(2) );fflush(stdout);}
+  if(all_grids->my_rank==0){fprintf(stdout,"  order = %0.3f\n",log(norm_of_u4h_minus_u2h / norm_of_u2h_minus_uh) / log(2) );fflush(stdout);}
 }
 
 
@@ -1016,6 +1040,7 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
   _LevelStart = CycleTime();
   interpolation_vcycle(all_grids->levels[level  ],e_id,1.0,all_grids->levels[level+1],e_id);
                 smooth(all_grids->levels[level  ],e_id,R_id,a,b);
+
   all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
 }
 
@@ -1032,7 +1057,9 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
   int maxVCycles = 20;
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  #ifdef USE_MPI
+  #ifdef _OPENMP
+  double MG_Start_Time = omp_get_wtime();
+  #elif USE_MPI
   double MG_Start_Time = MPI_Wtime();
   #endif
   if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"MGSolve... ");}
@@ -1086,7 +1113,9 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   all_grids->cycles.MGSolve += (uint64_t)(CycleTime()-_timeStartMGSolve);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  #ifdef USE_MPI
+  #ifdef _OPENMP
+  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done (%f seconds)\n",omp_get_wtime()-MG_Start_Time);} // used to monitor variability in individual solve times
+  #elif USE_MPI
   if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done (%f seconds)\n",MPI_Wtime()-MG_Start_Time);} // used to monitor variability in individual solve times
   #else
   if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done\n");}
@@ -1109,7 +1138,9 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
   int e_id = u_id;
   int R_id = VECTOR_F_MINUS_AV;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  #ifdef USE_MPI
+  #ifdef _OPENMP
+  double FMG_Start_Time = omp_get_wtime();
+  #elif USE_MPI
   double FMG_Start_Time = MPI_Wtime();
   #endif
   if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"FMGSolve... ");}
@@ -1200,7 +1231,9 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   all_grids->cycles.MGSolve += (uint64_t)(CycleTime()-_timeStartMGSolve);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  #ifdef USE_MPI
+  #ifdef _OPENMP
+  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done (%f seconds)\n",omp_get_wtime()-FMG_Start_Time);} // used to monitor variability in individual solve times
+  #elif USE_MPI
   if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done (%f seconds)\n",MPI_Wtime()-FMG_Start_Time);} // used to monitor variability in individual solve times
   #else
   if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done\n");}
@@ -1238,7 +1271,9 @@ void MGPCG(mg_type *all_grids, int onLevel, int x_id, int F_id, double a, double
   int   z_id = VECTORS_RESERVED+2;
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  #ifdef USE_MPI
+  #ifdef _OPENMP
+  double MGPCG_Start_Time = omp_get_wtime();
+  #elif USE_MPI
   double MGPCG_Start_Time = MPI_Wtime();
   #endif
   if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"MGPCG...  ");}
@@ -1303,7 +1338,9 @@ void MGPCG(mg_type *all_grids, int onLevel, int x_id, int F_id, double a, double
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   all_grids->cycles.MGSolve += (uint64_t)(CycleTime()-_timeStartMGSolve);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  #ifdef USE_MPI
+  #ifdef _OPENMP
+  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done (%f seconds)\n",omp_get_wtime()-MGPCG_Start_Time);} // used to monitor variability in individual solve times
+  #elif USE_MPI
   if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done (%f seconds)\n",MPI_Wtime()-MGPCG_Start_Time);} // used to monitor variability in individual solve times
   #else
   if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done\n");}

@@ -3,6 +3,24 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
+#if   defined(GSRB_FP)
+  #warning Overriding default GSRB implementation and using pre-computed 1.0/0.0 FP array for Red-Black to facilitate vectorization...
+#elif defined(GSRB_STRIDE2)
+  #if defined(GSRB_OOP)
+  #warning Overriding default GSRB implementation and using out-of-place and stride-2 accesses to minimize the number of flops
+  #else
+  #warning Overriding default GSRB implementation and using stride-2 accesses to minimize the number of flops
+  #endif
+#elif defined(GSRB_BRANCH)
+  #if defined(GSRB_OOP)
+  #warning Overriding default GSRB implementation and using out-of-place implementation with an if-then-else on loop indices...
+  #else
+  #warning Overriding default GSRB implementation and using if-then-else on loop indices...
+  #endif
+#else
+#define GSRB_STRIDE2 // default implementation
+#endif
+//------------------------------------------------------------------------------------------------------------------------------
 void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   int block,s;
   for(s=0;s<2*NUM_SMOOTHS;s++){ // there are two sweeps per GSRB smooth
@@ -57,7 +75,6 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
           
 
       #if defined(GSRB_FP)
-      #warning GSRB using pre-computed 1.0/0.0 FP array for Red-Black to facilitate vectorization...
       for(k=klo;k<khi;k++){const double * __restrict__ RedBlack = level->RedBlack_FP + ghosts*(1+jStride) + kStride*((k^color000)&0x1);
       for(j=jlo;j<jhi;j++){
       for(i=ilo;i<ihi;i++){
@@ -68,18 +85,17 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
             x_np1[ijk] = x_n[ijk] + RedBlack[ij]*lambda*(rhs[ijk]-Ax);
             //x_np1[ijk] = ((i^j^k^color000)&1) ? x_n[ijk] : x_n[ijk] + lambda*(rhs[ijk]-Ax);
       }}}
+
+
       #elif defined(GSRB_STRIDE2)
       for(k=klo;k<khi;k++){
       for(j=jlo;j<jhi;j++){
         #ifdef GSRB_OOP
-        #warning GSRB using out-of-place and stride-2 accesses to minimize the number of flops
         // out-of-place must copy old value...
         for(i=ilo;i<ihi;i++){
           int ijk = i + j*jStride + k*kStride; 
           x_np1[ijk] = x_n[ijk];
         }
-        #else
-        #warning GSRB using stride-2 accesses to minimize the number of flops
         #endif
         for(i=ilo+((ilo^j^k^color000)&1);i<ihi;i+=2){ // stride-2 GSRB
           int ijk = i + j*jStride + k*kStride; 
@@ -88,8 +104,9 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
           x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);
         }
       }}
-      #elif defined(GSRB_OOP)
-      #warning GSRB using out-of-place implementation with an if-then-else on loop indices...
+
+
+      #elif defined(GSRB_BRANCH)
       for(k=klo;k<khi;k++){
       for(j=jlo;j<jhi;j++){
       for(i=ilo;i<ihi;i++){
@@ -98,21 +115,19 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
           double Ax     = apply_op_ijk(x_n);
           double lambda =     Dinv_ijk();
           x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);
+        #ifdef GSRB_OOP
         }else{
           x_np1[ijk] = x_n[ijk]; // copy old value when sweep color != cell color
-      }}}}
+        #endif
+        }
+      }}}
+
+
       #else
-      #warning GSRB using if-then-else on loop indices...
-      for(k=klo;k<khi;k++){
-      for(j=jlo;j<jhi;j++){
-      for(i=ilo;i<ihi;i++){
-      if((i^j^k^color000^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
-            int ijk = i + j*jStride + k*kStride;
-            double Ax     = apply_op_ijk(x_n);
-            double lambda =     Dinv_ijk();
-            x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);
-      }}}}
+      #error no GSRB implementation was specified
       #endif
+
+
     } // boxes
     level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
   } // s-loop

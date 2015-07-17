@@ -3,6 +3,9 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef M_PI
+#define M_PI 3.14159265358979323846 // in case math.h doesn't define it
+#endif
 double evaluateBeta(double x, double y, double z, double h, int add_Bxx, int add_Byy, int add_Bzz){
   double b = 0.25;
   double a = 2.0*M_PI; // one period on [0,1]^3

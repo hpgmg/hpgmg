@@ -137,11 +137,8 @@ typedef struct {
   double    * __restrict__ RedBlack_FP;	        // Red/Black Mask (i.e. 0.0 or 1.0) for even/odd planes (2*kStride).  
 
   int num_threads;
-  int concurrent_boxes;
-  int threads_per_box;
 
   // statistics information...
-  uint64_t memory_allocated;			// 64b integer to track how much memory each process allocates for each level
   struct {
     uint64_t              smooth;
     uint64_t            apply_op;

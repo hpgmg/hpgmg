@@ -6,7 +6,7 @@
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
 static inline void interpolation_v2_block(level_type *level_f, int id_f, double prescale_f, level_type *level_c, int id_c, blockCopy_type *block){
-  // interpolate 3D array from read_i,j,k of read[] to write_i,j,k in write[]
+  // interpolate 3D array from read_i,j,k of read[] to write_i,j,k in write[] using volume averaged quadratic prolongation
   int write_dim_i   = block->dim.i<<1; // calculate the dimensions of the resultant fine block
   int write_dim_j   = block->dim.j<<1;
   int write_dim_k   = block->dim.k<<1;
@@ -181,7 +181,13 @@ static inline void interpolation_v2_block(level_type *level_f, int id_f, double 
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-// perform a (inter-level) volumetric quadratic interpolation
+// perform a (inter-level) volumetric quadratic interpolation on vector id_c of the coarse level and increments prescale_f*vector id_f on the fine level by the result
+// i.e. id_f = prescale_f*id_f + P*id_c
+// prescale_f is nominally 1.0 or 0.0
+// quadratic interpolation requires a full ghost zone exchange and boundary condition
+// This is a rather bulk synchronous implementation which packs all MPI buffers before initiating any sends
+// Similarly, it waits for all remote data before copying any into local boxes.
+// It does however attempt to overlap local interpolation with MPI
 void interpolation_v2(level_type * level_f, int id_f, double prescale_f, level_type *level_c, int id_c){
     exchange_boundary(level_c,id_c,STENCIL_SHAPE_BOX);
          apply_BCs_v2(level_c,id_c,STENCIL_SHAPE_BOX);

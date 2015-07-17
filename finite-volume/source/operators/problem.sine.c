@@ -3,6 +3,9 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
+#ifndef M_PI
+#define M_PI 3.14159265358979323846 // in case math.h doesn't define it
+#endif
 void evaluateBeta(double x, double y, double z, double *B, double *Bx, double *By, double *Bz){
   double Bmin =  1.0;
   double Bmax = 10.0;

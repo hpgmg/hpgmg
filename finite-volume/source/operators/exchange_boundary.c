@@ -3,10 +3,12 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-// perform a (intra-level) ghost zone exchange
+// perform a (intra-level) ghost zone exchange on vector id
 //  NOTE exchange_boundary() only exchanges the boundary.  
 //  It will not enforce any boundary conditions
 //  BC's are either the responsibility of a separate function or should be fused into the stencil
+// The argument shape indicates which of faces, edges, and corners on each box must be exchanged
+//  If the specified shape exceeds the range of defined shapes, the code will default to STENCIL_SHAPE_BOX (i.e. exchange faces, edges, and corners)
 void exchange_boundary(level_type * level, int id, int shape){
   uint64_t _timeCommunicationStart = CycleTime();
   uint64_t _timeStart,_timeEnd;

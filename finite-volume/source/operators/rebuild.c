@@ -3,9 +3,6 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-
-
-//------------------------------------------------------------------------------------------------------------------------------
 // power method for calculating the dominant eigenvalue of D^{-1}A
 double power_method(level_type * level, double a, double b, int max_iterations){
   int i;
@@ -38,11 +35,16 @@ double power_method(level_type * level, double a, double b, int max_iterations){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-// black-box routine to rebuild both D^{-1} and the l1 norm as well as estimate the dominant eigenvalue
+// Accurate estimates of D^{-1} are essential in realizing high-performance and stable smoothers.
+// Unfortunately, complex boundary conditions can make it difficult to express D^{-1} analytically
+// As such, this black-box routine will calculate D^{-1}, l1 norm, the dominant eigenvalue using only the apply_op_ijk macro
+// colors_in_each_dim should be sufficiently large as to decouple the boundary condition from the operator
+// e.g. with quartic BC's, colors_in_each_dim==4 (total of 64 colors in 3D)
+// If using periodic BCs, one should be able to set colors_in_each_dim to stencil_get_radius();
+// NOTE, as this function is not timed, it has not been optimized for performance.
 void rebuild_operator_blackbox(level_type * level, double a, double b, int colors_in_each_dim){
 
   // trying to color a 1^3 grid with 8 colors won't work... reduce the number of colors...
-  // FIX... is this necessary?
   if(level->dim.i<colors_in_each_dim)colors_in_each_dim=level->dim.i;
   if(level->dim.j<colors_in_each_dim)colors_in_each_dim=level->dim.j;
   if(level->dim.k<colors_in_each_dim)colors_in_each_dim=level->dim.k;

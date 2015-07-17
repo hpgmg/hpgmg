@@ -65,8 +65,8 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
     #endif
 
     if(all_grids->levels[onLevel]->my_rank==0){
-      if(doTiming==0){fprintf(stdout,"\n\n===== warming up by running %d solves ===============================\n",minSolves);}
-                 else{fprintf(stdout,"\n\n===== running %d solves =============================================\n",minSolves);}
+      if(doTiming==0){fprintf(stdout,"\n\n===== Warming up by running %d solves ===============================\n",minSolves);}
+                 else{fprintf(stdout,"\n\n===== Running %d solves =============================================\n",minSolves);}
       fflush(stdout);
     }
 
@@ -94,6 +94,7 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
     if(doTiming)HPM_Stop("FMGSolve()");
     #endif
   }
+  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"\n\n===== Timing Breakdown ==============================================\n");}
   MGPrintTiming(all_grids); // don't include the error check in the timing results
 }
 
@@ -103,7 +104,6 @@ int main(int argc, char **argv){
   int my_rank=0;
   int num_tasks=1;
   int OMP_Threads = 1;
-  int OMP_Nested = 0;
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   #ifdef _OPENMP
@@ -112,7 +112,6 @@ int main(int argc, char **argv){
     #pragma omp master
     {
       OMP_Threads = omp_get_num_threads();
-      OMP_Nested  = omp_get_nested();
     }
   }
   #endif
@@ -169,6 +168,15 @@ int main(int argc, char **argv){
     exit(0);
   }
 
+  if(log2_box_dim>9){
+    // NOTE, in order to use 32b int's for array indexing, box volumes must be less than 2^31 doubles
+    if(my_rank==0){fprintf(stderr,"log2_box_dim must be less than 10\n");}
+    #ifdef USE_MPI
+    MPI_Finalize();
+    #endif
+    exit(0);
+  }
+
   if(log2_box_dim<4){
     if(my_rank==0){fprintf(stderr,"log2_box_dim must be at least 4\n");}
     #ifdef USE_MPI
@@ -185,10 +193,8 @@ int main(int argc, char **argv){
     exit(0);
   }
 
-  if(my_rank==0){
-    if(OMP_Nested)fprintf(stdout,"%d MPI Tasks of %d threads (OMP_NESTED=TRUE)\n\n" ,num_tasks,OMP_Threads);
-             else fprintf(stdout,"%d MPI Tasks of %d threads (OMP_NESTED=FALSE)\n\n",num_tasks,OMP_Threads);
-  }
+  if(my_rank==0){fprintf(stdout,"%d MPI Tasks of %d threads\n",num_tasks,OMP_Threads);}
+  if(my_rank==0){fprintf(stdout,"\n\n===== Benchmark setup ===============================================\n");}
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   // calculate the problem size...
   #ifndef MAX_COARSE_DIM
@@ -257,6 +263,7 @@ int main(int argc, char **argv){
   bench_hpgmg(&MG_h,0,a,b,dtol,rtol);
   #endif
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  if(my_rank==0){fprintf(stdout,"\n\n===== Performing Richardson error analysis ==========================\n");}
   // solve A^h u^h = f^h
   // solve A^2h u^2h = f^2h
   // solve A^4h u^4h = f^4h
@@ -273,6 +280,7 @@ int main(int argc, char **argv){
   }
   richardson_error(&MG_h,0,VECTOR_U);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  if(my_rank==0){fprintf(stdout,"\n\n===== Deallocating memory ===========================================\n");}
   MGDestroy(&MG_h);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef USE_MPI
@@ -282,5 +290,6 @@ int main(int argc, char **argv){
   MPI_Finalize();
   #endif
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  if(my_rank==0){fprintf(stdout,"\n\n===== done ==========================================================\n");}
   return(0);
 }

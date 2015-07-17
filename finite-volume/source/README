@@ -96,24 +96,24 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 
 
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
-cc -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.edison
+cc -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.edison
 Conversely, true flat MPI should omit the -fopenmp flag.
-cc -Ofast          level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.edison.flat
+cc -Ofast          level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.edison.flat
 
 
 On Mira (an IBM BlueGene/Q), one can use the following...
 soft add +mpiwrapper-xl
-mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC                     -o run.bgq
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.bgq
 -or-
-mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV -o run.bgq
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.bgq
 In order to compile with IBM's HPM counters...
-mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV -o run.bgq \
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.bgq \
   -DUSE_HPM -I/bgsys/drivers/ppcfloor/bgpm/include -L/soft/perftools/hpctw/lib -L/bgsys/drivers/ppcfloor/bgpm/lib /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a  -lbgpm  -lmpihpm_smp -lmpitrace
 
 On Babbage (Xeon Phi cluster at NERSC), one can use the following for native mode compilation...
-mpiicc -mmic -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -o run.babbage
+mpiicc -mmic -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.babbage
 -or-
-mpiicc -mmic -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB -DSTENCIL_FUSE_BC -DSTENCIL_FUSE_DINV  -o run.babbage
+mpiicc -mmic -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.babbage
 
 
 

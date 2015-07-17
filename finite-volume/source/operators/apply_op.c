@@ -3,7 +3,10 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // y=Ax
+// Applies the linear operator specified in the apply_op_ijk macro to vector x_id and stores the result in Ax_id
+// This requires exchanging a ghost zone and/or enforcing a boundary condition.
+// NOTE, Ax_id and x_id must be distinct
+void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){
   // exchange the boundary of x in preparation for Ax
   exchange_boundary(level,x_id,stencil_get_shape());
           apply_BCs(level,x_id,stencil_get_shape());

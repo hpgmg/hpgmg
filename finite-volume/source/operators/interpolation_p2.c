@@ -39,6 +39,7 @@ static inline void interpolation_p2_block(level_type *level_f, int id_f, double 
 
   int i,j,k;
   double OneOver32Cubed = 1.0/32768.0;
+  // FIX... optimize the way v2 was optimized over naive (unroll/jam by 2 in all 3 loops;  eliminate common subexpressions)
   for(k=0;k<write_dim_k;k++){int delta_k=-read_kStride;if(k&0x1)delta_k=read_kStride;
   for(j=0;j<write_dim_j;j++){int delta_j=-read_jStride;if(j&0x1)delta_j=read_jStride;
   for(i=0;i<write_dim_i;i++){int delta_i=           -1;if(i&0x1)delta_i=           1; // i.e. even points look backwards while odd points look forward
