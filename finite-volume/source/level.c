@@ -1355,7 +1355,7 @@ void max_level_timers(level_type *level){
 // n.b. in some cases a malloc was used as the basis for an array of pointers.  As such free(x[0])
 void destroy_level(level_type *level){
   int i,j;
-  if(level->my_rank==0){fprintf(stdout,"attempting to destroy the %5d^3 level... ",level->dim.i);fflush(stdout);}
+  if(level->my_rank==0){fprintf(stdout,"attempting to free the %5d^3 level... ",level->dim.i);fflush(stdout);}
 
   // box ...
   for(i=0;i<level->num_my_boxes;i++)if(level->my_boxes[i].vectors)free(level->my_boxes[i].vectors);
@@ -1402,54 +1402,6 @@ void destroy_level(level_type *level){
     if(level->exchange_ghosts[i].status      )free(level->exchange_ghosts[i].status      );
     #endif
   }
-
-  // restriction mini programs...
-  for(i=0;i<4;i++){
-    if(level->restriction[i].num_recvs>0){
-    //for(j=0;j<level->restriction[i].num_recvs;j++)if(level->restriction[i].recv_buffers[j])free(level->restriction[i].recv_buffers[j]);
-    if(level->restriction[i].recv_buffers[0])free(level->restriction[i].recv_buffers[0]); // allocated in bulk
-    if(level->restriction[i].recv_buffers   )free(level->restriction[i].recv_buffers   );
-    if(level->restriction[i].recv_ranks     )free(level->restriction[i].recv_ranks     );
-    if(level->restriction[i].recv_sizes     )free(level->restriction[i].recv_sizes     );
-    }
-    if(level->restriction[i].num_sends>0){
-    //for(j=0;j<level->restriction[i].num_sends;j++)if(level->restriction[i].send_buffers[j])free(level->restriction[i].send_buffers[j]);
-    if(level->restriction[i].send_buffers[0])free(level->restriction[i].send_buffers[0]); // allocated in bulk
-    if(level->restriction[i].send_buffers   )free(level->restriction[i].send_buffers   );
-    if(level->restriction[i].send_ranks     )free(level->restriction[i].send_ranks     );
-    if(level->restriction[i].send_sizes     )free(level->restriction[i].send_sizes     );
-    }
-    if(level->restriction[i].blocks[0]      )free(level->restriction[i].blocks[0]      );
-    if(level->restriction[i].blocks[1]      )free(level->restriction[i].blocks[1]      );
-    if(level->restriction[i].blocks[2]      )free(level->restriction[i].blocks[2]      );
-    #ifdef USE_MPI
-    if(level->restriction[i].requests       )free(level->restriction[i].requests       );
-    if(level->restriction[i].status         )free(level->restriction[i].status         );
-    #endif
-  }
-
-  // interpolation mini programs...
-  if(level->interpolation.num_recvs>0){
-  //for(j=0;j<level->interpolation.num_recvs;j++)if(level->interpolation.recv_buffers[j])free(level->interpolation.recv_buffers[j]);
-  if(level->interpolation.recv_buffers[0])free(level->interpolation.recv_buffers[0]); // allocated in bulk
-  if(level->interpolation.recv_buffers   )free(level->interpolation.recv_buffers   );
-  if(level->interpolation.recv_ranks     )free(level->interpolation.recv_ranks     );
-  if(level->interpolation.recv_sizes     )free(level->interpolation.recv_sizes     );
-  }
-  if(level->interpolation.num_sends>0){
-  //for(j=0;j<level->interpolation.num_sends;j++)if(level->interpolation.send_buffers[j])free(level->interpolation.send_buffers[j]);
-  if(level->interpolation.send_buffers[0])free(level->interpolation.send_buffers[0]); // allocated in bulk
-  if(level->interpolation.send_buffers   )free(level->interpolation.send_buffers   );
-  if(level->interpolation.send_ranks     )free(level->interpolation.send_ranks     );
-  if(level->interpolation.send_sizes     )free(level->interpolation.send_sizes     );
-  }
-  if(level->interpolation.blocks[0]      )free(level->interpolation.blocks[0]      );
-  if(level->interpolation.blocks[1]      )free(level->interpolation.blocks[1]      );
-  if(level->interpolation.blocks[2]      )free(level->interpolation.blocks[2]      );
-  #ifdef USE_MPI
-  if(level->interpolation.requests       )free(level->interpolation.requests       );
-  if(level->interpolation.status         )free(level->interpolation.status         );
-  #endif
 
   if(level->my_rank==0){fprintf(stdout,"done\n");}
 }

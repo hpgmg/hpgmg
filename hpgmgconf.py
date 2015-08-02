@@ -34,10 +34,10 @@ def main():
     fv = parser.add_argument_group('Finite Volume options')
     fv.add_argument('--no-fv', action='store_false', dest='fv', help='Do not build the Finite-Volume solver')
     fv.add_argument('--no-fv-mpi', action='store_false', dest='fv_mpi', help='Use MPI')
-    fv.add_argument('--fv-cycle', help='Multigrid cycle type', choices=['V','F','W'], default='F')
+    fv.add_argument('--fv-cycle', help='Multigrid cycle type', choices=['V','F','U'], default='F')
     fv.add_argument('--no-fv-subcomm', action='store_false', dest='fv_subcomm', help='Build a subcommunicator for each level in the MG v-cycle to minimize the scope of MPI_AllReduce()')
     fv.add_argument('--fv-coarse-solver', help='Use BiCGStab as a bottom (coarse grid) solver', choices=['bicgstab','cabicgstab','cg','cacg'], default='bicgstab')
-    fv.add_argument('--fv-smoother', help='Multigrid smoother', choices=['cheby','gsrb','jacobi','l1jacobi'], default='cheby')
+    fv.add_argument('--fv-smoother', help='Multigrid smoother', choices=['cheby','gsrb','jacobi','l1jacobi'], default='gsrb')
     args = parser.parse_args()
     if args.arch is None:
         args.arch = args.petsc_arch

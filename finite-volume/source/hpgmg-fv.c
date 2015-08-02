@@ -50,6 +50,7 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
      int     doTiming;
      int    minSolves = 10; // do at least minSolves MGSolves
   double timePerSolve = 0;
+
   for(doTiming=0;doTiming<=1;doTiming++){ // first pass warms up, second pass times
 
     #ifdef USE_HPM // IBM performance counters for BGQ...
@@ -57,7 +58,7 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
     #endif
 
     #ifdef USE_MPI
-    double minTime   = 30.0; // minimum time in seconds that the benchmark should run
+    double minTime   = 60.0; // minimum time in seconds that the benchmark should run
     double startTime = MPI_Wtime();
     if(doTiming==1){
       if((minTime/timePerSolve)>minSolves)minSolves=(minTime/timePerSolve); // if one needs to do more than minSolves to run for minTime, change minSolves
@@ -65,8 +66,8 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
     #endif
 
     if(all_grids->levels[onLevel]->my_rank==0){
-      if(doTiming==0){fprintf(stdout,"\n\n===== Warming up by running %d solves ===============================\n",minSolves);}
-                 else{fprintf(stdout,"\n\n===== Running %d solves =============================================\n",minSolves);}
+      if(doTiming==0){fprintf(stdout,"\n\n===== Warming up by running %d solves ==========================================\n",minSolves);}
+                 else{fprintf(stdout,"\n\n===== Running %d solves ========================================================\n",minSolves);}
       fflush(stdout);
     }
 
@@ -94,8 +95,6 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
     if(doTiming)HPM_Stop("FMGSolve()");
     #endif
   }
-  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"\n\n===== Timing Breakdown ==============================================\n");}
-  MGPrintTiming(all_grids); // don't include the error check in the timing results
 }
 
 
@@ -133,8 +132,11 @@ int main(int argc, char **argv){
   MPI_Init_thread(&argc, &argv, requested_threading_model, &actual_threading_model);
   MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-//if(actual_threading_model>requested_threading_model)actual_threading_model=requested_threading_model;
   if(my_rank==0){
+  fprintf(stdout,"\n\n");
+  fprintf(stdout,"********************************************************************************\n");
+  fprintf(stdout,"***                            HPGMG-FV Benchmark                            ***\n");
+  fprintf(stdout,"********************************************************************************\n");
        if(requested_threading_model == MPI_THREAD_MULTIPLE  )fprintf(stdout,"Requested MPI_THREAD_MULTIPLE, ");
   else if(requested_threading_model == MPI_THREAD_SINGLE    )fprintf(stdout,"Requested MPI_THREAD_SINGLE, ");
   else if(requested_threading_model == MPI_THREAD_FUNNELED  )fprintf(stdout,"Requested MPI_THREAD_FUNNELED, ");
@@ -194,7 +196,7 @@ int main(int argc, char **argv){
   }
 
   if(my_rank==0){fprintf(stdout,"%d MPI Tasks of %d threads\n",num_tasks,OMP_Threads);}
-  if(my_rank==0){fprintf(stdout,"\n\n===== Benchmark setup ===============================================\n");}
+  if(my_rank==0){fprintf(stdout,"\n\n===== Benchmark setup ==========================================================\n");}
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   // calculate the problem size...
   #ifndef MAX_COARSE_DIM
@@ -259,17 +261,44 @@ int main(int argc, char **argv){
   double dtol=  0.0;double rtol=1e-10; // converged if ||b-Ax|| / ||b|| < rtol
 //double dtol=1e-15;double rtol=  0.0; // converged if ||D^{-1}(b-Ax)|| < dtol
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  // HPGMG-500 benchmark proper
+  // evaluate performance on problem sizes of h, 2h, and 4h
+  // (i.e. examine dynamic range for problem sizes N, N/8, and N/64)
+  int l;
+  double AverageSolveTime[3];
   #ifndef TEST_ERROR
-  bench_hpgmg(&MG_h,0,a,b,dtol,rtol);
+  for(l=0;l<3;l++){
+    if(l>0)restriction(MG_h.levels[l],VECTOR_F,MG_h.levels[l-1],VECTOR_F,RESTRICT_CELL);
+    bench_hpgmg(&MG_h,l,a,b,dtol,rtol);
+    AverageSolveTime[l] = (double)MG_h.cycles.MGSolve / (double)MG_h.MGSolves_performed;
+    if(my_rank==0){fprintf(stdout,"\n\n===== Timing Breakdown =========================================================\n");}
+    MGPrintTiming(&MG_h,l);
+  }
   #endif
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(my_rank==0){fprintf(stdout,"\n\n===== Performing Richardson error analysis ==========================\n");}
+  if(my_rank==0){
+    #ifdef CALIBRATE_TIMER
+    uint64_t _timeStart=CycleTime();sleep(1);uint64_t _timeEnd=CycleTime();
+    double SecondsPerCycle = (double)1.0/(double)(_timeEnd-_timeStart);
+    #else
+    double SecondsPerCycle = 1e-9;
+    #endif
+    fprintf(stdout,"\n\n===== Performance Summary ======================================================\n");
+    for(l=0;l<3;l++){
+      double DOF = (double)MG_h.levels[l]->dim.i*(double)MG_h.levels[l]->dim.j*(double)MG_h.levels[l]->dim.k;
+      double seconds = SecondsPerCycle*(double)AverageSolveTime[l];
+      double DOFs = DOF / seconds;
+      fprintf(stdout,"  h=%0.15e  DOF=%0.15e  time=%0.6f  DOF/s=%0.3e  MPI=%d  OMP=%d\n",MG_h.levels[l]->h,DOF,seconds,DOFs,num_tasks,OMP_Threads);
+    }
+  }
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  if(my_rank==0){fprintf(stdout,"\n\n===== Richardson error analysis ================================================\n");}
   // solve A^h u^h = f^h
   // solve A^2h u^2h = f^2h
   // solve A^4h u^4h = f^4h
   // error analysis...
   MGResetTimers(&MG_h);
-  int l;for(l=0;l<3;l++){
+  for(l=0;l<3;l++){
     if(l>0)restriction(MG_h.levels[l],VECTOR_F,MG_h.levels[l-1],VECTOR_F,RESTRICT_CELL);
            zero_vector(MG_h.levels[l],VECTOR_U);
     #ifdef USE_FCYCLES
@@ -280,8 +309,9 @@ int main(int argc, char **argv){
   }
   richardson_error(&MG_h,0,VECTOR_U);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(my_rank==0){fprintf(stdout,"\n\n===== Deallocating memory ===========================================\n");}
+  if(my_rank==0){fprintf(stdout,"\n\n===== Deallocating memory ======================================================\n");}
   MGDestroy(&MG_h);
+  destroy_level(&level_h);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef USE_MPI
   #ifdef USE_HPM // IBM performance counters for BGQ...
@@ -290,6 +320,6 @@ int main(int argc, char **argv){
   MPI_Finalize();
   #endif
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  if(my_rank==0){fprintf(stdout,"\n\n===== done ==========================================================\n");}
+  if(my_rank==0){fprintf(stdout,"\n\n===== Done =====================================================================\n");}
   return(0);
 }
