@@ -223,7 +223,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // calculate Dinv, L1inv, and estimate the dominant Eigenvalue
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int block;
 
   double dominant_eigenvalue = -1e9;
@@ -307,17 +307,17 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     }}}
     if(block_eigenvalue>dominant_eigenvalue){dominant_eigenvalue = block_eigenvalue;}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Reduce the local estimates dominant eigenvalue to a global estimate
   #ifdef USE_MPI
-  uint64_t _timeStartAllReduce = CycleTime();
+  double _timeStartAllReduce = getTime();
   double send = dominant_eigenvalue;
   MPI_Allreduce(&send,&dominant_eigenvalue,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
-  uint64_t _timeEndAllReduce = CycleTime();
-  level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
+  double _timeEndAllReduce = getTime();
+  level->timers.collectives   += (double)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
   if(level->my_rank==0){fprintf(stdout,"eigenvalue_max<%e\n",dominant_eigenvalue);}
   level->dominant_eigenvalue_of_DinvA = dominant_eigenvalue;

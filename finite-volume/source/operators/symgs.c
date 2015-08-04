@@ -10,7 +10,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
     exchange_boundary(level,phi_id,stencil_get_shape());
             apply_BCs(level,phi_id,stencil_get_shape());
 
-    uint64_t _timeStart = CycleTime();
+    double _timeStart = getTime();
     #ifdef _OPENMP
     #pragma omp parallel for private(box)
     #endif
@@ -50,7 +50,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
       }
 
     } // boxes
-    level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
+    level->timers.smooth += (double)(getTime()-_timeStart);
   } // s-loop
 }
 

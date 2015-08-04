@@ -14,7 +14,7 @@ void matmul(level_type * level, double *C, int * id_A, int * id_B, int rows, int
   int mm,nn;
 
 
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   // FIX... rather than performing an all_reduce on the essentially symmetric [G,g], do the all_reduce on the upper triangle and then duplicate (saves BW)
   #ifdef _OPENMP
   #pragma omp parallel for schedule(static,1) collapse(2)
@@ -45,7 +45,7 @@ void matmul(level_type * level, double *C, int * id_A, int * id_B, int rows, int
     if((mm<cols)&&(nn<rows)){C[nn*cols + mm] = a_dot_b_level;}// C[nn][mm] 
   }
   }}
-  level->cycles.blas3 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas3 += (double)(getTime()-_timeStart);
 
   #ifdef USE_MPI
   double *send_buffer = (double*)malloc(rows*cols*sizeof(double));
@@ -53,10 +53,10 @@ void matmul(level_type * level, double *C, int * id_A, int * id_B, int rows, int
   for(nn=0;nn<cols;nn++){
     send_buffer[mm*cols + nn] = C[mm*cols + nn];
   }}
-  uint64_t _timeStartAllReduce = CycleTime();
+  double _timeStartAllReduce = getTime();
   MPI_Allreduce(send_buffer,C,rows*cols,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_ALLREDUCE);
-  uint64_t _timeEndAllReduce = CycleTime();
-  level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
+  double _timeEndAllReduce = getTime();
+  level->timers.collectives   += (double)(_timeEndAllReduce-_timeStartAllReduce);
   free(send_buffer);
   #endif
 

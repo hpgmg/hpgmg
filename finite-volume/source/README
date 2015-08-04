@@ -29,7 +29,7 @@ About
 HPGMG is a compact benchmark designed to proxy the geometric MG solves found in
 applications built from AMR MG frameworks like CHOMBO or BoxLib.  At a high 
 level, the benchmark solves Au=f where u and f are cell-centered (finite volume) 
-3D structured grids. The operator A is a 2nd order finite volume discretization 
+3D structured grids. The operator A is a fourth order finite volume discretization 
 of the helmholtz operator (a*alpha[]*u[] - b* div beta[] grad u[]), where a and 
 b are scalar constants and alpha[] and beta[] are spatially varyingcoefficients.
 HPGMG supports both periodic and homogeneous dirichlet boundary conditions.  
@@ -79,9 +79,6 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 -DUSE_JACOBI			// use a weighted Jacobi smoother with a weight of 2/3
 -DUSE_L1JACOBI			// use a L1 Jacobi smoother (each row's weight is the L1 norm of that row)
 
--DSTENCIL_FUSE_DINV		// recompute the inverse of the diagonal on the fly (more flops including a divide, but eliminates an array)
--DSTENCIL_FUSE_BC  		// fuse the boundary conditions on the fly (more flops, but eliminates a difficult to efficiently thread traversal over the surface)
-
 -DBLOCKCOPY_TILE_I=###		// parallelism for all ghost zone, restriction, interpolation, and (now) operators (and eventually BC's) is organized the (cache/thread) block concept.  
 -DBLOCKCOPY_TILE_J=###		// That is, boxes are decomposed into tiles of size BLOCKCOPY_TILE_I x BLOCKCOPY_TILE_J x BLOCKCOPY_TILE_J.  Users may tune to find the optimal block size.
 -DBLOCKCOPY_TILE_K=###		// Smaller blocks fit in cache and express more TLP (good for MIC/BGQ/GPUs/...).  However, the unit stride for small blocks is reduced (bad for CPUs which rely on prefetchers)
@@ -96,30 +93,30 @@ There are a few basic arguments that should be used.  Most are selfexplanatory.
 
 
 Let us consider an example for Edison, the Cray XC30 at NERSC where the MPI compiler uses icc and is invoked as 'cc'.
-cc -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.edison
+cc -Ofast -xAVX -fopenmp level.c operators.fv4.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB  -o run.edison
 Conversely, true flat MPI should omit the -fopenmp flag.
-cc -Ofast          level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.edison.flat
+cc -Ofast -xAVX          level.c operators.fv4.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB  -o run.edison.flat
 
 
 On Mira (an IBM BlueGene/Q), one can use the following...
 soft add +mpiwrapper-xl
-mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.bgq
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.fv4.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB  -o run.bgq
 -or-
-mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.bgq
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.fv4.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB  -o run.bgq
 In order to compile with IBM's HPM counters...
-mpixlc_r -O5 -qsmp=omp:noauto level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.bgq \
+mpixlc_r -O5 -qsmp=omp:noauto level.c operators.fv4.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI                -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB  -o run.bgq \
   -DUSE_HPM -I/bgsys/drivers/ppcfloor/bgpm/include -L/soft/perftools/hpctw/lib -L/bgsys/drivers/ppcfloor/bgpm/lib /bgsys/drivers/ppcfloor/bgpm/lib/libbgpm.a  -lbgpm  -lmpihpm_smp -lmpitrace
 
 On Babbage (Xeon Phi cluster at NERSC), one can use the following for native mode compilation...
-mpiicc -mmic -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.babbage
+mpiicc -mmic -Ofast -fopenmp level.c operators.fv4.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB  -o run.babbage
 -or-
-mpiicc -mmic -Ofast -fopenmp level.c operators.7pt.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_CHEBY -DUSE_BICGSTAB  -o run.babbage
+mpiicc -mmic -Ofast -fopenmp level.c operators.fv4.c mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB  -o run.babbage
 
 
 
 4th order HPGMG-FV
 ==================
-Included in this release is a 4th order Finite Volume Full Multigrid Implementation.  Unlike the 2nd order implementation, this version requires a different driver (hpgmg-fv.c) and a different operator file (operators.fv4.c).  Currently, it is highly recommended one use GSRB over the Chebyshev or Jacobi smoothers.  By default, most smoothers make 6 pases thru the data (instead of 4) in order to provide sufficient error and residual.  This has the effect of increasing the time spent in smoothing by 50%.  
+Included in this release is the 4th order Finite Volume Full Multigrid Implementation.  Unlike a 2nd order implementation, the 4th order version requires a different operator file (operators.fv4.c instead of operators.7pt.c).  Currently, it is highly recommended one use GSRB over the Chebyshev or Jacobi smoothers.  By default, most smoothers make 6 pases thru the data (instead of 4) in order to provide sufficient error and residual.  This has the effect of increasing the time spent in smoothing by 50%.  
 
 Nominally, compared to the 2nd order method, the 4th order smoother performs ...
 - 4x the flops
@@ -128,8 +125,8 @@ Nominally, compared to the 2nd order method, the 4th order smoother performs ...
 - 1x the DRAM data movement
 - provides 4 more bits of accuracy for every 8x increase in the problem size (instead of 2 bits)
 
-In order to compile the 4th order version on Edison, one may use the following command line...
-cc  -Ofast -fopenmp level.c operators.fv4.c  mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB -o run.edison
+In order to compile the older 2nd order version on Edison, one may use the following command line...
+cc  -Ofast -xAVX -fopenmp level.c operators.fv2.c  mg.c solvers.c hpgmg-fv.c timers.c -DUSE_MPI  -DUSE_SUBCOMM -DUSE_FCYCLES -DUSE_GSRB -DUSE_BICGSTAB -o run.edison
 
 
 

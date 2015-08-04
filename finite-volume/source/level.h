@@ -140,40 +140,40 @@ typedef struct {
 
   // statistics information...
   struct {
-    uint64_t              smooth;
-    uint64_t            apply_op;
-    uint64_t            residual;
-    uint64_t               blas1;
-    uint64_t               blas3;
-    uint64_t boundary_conditions;
+    double              smooth;
+    double            apply_op;
+    double            residual;
+    double               blas1;
+    double               blas3;
+    double boundary_conditions;
     // Distributed Restriction
-    uint64_t   restriction_total;
-    uint64_t   restriction_pack;
-    uint64_t   restriction_local;
-    uint64_t   restriction_unpack;
-    uint64_t   restriction_recv;
-    uint64_t   restriction_send;
-    uint64_t   restriction_wait;
+    double   restriction_total;
+    double   restriction_pack;
+    double   restriction_local;
+    double   restriction_unpack;
+    double   restriction_recv;
+    double   restriction_send;
+    double   restriction_wait;
     // Distributed interpolation
-    uint64_t interpolation_total;
-    uint64_t interpolation_pack;
-    uint64_t interpolation_local;
-    uint64_t interpolation_unpack;
-    uint64_t interpolation_recv;
-    uint64_t interpolation_send;
-    uint64_t interpolation_wait;
+    double interpolation_total;
+    double interpolation_pack;
+    double interpolation_local;
+    double interpolation_unpack;
+    double interpolation_recv;
+    double interpolation_send;
+    double interpolation_wait;
     // Ghost Zone Exchanges...
-    uint64_t     ghostZone_total;
-    uint64_t     ghostZone_pack;
-    uint64_t     ghostZone_local;
-    uint64_t     ghostZone_unpack;
-    uint64_t     ghostZone_recv;
-    uint64_t     ghostZone_send;
-    uint64_t     ghostZone_wait;
+    double     ghostZone_total;
+    double     ghostZone_pack;
+    double     ghostZone_local;
+    double     ghostZone_unpack;
+    double     ghostZone_recv;
+    double     ghostZone_send;
+    double     ghostZone_wait;
     // Collectives...
-    uint64_t   collectives;
-    uint64_t         Total;
-  }cycles;
+    double   collectives;
+    double         Total;
+  }timers;
   int Krylov_iterations;        // total number of bottom solver iterations
   int CAKrylov_formations_of_G; // i.e. [G,g] = [P,R]^T[P,R,rt]
   int vcycles_from_this_level;  // number of vcycles performed that were initiated from this level
@@ -185,7 +185,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 void destroy_level(level_type *level);
 void create_vectors(level_type *level, int numVectors);
 void reset_level_timers(level_type *level);
-void   max_level_timers(level_type *level);
 int qsortInt(const void *a, const void *b);
 void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *num_blocks,
                           int dim_i, int dim_j, int dim_k,

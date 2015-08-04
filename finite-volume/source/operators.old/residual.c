@@ -11,7 +11,7 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
           apply_BCs(level,x_id,stencil_get_shape());
 
   // now do residual/restriction proper...
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   const int  ghosts = level->box_ghosts;
   const int jStride = level->box_jStride;
   const int kStride = level->box_kStride;
@@ -40,6 +40,6 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
       res[ijk] = rhs[ijk]-Ax;
     }}}
   }
-  level->cycles.residual += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.residual += (double)(getTime()-_timeStart);
 }
 

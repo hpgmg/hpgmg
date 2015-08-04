@@ -183,11 +183,11 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Reduce the local estimate of the dominant eigenvalue to a global estimate
   #ifdef USE_MPI
-  uint64_t _timeStartAllReduce = CycleTime();
+  double _timeStartAllReduce = getTime();
   double send = dominant_eigenvalue;
   MPI_Allreduce(&send,&dominant_eigenvalue,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
-  uint64_t _timeEndAllReduce = CycleTime();
-  level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
+  double _timeEndAllReduce = getTime();
+  level->timers.collectives   += (double)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
   if(level->my_rank==0){fprintf(stdout,"  estimating  lambda_max... <%1.15e\n",dominant_eigenvalue);fflush(stdout);}
   level->dominant_eigenvalue_of_DinvA = dominant_eigenvalue;

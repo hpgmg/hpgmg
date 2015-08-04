@@ -9,7 +9,7 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // 
           apply_BCs(level,x_id,stencil_get_shape());
 
   // now do Ax proper...
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   const int  ghosts = level->box_ghosts;
   const int jStride = level->box_jStride;
   const int kStride = level->box_kStride;
@@ -36,6 +36,6 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // 
       Ax[ijk] = apply_op_ijk(x);
     }}}
   }
-  level->cycles.apply_op += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.apply_op += (double)(getTime()-_timeStart);
 }
 //------------------------------------------------------------------------------------------------------------------------------

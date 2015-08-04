@@ -1279,75 +1279,39 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 // useful if one wishes to separate setup(build) timing from solve timing
 void reset_level_timers(level_type *level){
   // cycle counters information...
-  level->cycles.smooth                  = 0;
-  level->cycles.apply_op                = 0;
-  level->cycles.residual                = 0;
-  level->cycles.blas1                   = 0;
-  level->cycles.blas3                   = 0;
-  level->cycles.boundary_conditions     = 0;
-  level->cycles.restriction_total       = 0;
-  level->cycles.restriction_pack        = 0;
-  level->cycles.restriction_local       = 0;
-  level->cycles.restriction_unpack      = 0;
-  level->cycles.restriction_recv        = 0;
-  level->cycles.restriction_send        = 0;
-  level->cycles.restriction_wait        = 0;
-  level->cycles.interpolation_total     = 0;
-  level->cycles.interpolation_pack      = 0;
-  level->cycles.interpolation_local     = 0;
-  level->cycles.interpolation_unpack    = 0;
-  level->cycles.interpolation_recv      = 0;
-  level->cycles.interpolation_send      = 0;
-  level->cycles.interpolation_wait      = 0;
-  level->cycles.ghostZone_total         = 0;
-  level->cycles.ghostZone_pack          = 0;
-  level->cycles.ghostZone_local         = 0;
-  level->cycles.ghostZone_unpack        = 0;
-  level->cycles.ghostZone_recv          = 0;
-  level->cycles.ghostZone_send          = 0;
-  level->cycles.ghostZone_wait          = 0;
-  level->cycles.collectives             = 0;
-  level->cycles.Total                   = 0;
+  level->timers.smooth                  = 0;
+  level->timers.apply_op                = 0;
+  level->timers.residual                = 0;
+  level->timers.blas1                   = 0;
+  level->timers.blas3                   = 0;
+  level->timers.boundary_conditions     = 0;
+  level->timers.restriction_total       = 0;
+  level->timers.restriction_pack        = 0;
+  level->timers.restriction_local       = 0;
+  level->timers.restriction_unpack      = 0;
+  level->timers.restriction_recv        = 0;
+  level->timers.restriction_send        = 0;
+  level->timers.restriction_wait        = 0;
+  level->timers.interpolation_total     = 0;
+  level->timers.interpolation_pack      = 0;
+  level->timers.interpolation_local     = 0;
+  level->timers.interpolation_unpack    = 0;
+  level->timers.interpolation_recv      = 0;
+  level->timers.interpolation_send      = 0;
+  level->timers.interpolation_wait      = 0;
+  level->timers.ghostZone_total         = 0;
+  level->timers.ghostZone_pack          = 0;
+  level->timers.ghostZone_local         = 0;
+  level->timers.ghostZone_unpack        = 0;
+  level->timers.ghostZone_recv          = 0;
+  level->timers.ghostZone_send          = 0;
+  level->timers.ghostZone_wait          = 0;
+  level->timers.collectives             = 0;
+  level->timers.Total                   = 0;
   // solver events information...
   level->Krylov_iterations              = 0;
   level->CAKrylov_formations_of_G       = 0;
   level->vcycles_from_this_level        = 0;
-}
-
-//---------------------------------------------------------------------------------------------------------------------------------------------------
-void max_level_timers(level_type *level){
-  uint64_t temp;
-  #ifdef USE_MPI
-  temp=level->cycles.smooth;              MPI_Allreduce(&temp,&level->cycles.smooth              ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.apply_op;            MPI_Allreduce(&temp,&level->cycles.apply_op            ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.residual;            MPI_Allreduce(&temp,&level->cycles.residual            ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.blas1;               MPI_Allreduce(&temp,&level->cycles.blas1               ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.blas3;               MPI_Allreduce(&temp,&level->cycles.blas3               ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.boundary_conditions; MPI_Allreduce(&temp,&level->cycles.boundary_conditions ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_total;   MPI_Allreduce(&temp,&level->cycles.restriction_total   ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_pack;    MPI_Allreduce(&temp,&level->cycles.restriction_pack    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_local;   MPI_Allreduce(&temp,&level->cycles.restriction_local   ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_unpack;  MPI_Allreduce(&temp,&level->cycles.restriction_unpack  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_recv;    MPI_Allreduce(&temp,&level->cycles.restriction_recv    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_send;    MPI_Allreduce(&temp,&level->cycles.restriction_send    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_wait;    MPI_Allreduce(&temp,&level->cycles.restriction_wait    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_total; MPI_Allreduce(&temp,&level->cycles.interpolation_total ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_pack;  MPI_Allreduce(&temp,&level->cycles.interpolation_pack  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_local; MPI_Allreduce(&temp,&level->cycles.interpolation_local ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_unpack;MPI_Allreduce(&temp,&level->cycles.interpolation_unpack,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_recv;  MPI_Allreduce(&temp,&level->cycles.interpolation_recv  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_send;  MPI_Allreduce(&temp,&level->cycles.interpolation_send  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_wait;  MPI_Allreduce(&temp,&level->cycles.interpolation_wait  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_total;     MPI_Allreduce(&temp,&level->cycles.ghostZone_total     ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_pack;      MPI_Allreduce(&temp,&level->cycles.ghostZone_pack      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_local;     MPI_Allreduce(&temp,&level->cycles.ghostZone_local     ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_unpack;    MPI_Allreduce(&temp,&level->cycles.ghostZone_unpack    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_recv;      MPI_Allreduce(&temp,&level->cycles.ghostZone_recv      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_send;      MPI_Allreduce(&temp,&level->cycles.ghostZone_send      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_wait;      MPI_Allreduce(&temp,&level->cycles.ghostZone_wait      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.collectives;         MPI_Allreduce(&temp,&level->cycles.collectives         ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.Total;               MPI_Allreduce(&temp,&level->cycles.Total               ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  #endif
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------

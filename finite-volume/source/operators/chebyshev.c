@@ -46,7 +46,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
             else{exchange_boundary(level,VECTOR_TEMP,stencil_get_shape());apply_BCs(level,VECTOR_TEMP,stencil_get_shape());}
    
     // apply the smoother... Chebyshev ping pongs between x_id and VECTOR_TEMP
-    uint64_t _timeStart = CycleTime();
+    double _timeStart = getTime();
 
     PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
     for(block=0;block<level->num_my_blocks;block++){
@@ -95,6 +95,6 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       }}}
 
     } // box-loop
-    level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
+    level->timers.smooth += (double)(getTime()-_timeStart);
   } // s-loop
 }

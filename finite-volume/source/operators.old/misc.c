@@ -5,7 +5,7 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void zero_vector(level_type * level, int component_id){
   // zero's the entire grid INCLUDING ghost zones...
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int box;
 
   PRAGMA_THREAD_ACROSS_BOXES(level,box)
@@ -24,13 +24,13 @@ void zero_vector(level_type * level, int component_id){
       grid[ijk] = 0.0;
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void initialize_valid_region(level_type * level){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int box;
 
   PRAGMA_THREAD_ACROSS_BOXES(level,box)
@@ -57,14 +57,14 @@ void initialize_valid_region(level_type * level){
       }
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void init_vector(level_type * level, int component_id, double scalar){
   // initializes the grid to a scalar while zero'ing the ghost zones...
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int box;
 
   PRAGMA_THREAD_ACROSS_BOXES(level,box)
@@ -84,13 +84,13 @@ void init_vector(level_type * level, int component_id, double scalar){
         grid[ijk] = ghostZone ? 0.0 : scalar;
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double scale_b, int id_b){ // c=scale_a*id_a + scale_b*id_b
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
   int box;
 
@@ -112,13 +112,13 @@ void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double 
         grid_c[ijk] = scale_a*grid_a[ijk] + scale_b*grid_b[ijk];
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b){ // id_c=scale*id_a*id_b
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
   int box;
 
@@ -140,13 +140,13 @@ void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b)
         grid_c[ijk] = scale*grid_a[ijk]*grid_b[ijk];
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void invert_vector(level_type * level, int id_c, double scale_a, int id_a){ // c[]=scale_a/a[]
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
   int box;
 
@@ -167,13 +167,13 @@ void invert_vector(level_type * level, int id_c, double scale_a, int id_a){ // c
         grid_c[ijk] = scale_a/grid_a[ijk];
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void scale_vector(level_type * level, int id_c, double scale_a, int id_a){ // c[]=scale_a*a[]
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
   int box;
 
@@ -194,13 +194,13 @@ void scale_vector(level_type * level, int id_c, double scale_a, int id_a){ // c[
         grid_c[ijk] = scale_a*grid_a[ijk];
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 double dot(level_type * level, int id_a, int id_b){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
 
   int box;
@@ -225,14 +225,14 @@ double dot(level_type * level, int id_a, int id_b){
     }}}
     a_dot_b_level+=a_dot_b_box;
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 
   #ifdef USE_MPI
-  uint64_t _timeStartAllReduce = CycleTime();
+  double _timeStartAllReduce = getTime();
   double send = a_dot_b_level;
   MPI_Allreduce(&send,&a_dot_b_level,1,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_ALLREDUCE);
-  uint64_t _timeEndAllReduce = CycleTime();
-  level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
+  double _timeEndAllReduce = getTime();
+  level->timers.collectives   += (double)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
 
   return(a_dot_b_level);
@@ -240,7 +240,7 @@ double dot(level_type * level, int id_a, int id_b){
 
 //------------------------------------------------------------------------------------------------------------------------------
 double norm(level_type * level, int component_id){ // implements the max norm
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
   int box;
   double max_norm =  0.0;
@@ -264,14 +264,14 @@ double norm(level_type * level, int component_id){ // implements the max norm
     }}}
     if(box_norm>max_norm){max_norm = box_norm;}
   } // box list
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 
   #ifdef USE_MPI
-  uint64_t _timeStartAllReduce = CycleTime();
+  double _timeStartAllReduce = getTime();
   double send = max_norm;
   MPI_Allreduce(&send,&max_norm,1,MPI_DOUBLE,MPI_MAX,level->MPI_COMM_ALLREDUCE);
-  uint64_t _timeEndAllReduce = CycleTime();
-  level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
+  double _timeEndAllReduce = getTime();
+  level->timers.collectives   += (double)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
   return(max_norm);
 }
@@ -279,7 +279,7 @@ double norm(level_type * level, int component_id){ // implements the max norm
 
 //------------------------------------------------------------------------------------------------------------------------------
 double mean(level_type * level, int id_a){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
 
   int box;
@@ -302,15 +302,15 @@ double mean(level_type * level, int id_a){
     }}}
     sum_level+=sum_box;
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
   double ncells_level = (double)level->dim.i*(double)level->dim.j*(double)level->dim.k;
 
   #ifdef USE_MPI
-  uint64_t _timeStartAllReduce = CycleTime();
+  double _timeStartAllReduce = getTime();
   double send = sum_level;
   MPI_Allreduce(&send,&sum_level,1,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_ALLREDUCE);
-  uint64_t _timeEndAllReduce = CycleTime();
-  level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
+  double _timeEndAllReduce = getTime();
+  level->timers.collectives   += (double)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
 
   double mean_level = sum_level / ncells_level;
@@ -319,7 +319,7 @@ double mean(level_type * level, int id_a){
 
 
 void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
 
   int box;
@@ -341,7 +341,7 @@ void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
       grid_c[ijk] = grid_a[ijk] + shift_a;
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
@@ -355,7 +355,7 @@ double error(level_type * level, int id_a, int id_b){
 
 //------------------------------------------------------------------------------------------------------------------------------
 void color_vector(level_type * level, int id, int colors_in_each_dim, int icolor, int jcolor, int kcolor){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int box;
   PRAGMA_THREAD_ACROSS_BOXES(level,box)
   for(box=0;box<level->num_my_boxes;box++){
@@ -374,13 +374,13 @@ void color_vector(level_type * level, int id, int colors_in_each_dim, int icolor
       grid[ijk] = si*sj*sk;
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void random_vector(level_type * level, int id){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int box;
   PRAGMA_THREAD_ACROSS_BOXES(level,box)
   for(box=0;box<level->num_my_boxes;box++){
@@ -399,7 +399,7 @@ void random_vector(level_type * level, int id){
       grid[ijk] = -0.500 + 1.0*(i^j^k^0x1);
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 

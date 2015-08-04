@@ -29,7 +29,7 @@ void apply_BCs_v1(level_type * level, int x_id, int shape){
   const int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
   int buffer;
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
   for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     double scale = 1.0;
@@ -86,7 +86,7 @@ void apply_BCs_v1(level_type * level, int x_id, int shape){
     }
 
   }
-  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.boundary_conditions += (double)(getTime()-_timeStart);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
@@ -110,7 +110,7 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
   const int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
   int buffer;
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
   for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     int i,j,k;
@@ -246,7 +246,7 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
                  + 0.125*x[ijk+2*di+2*dj+2*dk];
     }
   }
-  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.boundary_conditions += (double)(getTime()-_timeStart);
 }
 
 
@@ -273,7 +273,7 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
   const int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
   int buffer;
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
   for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     int i,j,k;
@@ -544,7 +544,7 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
       xn[ijk-di-dj-dk] = fff;
     }
   }
-  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.boundary_conditions += (double)(getTime()-_timeStart);
 }
 
 
@@ -554,7 +554,7 @@ void extrapolate_betas(level_type * level){
   int shape=0;
 
   int buffer;
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
   for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     int i,j,k;
@@ -656,7 +656,7 @@ void extrapolate_betas(level_type * level){
     }
 
   }
-  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.boundary_conditions += (double)(getTime()-_timeStart);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------

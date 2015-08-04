@@ -12,7 +12,7 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
           apply_BCs(level,x_id,stencil_get_shape());
 
   // now do residual/restriction proper...
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int block;
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
@@ -46,6 +46,6 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
       res[ijk] = rhs[ijk]-Ax;
     }}}
   }
-  level->cycles.residual += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.residual += (double)(getTime()-_timeStart);
 }
 

@@ -5,7 +5,7 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void zero_vector(level_type * level, int id_a){
   // zero's the entire grid INCLUDING ghost zones...
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int block;
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
@@ -40,13 +40,13 @@ void zero_vector(level_type * level, int id_a){
       grid[ijk] = 0.0;
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void initialize_valid_region(level_type * level){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int block;
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
@@ -89,14 +89,14 @@ void initialize_valid_region(level_type * level){
       }
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
 void init_vector(level_type * level, int id_a, double scalar){
   // initializes the grid to a scalar while zero'ing the ghost zones...
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int block;
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
@@ -132,7 +132,7 @@ void init_vector(level_type * level, int id_a, double scalar){
         grid[ijk] = ghostZone ? 0.0 : scalar;
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
@@ -141,7 +141,7 @@ void init_vector(level_type * level, int id_a, double scalar){
 // i.e. c[] = scale_a*a[] + scale_b*b[]
 // note, only non ghost zone values are included in this calculation
 void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double scale_b, int id_b){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
   int block;
 
@@ -169,7 +169,7 @@ void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double 
         grid_c[ijk] = scale_a*grid_a[ijk] + scale_b*grid_b[ijk];
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
@@ -178,7 +178,7 @@ void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double 
 // i.e. c[]=scale*a[]*b[]
 // note, only non ghost zone values are included in this calculation
 void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
   int block;
 
@@ -206,7 +206,7 @@ void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b)
         grid_c[ijk] = scale*grid_a[ijk]*grid_b[ijk];
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
@@ -215,7 +215,7 @@ void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b)
 // i.e. c[]=scale_a/a[]
 // note, only non ghost zone values are included in this calculation
 void invert_vector(level_type * level, int id_c, double scale_a, int id_a){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
   int block;
 
@@ -242,7 +242,7 @@ void invert_vector(level_type * level, int id_c, double scale_a, int id_a){
         grid_c[ijk] = scale_a/grid_a[ijk];
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
@@ -251,7 +251,7 @@ void invert_vector(level_type * level, int id_c, double scale_a, int id_a){
 // i.e. c[]=scale_a*a[]
 // note, only non ghost zone values are included in this calculation
 void scale_vector(level_type * level, int id_c, double scale_a, int id_a){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
   int block;
 
@@ -278,7 +278,7 @@ void scale_vector(level_type * level, int id_c, double scale_a, int id_a){
         grid_c[ijk] = scale_a*grid_a[ijk];
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
@@ -286,7 +286,7 @@ void scale_vector(level_type * level, int id_c, double scale_a, int id_a){
 // return the dot product of vectors id_a and id_b
 // note, only non ghost zone values are included in this calculation
 double dot(level_type * level, int id_a, int id_b){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
 
   int block;
@@ -317,14 +317,14 @@ double dot(level_type * level, int id_a, int id_b){
     }}}
     a_dot_b_level+=a_dot_b_block;
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 
   #ifdef USE_MPI
-  uint64_t _timeStartAllReduce = CycleTime();
+  double _timeStartAllReduce = getTime();
   double send = a_dot_b_level;
   MPI_Allreduce(&send,&a_dot_b_level,1,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_ALLREDUCE);
-  uint64_t _timeEndAllReduce = CycleTime();
-  level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
+  double _timeEndAllReduce = getTime();
+  level->timers.collectives   += (double)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
 
   return(a_dot_b_level);
@@ -334,7 +334,7 @@ double dot(level_type * level, int id_a, int id_b){
 // return the max (infinity) norm of the vector id_a.
 // note, only non ghost zone values are included in this calculation
 double norm(level_type * level, int id_a){ // implements the max norm
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
   int block;
   double max_norm =  0.0;
@@ -365,14 +365,14 @@ double norm(level_type * level, int id_a){ // implements the max norm
 
     if(block_norm>max_norm){max_norm = block_norm;}
   } // block list
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 
   #ifdef USE_MPI
-  uint64_t _timeStartAllReduce = CycleTime();
+  double _timeStartAllReduce = getTime();
   double send = max_norm;
   MPI_Allreduce(&send,&max_norm,1,MPI_DOUBLE,MPI_MAX,level->MPI_COMM_ALLREDUCE);
-  uint64_t _timeEndAllReduce = CycleTime();
-  level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
+  double _timeEndAllReduce = getTime();
+  level->timers.collectives   += (double)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
   return(max_norm);
 }
@@ -383,7 +383,7 @@ double norm(level_type * level, int id_a){ // implements the max norm
 // essentially, this is a l1 norm by a scaling by the inverse of the total (global) number of cells
 // note, only non ghost zone values are included in this calculation
 double mean(level_type * level, int id_a){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
 
 
   int block;
@@ -413,15 +413,15 @@ double mean(level_type * level, int id_a){
     }}}
     sum_level+=sum_block;
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
   double ncells_level = (double)level->dim.i*(double)level->dim.j*(double)level->dim.k;
 
   #ifdef USE_MPI
-  uint64_t _timeStartAllReduce = CycleTime();
+  double _timeStartAllReduce = getTime();
   double send = sum_level;
   MPI_Allreduce(&send,&sum_level,1,MPI_DOUBLE,MPI_SUM,level->MPI_COMM_ALLREDUCE);
-  uint64_t _timeEndAllReduce = CycleTime();
-  level->cycles.collectives   += (uint64_t)(_timeEndAllReduce-_timeStartAllReduce);
+  double _timeEndAllReduce = getTime();
+  level->timers.collectives   += (double)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
 
   double mean_level = sum_level / ncells_level;
@@ -433,7 +433,7 @@ double mean(level_type * level, int id_a){
 // add the scalar value shift_a to each element of vector id_a and store the result in vector id_c
 // note, only non ghost zone values are included in this calculation
 void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int block;
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
@@ -460,7 +460,7 @@ void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
       grid_c[ijk] = grid_a[ijk] + shift_a;
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
@@ -488,7 +488,7 @@ double error(level_type * level, int id_a, int id_b){
 //   -+---+---+---+-
 //
 void color_vector(level_type * level, int id_a, int colors_in_each_dim, int icolor, int jcolor, int kcolor){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int block;
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
@@ -516,7 +516,7 @@ void color_vector(level_type * level, int id_a, int colors_in_each_dim, int icol
       grid[ijk] = si*sj*sk;
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 
@@ -525,7 +525,7 @@ void color_vector(level_type * level, int id_a, int colors_in_each_dim, int icol
 // For simplicity, random is defined as -1.0 or +1.0 and is based on whether the coordinates of the element are even or odd
 // note, only non ghost zone values are included in this calculation
 void random_vector(level_type * level, int id_a){
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int block;
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
@@ -550,7 +550,7 @@ void random_vector(level_type * level, int id_a){
       grid[ijk] = -1.000 + 2.0*(i^j^k^0x1);
     }}}
   }
-  level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.blas1 += (double)(getTime()-_timeStart);
 }
 
 

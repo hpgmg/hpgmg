@@ -26,9 +26,9 @@ typedef struct {
   level_type ** levels;	// array of pointers to levels
 
   struct {
-    uint64_t MGBuild; // total time spent building the coefficients...
-    uint64_t MGSolve; // total time spent in MGSolve
-  }cycles;
+    double MGBuild; // total time spent building the coefficients...
+    double MGSolve; // total time spent in MGSolve
+  }timers;
   int MGSolves_performed;
 } mg_type;
 

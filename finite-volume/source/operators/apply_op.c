@@ -12,7 +12,7 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){
           apply_BCs(level,x_id,stencil_get_shape());
 
   // now do Ax proper...
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int block;
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
@@ -44,6 +44,6 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){
       Ax[ijk] = apply_op_ijk(x);
     }}}
   }
-  level->cycles.apply_op += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.apply_op += (double)(getTime()-_timeStart);
 }
 //------------------------------------------------------------------------------------------------------------------------------

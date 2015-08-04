@@ -34,7 +34,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
     #endif
 
     // apply the smoother...
-    uint64_t _timeStart = CycleTime();
+    double _timeStart = getTime();
 
     // loop over all block/tiles this process owns...
     PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
@@ -129,7 +129,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
 
 
     } // boxes
-    level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
+    level->timers.smooth += (double)(getTime()-_timeStart);
   } // s-loop
 }
 

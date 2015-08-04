@@ -11,7 +11,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
             apply_BCs(level,phi_id,stencil_get_shape());
 
     // now do ghosts communication-avoiding smooths on each box...
-    uint64_t _timeStart = CycleTime();
+    double _timeStart = getTime();
     const int  ghosts = level->box_ghosts;
     const int jStride = level->box_jStride;
     const int kStride = level->box_kStride;
@@ -52,7 +52,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
       }
 
     } // boxes
-    level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
+    level->timers.smooth += (double)(getTime()-_timeStart);
   } // s-loop
 }
 
