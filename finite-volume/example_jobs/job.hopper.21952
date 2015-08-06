@@ -11,10 +11,10 @@ cd $PBS_O_WORKDIR
 module swap PrgEnv-pgi PrgEnv-intel
 
 export OMP_NUM_THREADS=6
-aprun -n 21952  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
-aprun -n 19683  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
-aprun -n 15625  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
-aprun -n 13824  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
-aprun -n 10648  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
-aprun -n  9261  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
-aprun -n  8000  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  1
+aprun -n 21296  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  4
+aprun -n 21952  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  8
+aprun -n 20736  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7 18
+aprun -n 18432  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  6
+aprun -n 21952  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7 12
+#aprun -n 23328  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  2
+#aprun -n 25088  -d  6  -N  4  -S 1  -ss  -cc numa_node ./run.hopper  7  7

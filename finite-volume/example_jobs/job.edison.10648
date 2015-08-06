@@ -3,83 +3,24 @@
 #PBS -o results.edison.10648
 #PBS -q regular
 #PBS -j oe
-#PBS -l walltime=0:29:00
+#PBS -l walltime=0:59:00
 #PBS -l mppwidth=129024
 
 set -x
 cd $PBS_O_WORKDIR
-export UGNI_CDM_MDD_DEDICATED=2
-
-
-export OMP_NUM_THREADS=1
-aprun -n  85184  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  64000  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  46656  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  32768  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  27000  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  21952  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  13824  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n   8000  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-
 
 export OMP_NUM_THREADS=12
-aprun -n  10648  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   8000  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   6859  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   5832  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   4913  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   4096  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   3375  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   2744  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   2197  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   1728  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   1331  -N  2  -S 1  -cc numa_node ./run.edison       7  1
-aprun -n   1000  -N  2  -S 1  -cc numa_node ./run.edison       7  1
+aprun -n   9216  -N  2  -S 1  -cc numa_node ./run.edison   7  12
+aprun -n  10648  -N  2  -S 1  -cc numa_node ./run.edison   7   8
+aprun -n  10752  -N  2  -S 1  -cc numa_node ./run.edison   7  11
+aprun -n  10752  -N  2  -S 1  -cc numa_node ./run.edison   7  17
+aprun -n  10752  -N  2  -S 1  -cc numa_node ./run.edison   7  25
+aprun -n  10368  -N  2  -S 1  -cc numa_node ./run.edison   7  36
+aprun -n  10240  -N  2  -S 1  -cc numa_node ./run.edison   7  50
+aprun -n  10648  -N  2  -S 1  -cc numa_node ./run.edison   7  64
 
+aprun -n  10648  -N  2  -S 1  -cc numa_node ./run.edison   8   8
+aprun -n   8000  -N  2  -S 1  -cc numa_node ./run.edison   8   8
+aprun -n   5832  -N  2  -S 1  -cc numa_node ./run.edison   8   8
+aprun -n   4096  -N  2  -S 1  -cc numa_node ./run.edison   8   8
 
-export OMP_NUM_THREADS=1
-aprun -n  85184  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  64000  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  54872  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  46656  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  39304  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  32768  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  27000  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  21952  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  17576  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  13824  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n  10648  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n   8000  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n   5832  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n   4096  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n   2744  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n   1728  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n   1000  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n    512  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n    216  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n     64  -N 16  -S 8  -cc numa_node ./run.edison.flat  6  1
-aprun -n      8  -N  8  -S 8  -cc numa_node ./run.edison.flat  6  1
-
-
-export OMP_NUM_THREADS=12
-aprun -n  10648  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   8000  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   6859  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   5832  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   4913  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   4096  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   3375  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   2744  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   2197  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   1728  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   1331  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n   1000  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n    729  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n    512  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n    343  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n    216  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n    125  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n     64  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n     27  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n      8  -N  2  -S 1  -cc numa_node ./run.edison  7  1
-aprun -n      1  -N  1  -S 1  -cc numa_node ./run.edison  7  1

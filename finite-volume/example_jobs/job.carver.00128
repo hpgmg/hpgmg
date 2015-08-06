@@ -14,8 +14,13 @@ module swap pgi intel
 module swap openmpi openmpi-intel
 
 export OMP_NUM_THREADS=4
-mpirun -np   1 -report-bindings -npernode 1 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
-mpirun -np   8 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
-mpirun -np  27 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
-mpirun -np  64 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np 128 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  4
+mpirun -np  64 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  8
+mpirun -np  32 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  2
+mpirun -np  16 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  4
+
 mpirun -np 125 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np  64 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np  27 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np   8 -report-bindings -npernode 2 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1
+mpirun -np   1 -report-bindings -npernode 1 -npersocket 1 -bysocket -bind-to-socket ./run.carver   7  1

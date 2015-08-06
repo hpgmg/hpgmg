@@ -356,7 +356,6 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #include "operators/misc.c"
 #include "operators/exchange_boundary.c"
 #include "operators/boundary_fd.c"
-#include "operators/matmul.c"
 #include "operators/restriction.c"
 #include "operators/interpolation_p0.c"
 #include "operators/interpolation_p1.c"

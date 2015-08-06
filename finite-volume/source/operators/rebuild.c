@@ -3,6 +3,7 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
+/*
 // power method for calculating the dominant eigenvalue of D^{-1}A
 double power_method(level_type * level, double a, double b, int max_iterations){
   int i;
@@ -32,6 +33,7 @@ double power_method(level_type * level, double a, double b, int max_iterations){
   #endif
   return(lambda_max);
 }
+*/
 
 
 //------------------------------------------------------------------------------------------------------------------------------

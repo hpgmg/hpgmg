@@ -150,7 +150,6 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #include "operators/exchange_boundary.c"
 #include "operators/boundary_fd.c" // 27pt uses cell centered, not cell averaged
 //#include "operators/boundary_fv.c"
-#include "operators/matmul.c"
 #include "operators/restriction.c"
 #include "operators/interpolation_p2.c"
 //#include "operators/interpolation_v2.c"

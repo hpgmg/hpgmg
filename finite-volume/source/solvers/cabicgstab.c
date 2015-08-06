@@ -18,6 +18,8 @@
 #define    CA_KRYLOV_S     4
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
+#include "matmul.c"
+//------------------------------------------------------------------------------------------------------------------------------
 // z[r] = alpha*A[r][c]*x[c]+beta*y[r]   // [row][col]
 // z[r] = alpha*A[r][c]*x[c]+beta*y[r]   // [row][col]
 #define gemv(z,alpha,A,x,beta,y,rows,cols)  {int r,c;double sum;for(r=0;r<(rows);r++){sum=0.0;for(c=0;c<(cols);c++){sum+=(A)[r][c]*(x)[c];}(z)[r]=(alpha)*sum+(beta)*(y)[r];}}

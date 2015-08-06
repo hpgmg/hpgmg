@@ -9,6 +9,7 @@
 #include <string.h>
 #include <math.h>
 //------------------------------------------------------------------------------------------------------------------------------
+#include "timers.h"
 #include "defines.h"
 #include "level.h"
 #include "operators.h"
