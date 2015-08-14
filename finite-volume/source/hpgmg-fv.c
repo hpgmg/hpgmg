@@ -55,7 +55,7 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
   for(doTiming=0;doTiming<=1;doTiming++){ // first pass warms up, second pass times
 
     #ifdef USE_HPM // IBM performance counters for BGQ...
-    if(doTiming)HPM_Start("FMGSolve()");
+    if( (doTiming==1) && (onLevel==0) )HPM_Start("FMGSolve()");
     #endif
 
     #ifdef USE_MPI
@@ -93,7 +93,7 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
     #endif
 
     #ifdef USE_HPM // IBM performance counters for BGQ...
-    if(doTiming)HPM_Stop("FMGSolve()");
+    if( (doTiming==1) && (onLevel==0) )HPM_Stop("FMGSolve()");
     #endif
   }
 }
