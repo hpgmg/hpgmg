@@ -48,6 +48,5 @@ void                color_vector(level_type * level, int id, int colors, int ico
 void               random_vector(level_type * level, int id);
 //------------------------------------------------------------------------------------------------------------------------------
   void        initialize_problem(level_type * level, double hLevel, double a, double b);
-  void   initialize_valid_region(level_type * level);
 //------------------------------------------------------------------------------------------------------------------------------
 #endif

@@ -44,162 +44,58 @@
   #define PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,b,nb,bmax)    
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs(level_type * level, int x_id, int shape){
-  #ifndef STENCIL_FUSE_BC
-  // This is a failure mode if (trying to do communication-avoiding) && (BC!=BC_PERIODIC)
-  apply_BCs_p1(level,x_id,shape);
-  #endif
-}
+void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_p1(level,x_id,shape);}
 //------------------------------------------------------------------------------------------------------------------------------
-// calculate Dinv?
-#ifdef STENCIL_VARIABLE_COEFFICIENT
-  #ifdef USE_HELMHOLTZ // variable coefficient Helmholtz ...
-  #define calculate_Dinv()                                      \
-  (                                                             \
-    1.0 / (a*alpha[ijk] - b*h2inv*(                             \
-             + beta_i[ijk        ]*( valid[ijk-1      ] - 2.0 ) \
-             + beta_j[ijk        ]*( valid[ijk-jStride] - 2.0 ) \
-             + beta_k[ijk        ]*( valid[ijk-kStride] - 2.0 ) \
-             + beta_i[ijk+1      ]*( valid[ijk+1      ] - 2.0 ) \
-             + beta_j[ijk+jStride]*( valid[ijk+jStride] - 2.0 ) \
-             + beta_k[ijk+kStride]*( valid[ijk+kStride] - 2.0 ) \
-          ))                                                    \
-  )
-  #else // variable coefficient Poisson ...
-  #define calculate_Dinv()                                      \
-  (                                                             \
-    1.0 / ( -b*h2inv*(                                          \
-             + beta_i[ijk        ]*( valid[ijk-1      ] - 2.0 ) \
-             + beta_j[ijk        ]*( valid[ijk-jStride] - 2.0 ) \
-             + beta_k[ijk        ]*( valid[ijk-kStride] - 2.0 ) \
-             + beta_i[ijk+1      ]*( valid[ijk+1      ] - 2.0 ) \
-             + beta_j[ijk+jStride]*( valid[ijk+jStride] - 2.0 ) \
-             + beta_k[ijk+kStride]*( valid[ijk+kStride] - 2.0 ) \
-          ))                                                    \
-  )
-  #endif
-#else // constant coefficient case... 
-  #define calculate_Dinv()          \
-  (                                 \
-    1.0 / (a - b*h2inv*(            \
-             + valid[ijk-1      ]   \
-             + valid[ijk-jStride]   \
-             + valid[ijk-kStride]   \
-             + valid[ijk+1      ]   \
-             + valid[ijk+jStride]   \
-             + valid[ijk+kStride]   \
-             - 12.0                 \
-          ))                        \
-  )
-#endif
-
-#if defined(STENCIL_FUSE_DINV) && defined(STENCIL_FUSE_BC)
-#define Dinv_ijk() calculate_Dinv() // recalculate it
-#else
 #define Dinv_ijk() Dinv[ijk]        // simply retrieve it rather than recalculating it
-#endif
 //------------------------------------------------------------------------------------------------------------------------------
-#ifdef STENCIL_FUSE_BC
-
-  #ifdef STENCIL_VARIABLE_COEFFICIENT
-    #ifdef USE_HELMHOLTZ // variable coefficient Helmholtz ...
-    #define apply_op_ijk(x)                                                                   \
-    (                                                                                         \
-      a*alpha[ijk]*x[ijk]                                                                     \
-      -b*h2inv*(                                                                              \
-        + beta_i[ijk        ]*( valid[ijk-1      ]*( x[ijk] + x[ijk-1      ] ) - 2.0*x[ijk] ) \
-        + beta_j[ijk        ]*( valid[ijk-jStride]*( x[ijk] + x[ijk-jStride] ) - 2.0*x[ijk] ) \
-        + beta_k[ijk        ]*( valid[ijk-kStride]*( x[ijk] + x[ijk-kStride] ) - 2.0*x[ijk] ) \
-        + beta_i[ijk+1      ]*( valid[ijk+1      ]*( x[ijk] + x[ijk+1      ] ) - 2.0*x[ijk] ) \
-        + beta_j[ijk+jStride]*( valid[ijk+jStride]*( x[ijk] + x[ijk+jStride] ) - 2.0*x[ijk] ) \
-        + beta_k[ijk+kStride]*( valid[ijk+kStride]*( x[ijk] + x[ijk+kStride] ) - 2.0*x[ijk] ) \
-      )                                                                                       \
-    )
-    #else // variable coefficient Poisson ...
-    #define apply_op_ijk(x)                                                                   \
-    (                                                                                         \
-      -b*h2inv*(                                                                              \
-        + beta_i[ijk        ]*( valid[ijk-1      ]*( x[ijk] + x[ijk-1      ] ) - 2.0*x[ijk] ) \
-        + beta_j[ijk        ]*( valid[ijk-jStride]*( x[ijk] + x[ijk-jStride] ) - 2.0*x[ijk] ) \
-        + beta_k[ijk        ]*( valid[ijk-kStride]*( x[ijk] + x[ijk-kStride] ) - 2.0*x[ijk] ) \
-        + beta_i[ijk+1      ]*( valid[ijk+1      ]*( x[ijk] + x[ijk+1      ] ) - 2.0*x[ijk] ) \
-        + beta_j[ijk+jStride]*( valid[ijk+jStride]*( x[ijk] + x[ijk+jStride] ) - 2.0*x[ijk] ) \
-        + beta_k[ijk+kStride]*( valid[ijk+kStride]*( x[ijk] + x[ijk+kStride] ) - 2.0*x[ijk] ) \
-      )                                                                                       \
-    )
-    #endif
-  #else  // constant coefficient case...  
-    #define apply_op_ijk(x)                                \
-    (                                                    \
-      a*x[ijk] - b*h2inv*(                               \
-        + valid[ijk-1      ]*( x[ijk] + x[ijk-1      ] ) \
-        + valid[ijk-jStride]*( x[ijk] + x[ijk-jStride] ) \
-        + valid[ijk-kStride]*( x[ijk] + x[ijk-kStride] ) \
-        + valid[ijk+1      ]*( x[ijk] + x[ijk+1      ] ) \
-        + valid[ijk+jStride]*( x[ijk] + x[ijk+jStride] ) \
-        + valid[ijk+kStride]*( x[ijk] + x[ijk+kStride] ) \
-                       -12.0*( x[ijk]                  ) \
-      )                                                  \
-    )
-  #endif // variable/constant coefficient
-
+#ifdef STENCIL_VARIABLE_COEFFICIENT
+#ifdef USE_HELMHOLTZ // variable coefficient Helmholtz...
+  #define apply_op_ijk(x)                               \
+  (                                                     \
+    a*alpha[ijk]*x[ijk]                                 \
+   -b*h2inv*(                                           \
+      + beta_i[ijk+1      ]*( x[ijk+1      ] - x[ijk] ) \
+      + beta_i[ijk        ]*( x[ijk-1      ] - x[ijk] ) \
+      + beta_j[ijk+jStride]*( x[ijk+jStride] - x[ijk] ) \
+      + beta_j[ijk        ]*( x[ijk-jStride] - x[ijk] ) \
+      + beta_k[ijk+kStride]*( x[ijk+kStride] - x[ijk] ) \
+      + beta_k[ijk        ]*( x[ijk-kStride] - x[ijk] ) \
+    )                                                   \
+  )
+#else // variable coefficient Poisson...
+  #define apply_op_ijk(x)                               \
+  (                                                     \
+    -b*h2inv*(                                          \
+      + beta_i[ijk+1      ]*( x[ijk+1      ] - x[ijk] ) \
+      + beta_i[ijk        ]*( x[ijk-1      ] - x[ijk] ) \
+      + beta_j[ijk+jStride]*( x[ijk+jStride] - x[ijk] ) \
+      + beta_j[ijk        ]*( x[ijk-jStride] - x[ijk] ) \
+      + beta_k[ijk+kStride]*( x[ijk+kStride] - x[ijk] ) \
+      + beta_k[ijk        ]*( x[ijk-kStride] - x[ijk] ) \
+    )                                                   \
+  )
 #endif
-
-
-//------------------------------------------------------------------------------------------------------------------------------
-#ifndef STENCIL_FUSE_BC
-
-  #ifdef STENCIL_VARIABLE_COEFFICIENT
-    #ifdef USE_HELMHOLTZ // variable coefficient Helmholtz...
-    #define apply_op_ijk(x)                               \
-    (                                                     \
-      a*alpha[ijk]*x[ijk]                                 \
-     -b*h2inv*(                                           \
-        + beta_i[ijk+1      ]*( x[ijk+1      ] - x[ijk] ) \
-        + beta_i[ijk        ]*( x[ijk-1      ] - x[ijk] ) \
-        + beta_j[ijk+jStride]*( x[ijk+jStride] - x[ijk] ) \
-        + beta_j[ijk        ]*( x[ijk-jStride] - x[ijk] ) \
-        + beta_k[ijk+kStride]*( x[ijk+kStride] - x[ijk] ) \
-        + beta_k[ijk        ]*( x[ijk-kStride] - x[ijk] ) \
-      )                                                   \
-    )
-    #else // variable coefficient Poisson...
-    #define apply_op_ijk(x)                               \
-    (                                                     \
-      -b*h2inv*(                                          \
-        + beta_i[ijk+1      ]*( x[ijk+1      ] - x[ijk] ) \
-        + beta_i[ijk        ]*( x[ijk-1      ] - x[ijk] ) \
-        + beta_j[ijk+jStride]*( x[ijk+jStride] - x[ijk] ) \
-        + beta_j[ijk        ]*( x[ijk-jStride] - x[ijk] ) \
-        + beta_k[ijk+kStride]*( x[ijk+kStride] - x[ijk] ) \
-        + beta_k[ijk        ]*( x[ijk-kStride] - x[ijk] ) \
-      )                                                   \
-    )
-    #endif
-  #else  // constant coefficient case...  
-    #define apply_op_ijk(x)            \
-    (                                \
-      a*x[ijk] - b*h2inv*(           \
-        + x[ijk+1      ]             \
-        + x[ijk-1      ]             \
-        + x[ijk+jStride]             \
-        + x[ijk-jStride]             \
-        + x[ijk+kStride]             \
-        + x[ijk-kStride]             \
-        - x[ijk        ]*6.0         \
-      )                              \
-    )
-  #endif // variable/constant coefficient
-
-#endif // BCs
-
+#else  // constant coefficient case...  
+  #define apply_op_ijk(x)            \
+  (                                \
+    a*x[ijk] - b*h2inv*(           \
+      + x[ijk+1      ]             \
+      + x[ijk-1      ]             \
+      + x[ijk+jStride]             \
+      + x[ijk-jStride]             \
+      + x[ijk+kStride]             \
+      + x[ijk-kStride]             \
+      - x[ijk        ]*6.0         \
+    )                              \
+  )
+#endif // variable/constant coefficient
 
 //------------------------------------------------------------------------------------------------------------------------------
 int stencil_get_radius(){return(1);} // 7pt reaches out 1 point
 int stencil_get_shape(){return(STENCIL_SHAPE_STAR);} // needs just faces
 //------------------------------------------------------------------------------------------------------------------------------
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
-  if(level->my_rank==0){fprintf(stdout,"  rebuilding operator for level...  h=%e  ",level->h);}
+  if(level->my_rank==0){fprintf(stdout,"  rebuilding operator for level...  h=%e  ",level->h);fflush(stdout);}
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // form restriction of alpha[], beta_*[] coefficients from fromLevel
@@ -246,7 +142,6 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     double * __restrict__ beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + ghosts*(1+jStride+kStride);
     double * __restrict__   Dinv = level->my_boxes[box].vectors[VECTOR_DINV  ] + ghosts*(1+jStride+kStride);
     double * __restrict__  L1inv = level->my_boxes[box].vectors[VECTOR_L1INV ] + ghosts*(1+jStride+kStride);
-    double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID ] + ghosts*(1+jStride+kStride);
     double block_eigenvalue = -1e9;
 
     for(k=klo;k<khi;k++){
@@ -254,45 +149,61 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     for(i=ilo;i<ihi;i++){ 
       int ijk = i + j*jStride + k*kStride;
 
+      // used for quick linear approximation to zero dirichlet BC
+      double ilo_is_valid =1.0;
+      double ihi_is_valid =1.0;
+      double jlo_is_valid =1.0;
+      double jhi_is_valid =1.0;
+      double klo_is_valid =1.0;
+      double khi_is_valid =1.0;
+      if(level->boundary_condition.type != BC_PERIODIC){
+         if(level->my_boxes[box].low.i+i-1 <             0)ilo_is_valid = 0.0;
+         if(level->my_boxes[box].low.j+j-1 <             0)jlo_is_valid = 0.0;
+         if(level->my_boxes[box].low.k+k-1 <             0)klo_is_valid = 0.0;
+         if(level->my_boxes[box].low.i+i+1 >= level->dim.i)ihi_is_valid = 0.0;
+         if(level->my_boxes[box].low.j+j+1 >= level->dim.j)jhi_is_valid = 0.0;
+         if(level->my_boxes[box].low.k+k+1 >= level->dim.k)khi_is_valid = 0.0;
+       }
+
       #ifdef STENCIL_VARIABLE_COEFFICIENT
       // radius of Gershgorin disc is the sum of the absolute values of the off-diagonal elements...
       double sumAbsAij = fabs(b*h2inv) * (
-                           fabs( beta_i[ijk        ]*valid[ijk-1      ] )+
-                           fabs( beta_j[ijk        ]*valid[ijk-jStride] )+
-                           fabs( beta_k[ijk        ]*valid[ijk-kStride] )+
-                           fabs( beta_i[ijk+1      ]*valid[ijk+1      ] )+
-                           fabs( beta_j[ijk+jStride]*valid[ijk+jStride] )+
-                           fabs( beta_k[ijk+kStride]*valid[ijk+kStride] )
+                           fabs( beta_i[ijk        ]*ilo_is_valid )+
+                           fabs( beta_j[ijk        ]*jlo_is_valid )+
+                           fabs( beta_k[ijk        ]*klo_is_valid )+
+                           fabs( beta_i[ijk+1      ]*ihi_is_valid )+
+                           fabs( beta_j[ijk+jStride]*jhi_is_valid )+
+                           fabs( beta_k[ijk+kStride]*khi_is_valid )
                          );
 
       // center of Gershgorin disc is the diagonal element...
       double    Aii = a*alpha[ijk] - b*h2inv*(
-                        beta_i[ijk        ]*( valid[ijk-1      ]-2.0 )+
-                        beta_j[ijk        ]*( valid[ijk-jStride]-2.0 )+
-                        beta_k[ijk        ]*( valid[ijk-kStride]-2.0 )+
-                        beta_i[ijk+1      ]*( valid[ijk+1      ]-2.0 )+
-                        beta_j[ijk+jStride]*( valid[ijk+jStride]-2.0 )+
-                        beta_k[ijk+kStride]*( valid[ijk+kStride]-2.0 ) 
+                        beta_i[ijk        ]*( ilo_is_valid-2.0 )+
+                        beta_j[ijk        ]*( jlo_is_valid-2.0 )+
+                        beta_k[ijk        ]*( klo_is_valid-2.0 )+
+                        beta_i[ijk+1      ]*( ihi_is_valid-2.0 )+
+                        beta_j[ijk+jStride]*( jhi_is_valid-2.0 )+
+                        beta_k[ijk+kStride]*( khi_is_valid-2.0 ) 
                       );
       #else // Constant coefficient versions with fused BC's...
       // radius of Gershgorin disc is the sum of the absolute values of the off-diagonal elements...
       double sumAbsAij = fabs(b*h2inv) * (
-                           valid[ijk-1      ] +
-                           valid[ijk-jStride] +
-                           valid[ijk-kStride] +
-                           valid[ijk+1      ] +
-                           valid[ijk+jStride] +
-                           valid[ijk+kStride] 
+                           ilo_is_valid +
+                           jlo_is_valid +
+                           klo_is_valid +
+                           ihi_is_valid +
+                           jhi_is_valid +
+                           khi_is_valid 
                          );
 
       // center of Gershgorin disc is the diagonal element...
       double    Aii = a - b*h2inv*(
-                         valid[ijk-1      ] +
-                         valid[ijk-jStride] +
-                         valid[ijk-kStride] +
-                         valid[ijk+1      ] +
-                         valid[ijk+jStride] +
-                         valid[ijk+kStride] - 12.0
+                         ilo_is_valid +
+                         jlo_is_valid +
+                         klo_is_valid +
+                         ihi_is_valid +
+                         jhi_is_valid +
+                         khi_is_valid - 12.0
                       );
       #endif
 

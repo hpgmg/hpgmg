@@ -45,55 +45,6 @@ void zero_vector(level_type * level, int id_a){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void initialize_valid_region(level_type * level){
-  double _timeStart = getTime();
-  int block;
-
-  PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
-  for(block=0;block<level->num_my_blocks;block++){
-    const int box = level->my_blocks[block].read.box;
-          int ilo = level->my_blocks[block].read.i; 
-          int jlo = level->my_blocks[block].read.j; 
-          int klo = level->my_blocks[block].read.k; 
-          int ihi = level->my_blocks[block].dim.i + ilo;
-          int jhi = level->my_blocks[block].dim.j + jlo;
-          int khi = level->my_blocks[block].dim.k + klo;
-    int i,j,k;
-    const int jStride = level->my_boxes[box].jStride;
-    const int kStride = level->my_boxes[box].kStride;
-    const int  ghosts = level->my_boxes[box].ghosts;
-    const int     dim = level->my_boxes[box].dim;
-
-    // expand the size of the block to include the ghost zones...
-    if(ilo<=  0)ilo-=ghosts; 
-    if(jlo<=  0)jlo-=ghosts; 
-    if(klo<=  0)klo-=ghosts; 
-    if(ihi>=dim)ihi+=ghosts; 
-    if(jhi>=dim)jhi+=ghosts; 
-    if(khi>=dim)khi+=ghosts; 
-
-    double * __restrict__ valid = level->my_boxes[box].vectors[VECTOR_VALID] + ghosts*(1+jStride+kStride);
-
-    for(k=klo;k<khi;k++){
-    for(j=jlo;j<jhi;j++){
-    for(i=ilo;i<ihi;i++){
-      int ijk = i + j*jStride + k*kStride;
-      valid[ijk] = 1.0; // i.e. all cells including ghosts are valid for periodic BC's
-      if(level->boundary_condition.type == BC_DIRICHLET){ // cells outside the domain boundaries are not valid
-        if(i + level->my_boxes[box].low.i <             0)valid[ijk] = 0.0;
-        if(j + level->my_boxes[box].low.j <             0)valid[ijk] = 0.0;
-        if(k + level->my_boxes[box].low.k <             0)valid[ijk] = 0.0;
-        if(i + level->my_boxes[box].low.i >= level->dim.i)valid[ijk] = 0.0;
-        if(j + level->my_boxes[box].low.j >= level->dim.j)valid[ijk] = 0.0;
-        if(k + level->my_boxes[box].low.k >= level->dim.k)valid[ijk] = 0.0;
-      }
-    }}}
-  }
-  level->timers.blas1 += (double)(getTime()-_timeStart);
-}
-
-
-//------------------------------------------------------------------------------------------------------------------------------
 void init_vector(level_type * level, int id_a, double scalar){
   // initializes the grid to a scalar while zero'ing the ghost zones...
   double _timeStart = getTime();

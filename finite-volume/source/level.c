@@ -1140,6 +1140,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->num_my_blocks    = 0;
   level->allocated_blocks = 0;
   level->tag              = log2(level->dim.i);
+  level->fluxes           = NULL;
 
 
   // allocate 3D array of integers to hold the MPI rank of the corresponding box and initialize to -1 (unassigned)
@@ -1225,17 +1226,18 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   }
 
 
-  // build an assists data structure which specifies which cells are within the domain (used with STENCIL_FUSE_BC)
-  initialize_valid_region(level);
-
-
   // build an assist structure for Gauss Seidel Red Black that would facilitate unrolling and SIMDization...
-  level->RedBlack_FP = NULL;
+  level->RedBlack_base = NULL;
+  level->RedBlack_FP   = NULL;
   if(level->num_my_boxes){
     int i,j;
     int kStride = level->my_boxes[0].kStride;
     int jStride = level->my_boxes[0].jStride;
-    level->RedBlack_FP = (double*)malloc(2*kStride*sizeof(double));
+    level->RedBlack_base = (double*)malloc(2*kStride*sizeof(double)+256); // used for free()
+    level->RedBlack_FP   = level->RedBlack_base; // aligned version
+    // align first *non-ghost* zone element to a 64-Byte boundary...
+    while( (uint64_t)(level->RedBlack_FP + level->box_ghosts*(1+level->box_jStride)) & 0x3f ){level->RedBlack_FP++;}
+    // initialize RedBlack array...
     for(j=0-level->box_ghosts;j<level->box_dim+level->box_ghosts;j++){
     for(i=0-level->box_ghosts;i<level->box_dim+level->box_ghosts;i++){
       int ij = (i+level->box_ghosts) + (j+level->box_ghosts)*jStride;
@@ -1246,6 +1248,11 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
         level->RedBlack_FP[ij        ]=0.0;
         level->RedBlack_FP[ij+kStride]=1.0;
       }
+      // Never update ghost zones
+      //if( (i<0) || (i>=level->box_dim) || (j<0) || (j>=level->box_dim) ){
+      //  level->RedBlack_FP[ij        ]=0.0;
+      //  level->RedBlack_FP[ij+kStride]=0.0;
+      //}
     }}
   }
 
@@ -1334,7 +1341,7 @@ void destroy_level(level_type *level){
   if(level->rank_of_box )free(level->rank_of_box);
   if(level->my_boxes    )free(level->my_boxes);
   if(level->my_blocks   )free(level->my_blocks);
-  if(level->RedBlack_FP )free(level->RedBlack_FP);
+  if(level->RedBlack_base)free(level->RedBlack_base);
 
   // FP vector data...
   #ifdef VECTOR_MALLOC_BULK

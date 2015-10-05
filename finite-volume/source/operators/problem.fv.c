@@ -126,11 +126,10 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
       double F=evaluateF(x,y,z,hLevel,1,1,1);
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+      level->my_boxes[box].vectors[VECTOR_ALPHA ][ijk] = A;
       level->my_boxes[box].vectors[VECTOR_BETA_I][ijk] = Bi;
       level->my_boxes[box].vectors[VECTOR_BETA_J][ijk] = Bj;
       level->my_boxes[box].vectors[VECTOR_BETA_K][ijk] = Bk;
-      level->my_boxes[box].vectors[VECTOR_ALPHA ][ijk] = A;
-      level->my_boxes[box].vectors[VECTOR_UTRUE ][ijk] = 0.0;
       level->my_boxes[box].vectors[VECTOR_F     ][ijk] = F;
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
     }}}

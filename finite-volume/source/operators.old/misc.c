@@ -29,39 +29,6 @@ void zero_vector(level_type * level, int component_id){
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void initialize_valid_region(level_type * level){
-  double _timeStart = getTime();
-  int box;
-
-  PRAGMA_THREAD_ACROSS_BOXES(level,box)
-  for(box=0;box<level->num_my_boxes;box++){
-    int i,j,k;
-    const int jStride = level->my_boxes[box].jStride;
-    const int kStride = level->my_boxes[box].kStride;
-    const int  ghosts = level->my_boxes[box].ghosts;
-    const int     dim = level->my_boxes[box].dim;
-    double * __restrict__ valid = level->my_boxes[box].vectors[VECTOR_VALID] + ghosts*(1+jStride+kStride);
-    PRAGMA_THREAD_WITHIN_A_BOX(level,i,j,k)
-    for(k=-ghosts;k<dim+ghosts;k++){
-    for(j=-ghosts;j<dim+ghosts;j++){
-    for(i=-ghosts;i<dim+ghosts;i++){
-      int ijk = i + j*jStride + k*kStride;
-      valid[ijk] = 1.0; // i.e. all cells including ghosts are valid for periodic BC's
-      if(level->boundary_condition.type == BC_DIRICHLET){ // cells outside the domain boundaries are not valid
-        if(i + level->my_boxes[box].low.i <             0)valid[ijk] = 0.0;
-        if(j + level->my_boxes[box].low.j <             0)valid[ijk] = 0.0;
-        if(k + level->my_boxes[box].low.k <             0)valid[ijk] = 0.0;
-        if(i + level->my_boxes[box].low.i >= level->dim.i)valid[ijk] = 0.0;
-        if(j + level->my_boxes[box].low.j >= level->dim.j)valid[ijk] = 0.0;
-        if(k + level->my_boxes[box].low.k >= level->dim.k)valid[ijk] = 0.0;
-      }
-    }}}
-  }
-  level->timers.blas1 += (double)(getTime()-_timeStart);
-}
-
-
-//------------------------------------------------------------------------------------------------------------------------------
 void init_vector(level_type * level, int component_id, double scalar){
   // initializes the grid to a scalar while zero'ing the ghost zones...
   double _timeStart = getTime();

@@ -26,7 +26,6 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){  // 
     const double * __restrict__ beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride);
     const double * __restrict__ beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + ghosts*(1+jStride+kStride);
     const double * __restrict__ beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + ghosts*(1+jStride+kStride);
-    const double * __restrict__  valid = level->my_boxes[box].vectors[VECTOR_VALID ] + ghosts*(1+jStride+kStride);
 
     PRAGMA_THREAD_WITHIN_A_BOX(level,i,j,k)
     for(k=0;k<dim;k++){
