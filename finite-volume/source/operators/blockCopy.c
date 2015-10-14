@@ -21,8 +21,8 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
   int write_jStride = block->write.jStride;
   int write_kStride = block->write.kStride;
 
-  double * __restrict__  read = block->read.ptr;
-  double * __restrict__ write = block->write.ptr;
+  const double * __restrict__  read = block->read.ptr;
+        double * __restrict__ write = block->write.ptr;
 
   if(block->read.box >=0){
      read_jStride = level->my_boxes[block->read.box ].jStride;
@@ -108,17 +108,18 @@ static inline void IncrementBlock(level_type *level, int id, double prescale, bl
   int write_jStride = block->write.jStride;
   int write_kStride = block->write.kStride;
 
-  double * __restrict__  read = block->read.ptr;
-  double * __restrict__ write = block->write.ptr;
+  const double * __restrict__  read = block->read.ptr;
+        double * __restrict__ write = block->write.ptr;
+
   if(block->read.box >=0){
-     read = level->my_boxes[ block->read.box].vectors[id] + level->my_boxes[ block->read.box].ghosts*(1+level->my_boxes[ block->read.box].jStride+level->my_boxes[ block->read.box].kStride);
      read_jStride = level->my_boxes[block->read.box ].jStride;
      read_kStride = level->my_boxes[block->read.box ].kStride;
+     read = level->my_boxes[ block->read.box].vectors[id] + level->box_ghosts*(1+ read_jStride+ read_kStride);
   }
   if(block->write.box>=0){
-    write = level->my_boxes[block->write.box].vectors[id] + level->my_boxes[block->write.box].ghosts*(1+level->my_boxes[block->write.box].jStride+level->my_boxes[block->write.box].kStride);
     write_jStride = level->my_boxes[block->write.box].jStride;
     write_kStride = level->my_boxes[block->write.box].kStride;
+    write = level->my_boxes[block->write.box].vectors[id] + level->box_ghosts*(1+write_jStride+write_kStride);
   }
 
   int i,j,k;

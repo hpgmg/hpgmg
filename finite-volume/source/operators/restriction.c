@@ -26,57 +26,58 @@ static inline void restriction_pc_block(level_type *level_c, int id_c, level_typ
   if(block->read.box >=0){
      read_jStride = level_f->my_boxes[block->read.box ].jStride;
      read_kStride = level_f->my_boxes[block->read.box ].kStride;
-     read = level_f->my_boxes[ block->read.box].vectors[id_f] + level_f->my_boxes[ block->read.box].ghosts*(1+level_f->my_boxes[ block->read.box].jStride+level_f->my_boxes[ block->read.box].kStride);
+     read = level_f->my_boxes[ block->read.box].vectors[id_f] + level_f->my_boxes[ block->read.box].ghosts*(1+ read_jStride+ read_kStride);
   }
   if(block->write.box>=0){
     write_jStride = level_c->my_boxes[block->write.box].jStride;
     write_kStride = level_c->my_boxes[block->write.box].kStride;
-    write = level_c->my_boxes[block->write.box].vectors[id_c] + level_c->my_boxes[block->write.box].ghosts*(1+level_c->my_boxes[block->write.box].jStride+level_c->my_boxes[block->write.box].kStride);
+    write = level_c->my_boxes[block->write.box].vectors[id_c] + level_c->my_boxes[block->write.box].ghosts*(1+write_jStride+write_kStride);
   }
 
 
 
   int i,j,k;
+  int ii,jj,kk;
   switch(restrictionType){
     case RESTRICT_CELL:
-         for(k=0;k<dim_k;k++){
-         for(j=0;j<dim_j;j++){
-         for(i=0;i<dim_i;i++){
-           int write_ijk = ((i   )+write_i) + ((j   )+write_j)*write_jStride + ((k   )+write_k)*write_kStride;
-           int  read_ijk = ((i<<1)+ read_i) + ((j<<1)+ read_j)* read_jStride + ((k<<1)+ read_k)* read_kStride;
+         for(k=0,kk=0;k<dim_k;k++,kk+=2){
+         for(j=0,jj=0;j<dim_j;j++,jj+=2){
+         for(i=0,ii=0;i<dim_i;i++,ii+=2){
+           int write_ijk = (i +write_i) + (j +write_j)*write_jStride + (k +write_k)*write_kStride;
+           int  read_ijk = (ii+ read_i) + (jj+ read_j)* read_jStride + (kk+ read_k)* read_kStride;
            write[write_ijk] = ( read[read_ijk                            ]+read[read_ijk+1                          ] +
                                 read[read_ijk  +read_jStride             ]+read[read_ijk+1+read_jStride             ] +
                                 read[read_ijk               +read_kStride]+read[read_ijk+1             +read_kStride] +
                                 read[read_ijk  +read_jStride+read_kStride]+read[read_ijk+1+read_jStride+read_kStride] ) * 0.125;
          }}}break;
     case RESTRICT_FACE_I:
-         for(k=0;k<dim_k;k++){
-         for(j=0;j<dim_j;j++){
-         for(i=0;i<dim_i;i++){
-           int write_ijk = ((i   )+write_i) + ((j   )+write_j)*write_jStride + ((k   )+write_k)*write_kStride;
-           int  read_ijk = ((i<<1)+ read_i) + ((j<<1)+ read_j)* read_jStride + ((k<<1)+ read_k)* read_kStride;
+         for(k=0,kk=0;k<dim_k;k++,kk+=2){
+         for(j=0,jj=0;j<dim_j;j++,jj+=2){
+         for(i=0,ii=0;i<dim_i;i++,ii+=2){
+           int write_ijk = (i +write_i) + (j +write_j)*write_jStride + (k +write_k)*write_kStride;
+           int  read_ijk = (ii+ read_i) + (jj+ read_j)* read_jStride + (kk+ read_k)* read_kStride;
            write[write_ijk] = ( read[read_ijk                          ] +
                                 read[read_ijk+read_jStride             ] +
                                 read[read_ijk             +read_kStride] +
                                 read[read_ijk+read_jStride+read_kStride] ) * 0.25;
          }}}break;
     case RESTRICT_FACE_J:
-         for(k=0;k<dim_k;k++){
-         for(j=0;j<dim_j;j++){
-         for(i=0;i<dim_i;i++){
-           int write_ijk = ((i   )+write_i) + ((j   )+write_j)*write_jStride + ((k   )+write_k)*write_kStride;
-           int  read_ijk = ((i<<1)+ read_i) + ((j<<1)+ read_j)* read_jStride + ((k<<1)+ read_k)* read_kStride;
+         for(k=0,kk=0;k<dim_k;k++,kk+=2){
+         for(j=0,jj=0;j<dim_j;j++,jj+=2){
+         for(i=0,ii=0;i<dim_i;i++,ii+=2){
+           int write_ijk = (i +write_i) + (j +write_j)*write_jStride + (k +write_k)*write_kStride;
+           int  read_ijk = (ii+ read_i) + (jj+ read_j)* read_jStride + (kk+ read_k)* read_kStride;
            write[write_ijk] = ( read[read_ijk               ] +
                                 read[read_ijk+1             ] +
                                 read[read_ijk  +read_kStride] +
                                 read[read_ijk+1+read_kStride] ) * 0.25;
          }}}break;
     case RESTRICT_FACE_K:
-         for(k=0;k<dim_k;k++){
-         for(j=0;j<dim_j;j++){
-         for(i=0;i<dim_i;i++){
-           int write_ijk = ((i   )+write_i) + ((j   )+write_j)*write_jStride + ((k   )+write_k)*write_kStride;
-           int  read_ijk = ((i<<1)+ read_i) + ((j<<1)+ read_j)* read_jStride + ((k<<1)+ read_k)* read_kStride;
+         for(k=0,kk=0;k<dim_k;k++,kk+=2){
+         for(j=0,jj=0;j<dim_j;j++,jj+=2){
+         for(i=0,ii=0;i<dim_i;i++,ii+=2){
+           int write_ijk = (i +write_i) + (j +write_j)*write_jStride + (k +write_k)*write_kStride;
+           int  read_ijk = (ii+ read_i) + (jj+ read_j)* read_jStride + (kk+ read_k)* read_kStride;
            write[write_ijk] = ( read[read_ijk               ] +
                                 read[read_ijk+1             ] +
                                 read[read_ijk  +read_jStride] +

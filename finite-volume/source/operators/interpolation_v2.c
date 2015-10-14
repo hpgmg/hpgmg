@@ -23,19 +23,20 @@ static inline void interpolation_v2_block(level_type *level_f, int id_f, double 
   int write_jStride = block->write.jStride;
   int write_kStride = block->write.kStride;
 
-  double * __restrict__  read = block->read.ptr;
-  double * __restrict__ write = block->write.ptr;
+  const double * __restrict__  read = block->read.ptr;
+        double * __restrict__ write = block->write.ptr;
+
   if(block->read.box >=0){
      read_jStride = level_c->my_boxes[block->read.box ].jStride;
      read_kStride = level_c->my_boxes[block->read.box ].kStride;
-     read = level_c->my_boxes[ block->read.box].vectors[id_c] + level_c->my_boxes[ block->read.box].ghosts*(1+ read_jStride+ read_kStride);
+     read = level_c->my_boxes[ block->read.box].vectors[id_c] + level_c->box_ghosts*(1+ read_jStride+ read_kStride);
   }
   if(block->write.box>=0){
     write_jStride = level_f->my_boxes[block->write.box].jStride;
     write_kStride = level_f->my_boxes[block->write.box].kStride;
-    write = level_f->my_boxes[block->write.box].vectors[id_f] + level_f->my_boxes[block->write.box].ghosts*(1+write_jStride+write_kStride);
+    write = level_f->my_boxes[block->write.box].vectors[id_f] + level_f->box_ghosts*(1+write_jStride+write_kStride);
   }
- 
+
 
   #ifdef USE_NAIVE_INTERP
   // naive 27pt per fine grid cell
@@ -64,12 +65,18 @@ static inline void interpolation_v2_block(level_type *level_f, int id_f, double 
   }}}
   #else
   int i,j,k;
+  int ii,jj,kk;
   double c1 = 1.0/8.0;
-  for(k=0;k<write_dim_k;k+=2){
-  for(j=0;j<write_dim_j;j+=2){
-  for(i=0;i<write_dim_i;i+=2){
-    int write_ijk = ((i   )+write_i) + (((j   )+write_j)*write_jStride) + (((k   )+write_k)*write_kStride);
-    int  read_ijk = ((i>>1)+ read_i) + (((j>>1)+ read_j)* read_jStride) + (((k>>1)+ read_k)* read_kStride);
+  for(k=0,kk=0;k<write_dim_k;k+=2,kk++){
+  for(j=0,jj=0;j<write_dim_j;j+=2,jj++){
+  // compiler cannot infer/speculate write[ijk+write_jStride] is disjoint from write[ijk], so create a unique restrict pointers for each nonliteral offset...
+  double * __restrict__ write00 = write + write_i + (write_j+j+0)*write_jStride + (write_k+k+0)*write_kStride;
+  double * __restrict__ write10 = write + write_i + (write_j+j+1)*write_jStride + (write_k+k+0)*write_kStride;
+  double * __restrict__ write01 = write + write_i + (write_j+j+0)*write_jStride + (write_k+k+1)*write_kStride;
+  double * __restrict__ write11 = write + write_i + (write_j+j+1)*write_jStride + (write_k+k+1)*write_kStride;
+  for(i=0,ii=0;i<write_dim_i;i+=2,ii++){
+    int write_ijk = ( i+write_i) + ( j+write_j)*write_jStride + ( k+write_k)*write_kStride;
+    int  read_ijk = (ii+ read_i) + (jj+ read_j)* read_jStride + (kk+ read_k)* read_kStride;
     //
     // |  1/8  |  1.0  | -1/8  | coarse grid
     // |---+---|---+---|---+---|
@@ -166,6 +173,7 @@ static inline void interpolation_v2_block(level_type *level_f, int id_f, double 
     const double f111 = ( f11c1 - c1*(f11c0-f11c2) );
 
     // commit to memory...
+    #if 0 // compiler cannot infer/speculate write[ijk+write_jStride] is disjoint from write[ijk], and thus cannot vectorize...
     write[write_ijk                              ] = prescale_f*write[write_ijk                              ] + f000;
     write[write_ijk+1                            ] = prescale_f*write[write_ijk+1                            ] + f100;
     write[write_ijk  +write_jStride              ] = prescale_f*write[write_ijk  +write_jStride              ] + f010;
@@ -174,6 +182,17 @@ static inline void interpolation_v2_block(level_type *level_f, int id_f, double 
     write[write_ijk+1              +write_kStride] = prescale_f*write[write_ijk+1              +write_kStride] + f101;
     write[write_ijk  +write_jStride+write_kStride] = prescale_f*write[write_ijk  +write_jStride+write_kStride] + f011;
     write[write_ijk+1+write_jStride+write_kStride] = prescale_f*write[write_ijk+1+write_jStride+write_kStride] + f111;
+    #else // use a unique restrict pointer for each pencil...
+    write00[i  ] = prescale_f*write00[i  ] + f000;
+    write00[i+1] = prescale_f*write00[i+1] + f100;
+    write10[i  ] = prescale_f*write10[i  ] + f010;
+    write10[i+1] = prescale_f*write10[i+1] + f110;
+    write01[i  ] = prescale_f*write01[i  ] + f001;
+    write01[i+1] = prescale_f*write01[i+1] + f101;
+    write11[i  ] = prescale_f*write11[i  ] + f011;
+    write11[i+1] = prescale_f*write11[i+1] + f111;
+    #endif
+
   }}}
   #endif
 

@@ -50,7 +50,7 @@ void apply_BCs_v1(level_type * level, int x_id, int shape){
     // hard code for box to box BC's 
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
-    double * __restrict__  x = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride);
+    double * __restrict__  x = level->my_boxes[box].vectors[x_id] + level->box_ghosts*(1+jStride+kStride);
 
     // convert normal vector into pointer offsets...
     const int di = (((normal % 3)  )-1);
@@ -127,8 +127,8 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
     // hard code for box to box BC's 
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
-    double * __restrict__  x  = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride);
-    double * __restrict__  xn = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride); // physically the same, but use different pointers for read/write
+    const double * __restrict__ x  = level->my_boxes[box].vectors[x_id] + level->box_ghosts*(1+jStride+kStride);
+          double * __restrict__ xn = level->my_boxes[box].vectors[x_id] + level->box_ghosts*(1+jStride+kStride); // physically the same, but use different pointers for read/write
 
     // zero out entire ghost region when not all points will be updated...
     if(box_ghosts>1){
@@ -142,9 +142,9 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
     // apply the appropriate BC subtype (face, edge, corner)...
     if(faces[subtype]){
       //
-      //    :.......:.......|.......:.......:.......:.
-      //    :   -   :   ?   | -5/2  :  1/2  :   0   :
-      //    :.......:.......|.......:.......:.......:.
+      //    :.......|.......:.......:
+      //    :   ?   | -5/2  :  1/2  :
+      //    :.......|.......:.......:
       //
       int r=-1,rStride=-1,dim_r=-1,rlo=-1;
       int s=-1,sStride=-1,dim_s=-1,slo=-1;
@@ -290,8 +290,8 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
     // hard code for box to box BC's 
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
-    double * __restrict__  x  = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride);
-    double * __restrict__  xn = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride); // physically the same, but use different pointers for read/write
+    const double * __restrict__ x  = level->my_boxes[box].vectors[x_id] + level->box_ghosts*(1+jStride+kStride);
+          double * __restrict__ xn = level->my_boxes[box].vectors[x_id] + level->box_ghosts*(1+jStride+kStride); // physically the same, but use different pointers for read/write
 
     double OneTwelfth = 1.0/12.0;
 
@@ -325,12 +325,20 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
         case 22:rlo=ilo;dim_r=dim_i;rStride=      1;slo=jlo;dim_s=dim_j;sStride=jStride;t=box_dim;tStride=kStride;dt=-tStride;break; // ij face, high k
       }
       // FIX... optimize for rStride==1 (unit-stride)
+      // FIX... optimize for dt==+/-1
+      double * __restrict__  ghost0 = (double * __restrict__)(x   ); // convince the compiler that read (box) & write (ghost zone) are disjoint
+      double * __restrict__  ghost1 = (double * __restrict__)(x-dt); // convince the compiler that read (box) & write (ghost zone) are disjoint
       for(s=0;s<dim_s;s++){
       for(r=0;r<dim_r;r++){
         int ijk = (r+rlo)*rStride + (s+slo)*sStride + (t)*tStride;
         double x1=x[ijk+dt], x2=x[ijk+2*dt], x3=x[ijk+3*dt], x4=x[ijk+4*dt];
+        #if 0 // compiler cannot disambiguate xn[ijk] and xn[ijk-dt]
         xn[ijk   ] = OneTwelfth*(  -77.0*x1 +  43.0*x2 -  17.0*x3 +  3.0*x4 );
         xn[ijk-dt] = OneTwelfth*( -505.0*x1 + 335.0*x2 - 145.0*x3 + 27.0*x4 );
+        #else
+        ghost0[ijk] = OneTwelfth*(  -77.0*x1 +  43.0*x2 -  17.0*x3 +  3.0*x4 );
+        ghost1[ijk] = OneTwelfth*( -505.0*x1 + 335.0*x2 - 145.0*x3 + 27.0*x4 );
+        #endif
       }}
     }else
     if(edges[subtype]){
@@ -386,6 +394,11 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
         case 25:rlo=ilo;dim_r=dim_i;rStride=      1;s=box_dim;sStride=jStride;t=box_dim;tStride=kStride;ds=-sStride;dt=-tStride;break; // i-edge, high j, high k
       }
       // FIX... optimize for rStride==1 (unit-stride)
+      // FIX... optimize for ds==+/-1
+      double * __restrict__  ghost00 = (double * __restrict__)(x      ); // convince the compiler that read (box) & write (ghost zone) are disjoint
+      double * __restrict__  ghost01 = (double * __restrict__)(x   -dt); // convince the compiler that read (box) & write (ghost zone) are disjoint
+      double * __restrict__  ghost10 = (double * __restrict__)(x-ds   ); // convince the compiler that read (box) & write (ghost zone) are disjoint
+      double * __restrict__  ghost11 = (double * __restrict__)(x-ds-dt); // convince the compiler that read (box) & write (ghost zone) are disjoint
       for(r=0;r<dim_r;r++){
         int ijk = (r+rlo)*rStride + (s)*sStride + (t)*tStride;
         double x11 = x[ijk+  ds+  dt], x21 = x[ijk+2*ds+  dt], x31 = x[ijk+3*ds+  dt], x41 = x[ijk+4*ds+  dt];
@@ -400,10 +413,17 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
             double f2 = OneTwelfth*( -505.0*x12 + 335.0*x22 - 145.0*x32 + 27.0*x42 );
             double f3 = OneTwelfth*( -505.0*x13 + 335.0*x23 - 145.0*x33 + 27.0*x43 );
             double f4 = OneTwelfth*( -505.0*x14 + 335.0*x24 - 145.0*x34 + 27.0*x44 );
+        #if 0 // compiler cannot disambiguate pointers
         xn[ijk      ] = OneTwelfth*(  -77.0*n1  +  43.0*n2  -  17.0*n3  +  3.0*n4  );
         xn[ijk   -dt] = OneTwelfth*( -505.0*n1  + 335.0*n2  - 145.0*n3  + 27.0*n4  );
         xn[ijk-ds   ] = OneTwelfth*(  -77.0*f1  +  43.0*f2  -  17.0*f3  +  3.0*f4  );
         xn[ijk-ds-dt] = OneTwelfth*( -505.0*f1  + 335.0*f2  - 145.0*f3  + 27.0*f4  );
+        #else
+        ghost00[ijk] = OneTwelfth*(  -77.0*n1  +  43.0*n2  -  17.0*n3  +  3.0*n4  );
+        ghost01[ijk] = OneTwelfth*( -505.0*n1  + 335.0*n2  - 145.0*n3  + 27.0*n4  );
+        ghost10[ijk] = OneTwelfth*(  -77.0*f1  +  43.0*f2  -  17.0*f3  +  3.0*f4  );
+        ghost11[ijk] = OneTwelfth*( -505.0*f1  + 335.0*f2  - 145.0*f3  + 27.0*f4  );
+        #endif
       }
     }else
     if(corners[subtype]){
@@ -438,6 +458,7 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
       int j=-1,dj=-1;
       int k=-1,dk=-1;
       // the eight 64-point stencils (symmetry allows you to view it as 56 4-point) can point in 8 different directions...
+      // FIX... optimize for di==+/-1
       switch(subtype){
         case  0:i=     -1;j=     -1;k=     -1;di= 1;dj= jStride;dk= kStride;break; //  low i,  low j,  low k
         case  2:i=box_dim;j=     -1;k=     -1;di=-1;dj= jStride;dk= kStride;break; // high i,  low j,  low k
@@ -582,9 +603,9 @@ void extrapolate_betas(level_type * level){
     // hard code for box to box BC's 
     const int jStride = level->my_boxes[box].jStride;
     const int kStride = level->my_boxes[box].kStride;
-    double * __restrict__  beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + level->my_boxes[box].ghosts*(1+jStride+kStride);
-    double * __restrict__  beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + level->my_boxes[box].ghosts*(1+jStride+kStride);
-    double * __restrict__  beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + level->my_boxes[box].ghosts*(1+jStride+kStride);
+    double * __restrict__  beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + level->box_ghosts*(1+jStride+kStride);
+    double * __restrict__  beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + level->box_ghosts*(1+jStride+kStride);
+    double * __restrict__  beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + level->box_ghosts*(1+jStride+kStride);
 
     // convert normal vector into pointer offsets...
     const int di = (((normal % 3)  )-1);
