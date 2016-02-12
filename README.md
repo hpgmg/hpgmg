@@ -59,6 +59,11 @@ range of problem sizes that can be solved efficiently.
   have significant performance variability, requiring several solves to
   extract meaningful timing information.
 
+* `-mintime <1>` minimum interval (in seconds) for repeatedly solving 
+  each problem size. A negative or zero value will disable this constraint. 
+  If both `-repeat` and `-mintime` are specified, sampling will continue 
+  until both conditions are satisfied.
+
 The run solves the smallest problem size first to provide instant
 feedback about incompatible configuration.  Then it solves the largest
 problem size to ensure that the whole run will not exceed machine memory

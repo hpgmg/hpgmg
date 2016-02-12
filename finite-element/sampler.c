@@ -128,7 +128,7 @@ static PetscErrorCode ReportMemoryUsage(MPI_Comm comm,PetscLogDouble memused,Pet
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const PetscInt smooth[2],PetscInt nrepeat,PetscLogDouble *memused,PetscLogDouble *memavail,PetscBool monitor) {
+static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const PetscInt smooth[2],PetscInt nrepeat,PetscLogDouble mintime,PetscLogDouble *memused,PetscLogDouble *memavail,PetscBool monitor) {
   PetscErrorCode ierr;
   PetscInt pgrid[3],cmax,fedegree,dof,nlevels,M_max;
   PetscMPIInt nranks;
@@ -177,7 +177,9 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   ierr = PetscSNPrintf(eventname,sizeof eventname,"Solve G[%D %D %D]",M[0],M[1],M[2]);CHKERRQ(ierr);
   HPM_Start(eventname);
 #endif
-  for (PetscInt i=0; i<nrepeat; i++) {
+  PetscInt i = 0;
+  PetscLogDouble sampletime = 0; 
+  while ( (i<nrepeat) || (sampletime < mintime) ) {
     PetscLogDouble t0,t1,elapsed,flops,eqs;
     ierr = VecZeroEntries(U);CHKERRQ(ierr);
     ierr = MPI_Barrier(comm);CHKERRQ(ierr);
@@ -186,11 +188,13 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
     ierr = MGFCycle(op,mg,smooth[0],smooth[1],F,U);CHKERRQ(ierr);
     ierr = PetscTime(&t1);CHKERRQ(ierr);
     flops = petsc_TotalFlops - flops;
-    elapsed = t1 - t0;
+    elapsed = t1 - t0; 
     ierr = MPI_Allreduce(MPI_IN_PLACE,&elapsed,1,MPI_DOUBLE,MPI_MAX,comm);CHKERRQ(ierr);
     ierr = MPI_Allreduce(MPI_IN_PLACE,&flops,1,MPI_DOUBLE,MPI_SUM,comm);CHKERRQ(ierr);
     eqs = (double)(M[0]*fedegree+1)*(M[1]*fedegree+1)*(M[2]*fedegree+1)*dof;
     ierr = PetscPrintf(comm,"Q%D G[%5D%5D%5D] P[%3D%3D%3D] %10.3e s  %10f GF  %10f MEq/s\n",fedegree,M[0],M[1],M[2],pgrid[0],pgrid[1],pgrid[2],t1-t0,flops/elapsed*1e-9,eqs/elapsed*1e-6);CHKERRQ(ierr);
+    i++;
+    sampletime += elapsed;
   }
 #ifdef USE_HPM
   HPM_Stop(eventname);
@@ -210,6 +214,7 @@ PetscErrorCode RunSample() {
   Op op;
   PetscInt pgrid[3],smooth[2] = {3,1},two = 2,maxsamples = 6,repeat = 5,nsamples,(*gridsize)[3];
   PetscReal local[2] = {100,10000};
+  PetscReal mintime = 1;
   PetscLogDouble memused,memavail;
   PetscMPIInt nranks;
   MPI_Comm comm = PETSC_COMM_WORLD;
@@ -218,7 +223,8 @@ PetscErrorCode RunSample() {
   ierr = PetscOptionsBegin(comm,NULL,"FMG Performance Sampler options",NULL);CHKERRQ(ierr);
   ierr = PetscOptionsRealArray("-local","range of local problem sizes","",local,&two,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsInt("-maxsamples","maximum number of samples across range","",maxsamples,&maxsamples,NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsInt("-repeat","Number of repetitions for each problem size","",repeat,&repeat,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-repeat","Minimum number of repetitions for each problem size","",repeat,&repeat,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsReal("-mintime","Minimum interval (in seconds) for repeatedly solving each problem size","",mintime,&mintime,NULL);CHKERRQ(ierr);
   two = 2;
   ierr = PetscOptionsIntArray("-smooth","V- and F-cycle pre,post smoothing","",smooth,&two,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
@@ -235,17 +241,17 @@ PetscErrorCode RunSample() {
   ierr = ReportMemoryUsage(comm,memused,memavail);CHKERRQ(ierr);
 
   ierr = PetscPrintf(comm,"Small Test G[%5D%5D%5D]\n",gridsize[nsamples-1][0],gridsize[nsamples-1][1],gridsize[nsamples-1][2]);CHKERRQ(ierr);
-  ierr = SampleOnGrid(comm,op,gridsize[nsamples-1],smooth,1,NULL,NULL,PETSC_FALSE);CHKERRQ(ierr);
+  ierr = SampleOnGrid(comm,op,gridsize[nsamples-1],smooth,1,0,NULL,NULL,PETSC_FALSE);CHKERRQ(ierr);
   ierr = PetscPrintf(comm,"Large Test G[%5D%5D%5D]\n",gridsize[0][0],gridsize[0][1],gridsize[0][2]);CHKERRQ(ierr);
-  ierr = SampleOnGrid(comm,op,gridsize[0],smooth,1,&memused,&memavail,PETSC_TRUE);CHKERRQ(ierr);
+  ierr = SampleOnGrid(comm,op,gridsize[0],smooth,1,0,&memused,&memavail,PETSC_TRUE);CHKERRQ(ierr);
 
   ierr = ReportMemoryUsage(comm,memused,memavail);CHKERRQ(ierr);
 
   ierr = PetscPrintf(comm,"Starting performance sampling\n");CHKERRQ(ierr);
   for (PetscInt i=nsamples-1; i>=0; i--) {
-    ierr = SampleOnGrid(comm,op,gridsize[i],smooth,repeat,NULL,NULL,PETSC_FALSE);CHKERRQ(ierr);
+    ierr = SampleOnGrid(comm,op,gridsize[i],smooth,repeat,mintime,NULL,NULL,PETSC_FALSE);CHKERRQ(ierr);
   }
-
+  
   ierr = PetscFree(gridsize);CHKERRQ(ierr);
   ierr = OpDestroy(&op);CHKERRQ(ierr);
   PetscFunctionReturn(0);
