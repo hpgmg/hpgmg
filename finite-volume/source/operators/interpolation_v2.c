@@ -75,7 +75,6 @@ static inline void interpolation_v2_block(level_type *level_f, int id_f, double 
   double * __restrict__ write01 = write + write_i + (write_j+j+0)*write_jStride + (write_k+k+1)*write_kStride;
   double * __restrict__ write11 = write + write_i + (write_j+j+1)*write_jStride + (write_k+k+1)*write_kStride;
   for(i=0,ii=0;i<write_dim_i;i+=2,ii++){
-    int write_ijk = ( i+write_i) + ( j+write_j)*write_jStride + ( k+write_k)*write_kStride;
     int  read_ijk = (ii+ read_i) + (jj+ read_j)* read_jStride + (kk+ read_k)* read_kStride;
     //
     // |  1/8  |  1.0  | -1/8  | coarse grid
@@ -174,6 +173,7 @@ static inline void interpolation_v2_block(level_type *level_f, int id_f, double 
 
     // commit to memory...
     #if 0 // compiler cannot infer/speculate write[ijk+write_jStride] is disjoint from write[ijk], and thus cannot vectorize...
+    int write_ijk = ( i+write_i) + ( j+write_j)*write_jStride + ( k+write_k)*write_kStride;
     write[write_ijk                              ] = prescale_f*write[write_ijk                              ] + f000;
     write[write_ijk+1                            ] = prescale_f*write[write_ijk+1                            ] + f100;
     write[write_ijk  +write_jStride              ] = prescale_f*write[write_ijk  +write_jStride              ] + f010;
