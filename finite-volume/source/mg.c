@@ -1173,10 +1173,12 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
 
 //------------------------------------------------------------------------------------------------------------------------------
 void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol){
+  // This FMGSolve will perform one F-Cycle, then iterate on V-cycles.  
+  // Unless compiled with -DUNLIMIT_FMG_ITERATIONS, no V-cycles will be performed
   all_grids->MGSolves_performed++;
   if(!all_grids->levels[onLevel]->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  #ifdef UNLIMIT_FMG_VCYCLES
+  #ifdef UNLIMIT_FMG_ITERATIONS
   int maxVCycles=20;
   #else
   int maxVCycles=0;
@@ -1275,6 +1277,110 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
     if(norm_of_residual           < dtol)break;
   }
 
+
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  all_grids->timers.MGSolve += (double)(getTime()-_timeStartMGSolve);
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  #ifdef _OPENMP
+  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done (%f seconds)\n",omp_get_wtime()-FMG_Start_Time);} // used to monitor variability in individual solve times
+  #elif USE_MPI
+  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done (%f seconds)\n",MPI_Wtime()-FMG_Start_Time);} // used to monitor variability in individual solve times
+  #else
+  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"done\n");}
+  #endif
+}
+
+
+//------------------------------------------------------------------------------------------------------------------------------
+void FMGSolve2(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol){
+  // This FMGSolve will iterate on F-cycles.  
+  // It does this by putting the system into residual correction
+  // i.e. calculate the residual (becomes the RHS), solve for a correction, add the correction to the current solution, calculate a new residual, and repeat
+  // Unless compiled with -DUNLIMIT_FMG_ITERATIONS, only one F-cycle will be performed
+  all_grids->MGSolves_performed++;
+  if(!all_grids->levels[onLevel]->active)return;
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  #ifdef UNLIMIT_FMG_ITERATIONS
+  int maxFCycles=20;
+  #else
+  int maxFCycles=0;
+  #endif
+  int f;
+  int level;
+  int e_id = VECTOR_E;
+  int R_id = VECTOR_F_MINUS_AV;
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  #ifdef _OPENMP
+  double FMG_Start_Time = omp_get_wtime();
+  #elif USE_MPI
+  double FMG_Start_Time = MPI_Wtime();
+  #endif
+  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"FMGSolve... ");}
+  double _timeStartMGSolve = getTime();
+
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  // calculate norm of f, inital guess, calculate R...
+  double _LevelStart = getTime();
+  double norm_of_F = norm(all_grids->levels[onLevel],F_id);           // ||F||
+              zero_vector(all_grids->levels[onLevel],u_id);           // intial guess of u=0
+             scale_vector(all_grids->levels[onLevel],R_id,1.0,F_id);  // R_id = F-Au = F-0 = F_id
+  all_grids->levels[onLevel]->timers.Total += (double)(getTime()-_LevelStart);
+
+  //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  // iterate on f-cycles...
+  for(f=0;f<maxFCycles;f++){
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    // restrict RHS to bottom (coarsest grids)
+    for(level=onLevel;level<(all_grids->num_levels-1);level++){
+      double _LevelStart = getTime();
+      restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],R_id,RESTRICT_CELL);
+      all_grids->levels[level]->timers.Total += (double)(getTime()-_LevelStart);
+    }
+
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    // solve coarsest grid...
+      double _timeBottomStart = getTime();
+      level = all_grids->num_levels-1;
+      if(level>onLevel)zero_vector(all_grids->levels[level],e_id);//else use whatever was the initial guess
+      IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,MG_DEFAULT_BOTTOM_NORM);  // -1 == exact solution
+      all_grids->levels[level]->timers.Total += (double)(getTime()-_timeBottomStart);
+
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    // now do the F-cycle proper...
+    for(level=all_grids->num_levels-2;level>=onLevel;level--){
+      // high-order interpolation
+      _LevelStart = getTime();
+      interpolation_fcycle(all_grids->levels[level],e_id,0.0,all_grids->levels[level+1],e_id);
+      all_grids->levels[level]->timers.Total += (double)(getTime()-_LevelStart);
+  
+      // v-cycle
+      all_grids->levels[level]->vcycles_from_this_level++;
+      MGVCycle(all_grids,e_id,R_id,a,b,level);
+    }
+
+    // correct current solution and calculate residual (new RHS)...
+    _LevelStart = getTime();
+    add_vectors(all_grids->levels[onLevel],u_id,1.0,u_id,1.0,e_id); // u = u+e
+    if(all_grids->levels[onLevel]->must_subtract_mean == 1){
+      double average_value_of_u = mean(all_grids->levels[onLevel],u_id);
+      shift_vector(all_grids->levels[onLevel],u_id,u_id,-average_value_of_u);
+    }
+    residual(all_grids->levels[onLevel],R_id,u_id,F_id,a,b);
+    double norm_of_residual = norm(all_grids->levels[onLevel],R_id);
+    all_grids->levels[onLevel]->timers.Total += (double)(getTime()-_LevelStart);
+
+    // test convergence...
+    if(all_grids->levels[onLevel]->my_rank==0){
+      double rel = norm_of_residual/norm_of_F;
+      if(f>0){fprintf(stdout,"\n            f-cycle=%2d  norm=%1.15e  rel=%1.15e  ",f+1,norm_of_residual,rel);}
+         else{fprintf(stdout,              "f-cycle=%2d  norm=%1.15e  rel=%1.15e  ",f+1,norm_of_residual,rel);}
+    }
+    if(norm_of_residual/norm_of_F < rtol)break;
+
+  } // F-cycle
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   all_grids->timers.MGSolve += (double)(getTime()-_timeStartMGSolve);
