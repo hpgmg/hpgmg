@@ -24,7 +24,7 @@ def main():
     parser.add_argument('--petsc-arch', help='PETSC_ARCH', default=os.environ.get('PETSC_ARCH',''))
     parser.add_argument('--with-hpm', help='libHPM profiling library on Blue Gene ("1" or "/path/to/libmpihpm.a /path/to/libbgpm.a")')
     cf = parser.add_argument_group('Compilers and flags')
-    cf.add_argument('--CC', help='Path to C compiler', default=os.environ.get('CC',''))
+    cf.add_argument('--CC', help='Path to C compiler', default=os.environ.get('CC','mpicc'))
     cf.add_argument('--CFLAGS', help='Flags for C compiler', default=os.environ.get('CFLAGS',''))
     cf.add_argument('--CPPFLAGS', help='Flags for C preprocessor', default=os.environ.get('CPPFLAGS',''))
     cf.add_argument('--LDFLAGS', help='Flags to pass to linker', default=os.environ.get('LDFLAGS',''))
