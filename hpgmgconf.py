@@ -30,7 +30,7 @@ def main():
     cf.add_argument('--LDFLAGS', help='Flags to pass to linker', default=os.environ.get('LDFLAGS',''))
     cf.add_argument('--LDLIBS', help='Libraries to pass to linker', default=os.environ.get('LDLIBS',''))
     fe = parser.add_argument_group('Finite Element options')
-    fe.add_argument('--no-fe', action='store_false', dest='fe', help='Do not build the Finite-Element solver')
+    fe.add_argument('--no-fe', action='store_true', dest='fe', help='Do not build the Finite-Element solver')
     fv = parser.add_argument_group('Finite Volume options')
     fv.add_argument('--no-fv', action='store_false', dest='fv', help='Do not build the Finite-Volume solver')
     fv.add_argument('--no-fv-mpi', action='store_false', dest='fv_mpi', help='Use MPI')
