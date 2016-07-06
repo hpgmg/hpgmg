@@ -1,0 +1,30 @@
+\documentclass[11pt]{amsart}
+\usepackage{geometry}                % See geometry.pdf to learn the layout options. There are lots.
+\geometry{letterpaper}                   % ... or a4paper or a5paper or ... 
+%\geometry{landscape}                % Activate for for rotated page geometry
+%\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{epstopdf}
+\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+
+\title{HPGMG report for SuperMUC usage -- 2014}
+\author{Mark Adams}
+%\date{}                                           % Activate to display a given date or no date
+
+\begin{document}
+\maketitle
+%\section{}
+%\subsection{}
+
+The HPGMG project (hpgmg.org) used time on SuperMUC in 2014 to collect benchmarking data with the HPGMG-FV and HPGMG-FE benchmark codes.
+We had one opportunity to run large (``special") jobs to complete the scaling studies and 4 of the 6 jobs failed to load properly but we where able to get two data points for the HPGMG-FE version, including one data point for running on the entire machine.  The figure shows the dynamic range  on Titan and Edison, as well as SuperMUC.  SuperMUC did as well as Edison and much better than Titan.
+
+\begin{figure}[htbp] %  figure placement: here, top, bottom, or page
+   \centering
+   \includegraphics[width=7in]{dynamic_range.png} 
+   \caption{Dynamic rage scaling of HPGMG-FE on Titan, SuperMUC and Edison.  Multiple data points (in clusters) are from multiple timed solves of the same problem.  Points to the left show strong scaling (left is good).}
+   \label{fig:example}
+\end{figure}
+
+\end{document}  
