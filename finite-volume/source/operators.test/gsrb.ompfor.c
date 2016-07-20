@@ -64,8 +64,8 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       #endif
 
       int i,j,k;
-      //#pragma omp parallel for private(i,j,k) schedule(static,1) // chunksize=1 implies the collection of threads gets a slab (spatial locality in k exploited in LLC)
-      #pragma omp parallel for private(i,j,k) // Default schedule chunksize implies each thread gets a slab and inter-thread locality may not be exploited
+      #pragma omp parallel for private(i,j,k) schedule(static,1) // chunksize=1 implies the collection of threads gets a slab (spatial locality in k exploited in LLC)
+      //#pragma omp parallel for private(i,j,k) // Default schedule chunksize implies each thread gets a slab and inter-thread locality may not be exploited
       for(k=0;k<level->box_dim;k++){
       for(j=0;j<level->box_dim;j++){
 
@@ -75,9 +75,8 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
           int ij  = i + j*jStride;
           int ijk = i + j*jStride + k*kStride;
           double Ax     = apply_op_ijk(x_n);
-          double lambda =     Dinv_ijk();
-          x_np1[ijk] = x_n[ijk] + RedBlack[ij]*lambda*(rhs[ijk]-Ax);
-          //x_np1[ijk] = ((i^j^k^color000)&1) ? x_n[ijk] : x_n[ijk] + lambda*(rhs[ijk]-Ax);
+          x_np1[ijk] = x_n[ijk] + RedBlack[ij]*Dinv[ijk]*(rhs[ijk]-Ax);
+          //x_np1[ijk] = ((i^j^k^color000)&1) ? x_n[ijk] : x_n[ijk] + Dinv[ijk]*(rhs[ijk]-Ax);
         } // i
 
 
@@ -92,8 +91,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
         for(i=((j^k^color000)&1);i<level->box_dim;i+=2){ // stride-2 GSRB
           int ijk = i + j*jStride + k*kStride; 
           double Ax     = apply_op_ijk(x_n);
-          double lambda =     Dinv_ijk();
-          x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);
+          x_np1[ijk] = x_n[ijk] + Dinv[ijk]*(rhs[ijk]-Ax);
         } // i stencil
 
 
@@ -102,8 +100,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
           int ijk = i + j*jStride + k*kStride;
           if((i^j^k^color000^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
             double Ax     = apply_op_ijk(x_n);
-            double lambda =     Dinv_ijk();
-            x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);
+            x_np1[ijk] = x_n[ijk] + Dinv[ijk]*(rhs[ijk]-Ax);
           #ifdef GSRB_OOP
           }else{
             x_np1[ijk] = x_n[ijk]; // copy old value when sweep color != cell color

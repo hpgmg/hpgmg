@@ -3,4 +3,8 @@
 - more efficient ghost zone exchange (box intersection algebra) when communicating edges and corners
 - overlap BC with exchange
 - add a VECTOR_INTERNAL
-- iterate on F's (faster for 2nd order, slower for 4th order)?
+- make all GSRB OOP
+- distinguish tiling for
+  - stencils
+  - ghost/BC
+  - BLAS1(==planes?)

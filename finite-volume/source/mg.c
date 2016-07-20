@@ -1094,7 +1094,7 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol){
+void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double rtol){
   // solves Au=f on level 'onLevel'
   all_grids->MGSolves_performed++;
   if(!all_grids->levels[onLevel]->active)return;
@@ -1116,12 +1116,7 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // calculate norm of f for convergence criteria...
   double norm_of_F     = 1.0;
-  double norm_of_DinvF = 1.0;
-  if(dtol>0){
-    mul_vectors(all_grids->levels[onLevel],VECTOR_TEMP,1.0,F_id,VECTOR_DINV); // D^{-1}F
-    norm_of_DinvF = norm(all_grids->levels[onLevel],VECTOR_TEMP);		// ||D^{-1}F||
-  }
-  if(rtol>0)norm_of_F = norm(all_grids->levels[onLevel],F_id);		// ||F||
+  norm_of_F = norm(all_grids->levels[onLevel],F_id);              // ||F||
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // make initial guess for e (=0) and setup the RHS
@@ -1144,19 +1139,15 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
       shift_vector(all_grids->levels[level],e_id,e_id,-average_value_of_e);
     }
     residual(all_grids->levels[level],VECTOR_TEMP,e_id,F_id,a,b);
-    if(dtol>0)mul_vectors(all_grids->levels[level],VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
     double norm_of_residual = norm(all_grids->levels[level],VECTOR_TEMP);
     double _timeNorm = getTime();
     all_grids->levels[level]->timers.Total += (double)(_timeNorm-_timeStart);
     if(all_grids->levels[level]->my_rank==0){
-      double rel = 0.0;
-      if(rtol>0)rel = norm_of_residual/norm_of_F;
-           else rel = norm_of_residual/norm_of_DinvF;
+      double rel = norm_of_residual/norm_of_F;
       if(   v>0){fprintf(stdout,"\n           v-cycle=%2d  norm=%1.15e  rel=%1.15e  ",v+1,norm_of_residual,rel);}
             else{fprintf(stdout,             "v-cycle=%2d  norm=%1.15e  rel=%1.15e  ",v+1,norm_of_residual,rel);}
     }
     if(norm_of_residual/norm_of_F < rtol)break;
-    if(norm_of_residual           < dtol)break;
   } // maxVCycles
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   all_grids->timers.MGSolve += (double)(getTime()-_timeStartMGSolve);
@@ -1172,7 +1163,7 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol){
+void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double rtol){
   // This FMGSolve will perform one F-Cycle, then iterate on V-cycles.  
   // Unless compiled with -DUNLIMIT_FMG_ITERATIONS, no V-cycles will be performed
   all_grids->MGSolves_performed++;
@@ -1200,12 +1191,7 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
   // calculate norm of f...
   double _LevelStart = getTime();
   double norm_of_F     = 1.0;
-  double norm_of_DinvF = 1.0;
-  if(dtol>0){
-    mul_vectors(all_grids->levels[onLevel],VECTOR_TEMP,1.0,F_id,VECTOR_DINV);	// D^{-1}F
-    norm_of_DinvF = norm(all_grids->levels[onLevel],VECTOR_TEMP);		// ||D^{-1}F||
-  }
-  if(rtol>0)norm_of_F = norm(all_grids->levels[onLevel],F_id);			// ||F||
+  norm_of_F = norm(all_grids->levels[onLevel],F_id);			// ||F||
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // initialize the RHS for the f-cycle to f...
@@ -1262,19 +1248,15 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
       shift_vector(all_grids->levels[level],e_id,e_id,-average_value_of_e);
     }
     residual(all_grids->levels[level],VECTOR_TEMP,e_id,F_id,a,b);
-    if(dtol>0)mul_vectors(all_grids->levels[level],VECTOR_TEMP,1.0,VECTOR_TEMP,VECTOR_DINV); //  Using ||D^{-1}(b-Ax)||_{inf} as convergence criteria...
     double norm_of_residual = norm(all_grids->levels[level],VECTOR_TEMP);
     double _timeNorm = getTime();
     all_grids->levels[level]->timers.Total += (double)(_timeNorm-_timeStart);
     if(all_grids->levels[level]->my_rank==0){
-      double rel = 0.0;
-      if(rtol>0)rel = norm_of_residual/norm_of_F;
-           else rel = norm_of_residual/norm_of_DinvF;
+      double rel = norm_of_residual/norm_of_F;
       if(  v>=0){fprintf(stdout,"\n            v-cycle=%2d  norm=%1.15e  rel=%1.15e  ",v+1,norm_of_residual,rel);}
             else{fprintf(stdout,              "f-cycle     norm=%1.15e  rel=%1.15e  ",norm_of_residual,rel);}
     }
     if(norm_of_residual/norm_of_F < rtol)break;
-    if(norm_of_residual           < dtol)break;
   }
 
 
@@ -1292,7 +1274,7 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void FMGSolve2(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol){
+void FMGSolve2(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double rtol){
   // This FMGSolve will iterate on F-cycles.  
   // It does this by putting the system into residual correction
   // i.e. calculate the residual (becomes the RHS), solve for a correction, add the correction to the current solution, calculate a new residual, and repeat
@@ -1396,7 +1378,7 @@ void FMGSolve2(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, do
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void MGPCG(mg_type *all_grids, int onLevel, int x_id, int F_id, double a, double b, double dtol, double rtol){
+void MGPCG(mg_type *all_grids, int onLevel, int x_id, int F_id, double a, double b, double rtol){
   // Algorithm 9.1 in Iterative Methods for Sparse Linear Systems(Yousef Saad) using a MG V-Cycle as M^{-1}
   level_type * level = all_grids->levels[onLevel];
   if(!level->active)return;
@@ -1475,7 +1457,7 @@ void MGPCG(mg_type *all_grids, int onLevel, int x_id, int F_id, double a, double
     if(norm_of_r == 0.0){CGConverged=1;break;}                                  //
     if(level->my_rank==0){
       if(   j>1){fprintf(stdout,"\n          ");}
-      if(rtol>0){fprintf(stdout,"iter=%3d  norm=%1.15e  rel=%1.15e  ",j,norm_of_r,norm_of_r/norm_of_r0    );}
+                 fprintf(stdout,"iter=%3d  norm=%1.15e  rel=%1.15e  ",j,norm_of_r,norm_of_r/norm_of_r0    );
     }
     if(norm_of_r/norm_of_r0 < rtol)break;                                       //   norm if true residual is small enough
     level->vcycles_from_this_level++;                                           //

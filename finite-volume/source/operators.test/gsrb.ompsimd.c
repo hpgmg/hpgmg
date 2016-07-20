@@ -26,11 +26,9 @@ void smooth(level_type * level, int x_id, int rhs_id, const double a, const doub
     PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
     for(block=0;block<level->num_my_blocks;block++){
       const int box  = level->my_blocks[block].read.box;
-    //const int ilo  = level->my_blocks[block].read.i;
       const int jlo  = level->my_blocks[block].read.j;
       const int klo  = level->my_blocks[block].read.k;
-      const int idim = level->box_dim;
-    //const int idim = level->my_blocks[block].dim.i;
+      const int idim = level->my_blocks[block].dim.i;
       const int jdim = level->my_blocks[block].dim.j;
       const int kdim = level->my_blocks[block].dim.k;
 
@@ -41,7 +39,7 @@ void smooth(level_type * level, int x_id, int rhs_id, const double a, const doub
       //const int jStride = level->my_boxes[box].jStride;
       //const int kStride = level->my_boxes[box].kStride;
 
-      const int offset = ghosts*(1+jStride+kStride) + (/*ilo +*/ jlo*jStride + klo*kStride); // offset from first ghost zone to first element this block operates on
+      const int offset = ghosts*(1+jStride+kStride) + (jlo*jStride + klo*kStride); // offset from first ghost zone to first element this block operates on
       const double * __restrict__ rhs      = level->my_boxes[box].vectors[       rhs_id] + offset;
       const double * __restrict__ alpha    = level->my_boxes[box].vectors[VECTOR_ALPHA ] + offset;
       const double * __restrict__ beta_i   = level->my_boxes[box].vectors[VECTOR_BETA_I] + offset;
@@ -69,11 +67,13 @@ void smooth(level_type * level, int x_id, int rhs_id, const double a, const doub
       //__assume_aligned(Dinv  ,BOX_ALIGN_JSTRIDE*sizeof(double));
       //__assume_aligned(x_n   ,BOX_ALIGN_JSTRIDE*sizeof(double));
       //__assume_aligned(x_np1 ,BOX_ALIGN_JSTRIDE*sizeof(double));
-      __assume( (   jStride) % BOX_ALIGN_JSTRIDE == 0); // e.g. jStride%4==0 or jStride%8==0, hence x+jStride is aligned
-      __assume( (   kStride) % BOX_ALIGN_KSTRIDE == 0);
-      __assume( ( 2*jStride) % BOX_ALIGN_JSTRIDE == 0);
-      __assume( ( 2*kStride) % BOX_ALIGN_KSTRIDE == 0);
-      __assume( (      idim) % BOX_ALIGN_JSTRIDE == 0); // FIX... is this safe ?!!
+      __assume(       (  jStride) % BOX_ALIGN_JSTRIDE == 0); // e.g. jStride%4==0 or jStride%8==0, hence x+jStride is aligned
+      __assume(       (  kStride) % BOX_ALIGN_JSTRIDE == 0);
+      __assume(               jStride >= BOX_ALIGN_JSTRIDE);
+      __assume(               kStride >= BOX_ALIGN_JSTRIDE);
+      __assume(                                   idim > 0);
+      __assume(                                   jdim > 0);
+      __assume(                                   kdim > 0);
       #elif __xlC__
       __alignx(BOX_ALIGN_JSTRIDE*sizeof(double), rhs   );
       __alignx(BOX_ALIGN_JSTRIDE*sizeof(double), alpha );
@@ -86,20 +86,38 @@ void smooth(level_type * level, int x_id, int rhs_id, const double a, const doub
       #endif
           
 
-      int i,j,k;
+      int i,j,k,ij;
 
-      const int color000 = (level->my_boxes[box].low.i^level->my_boxes[box].low.j^level->my_boxes[box].low.k/*^ilo*/^jlo^klo^s)&1;  // is element 000 red or black on *THIS* sweep
+      #if 0
+      const int color000 = (level->my_boxes[box].low.i^level->my_boxes[box].low.j^level->my_boxes[box].low.k^jlo^klo^s)&1;  // is element 000 red or black on *THIS* sweep
       for(k=0;k<kdim;k++){
       for(j=0;j<jdim;j++){
         const double * __restrict__ RedBlack = level->RedBlack_FP + ghosts*(1+jStride) + jStride*((j^k^color000)&1);// exploit pencil symmetry (only need two pencils, not two planes == low cache pressure)
         #if (_OPENMP>=201307) // OpenMP 4.0
         #pragma omp simd aligned(alpha,beta_i,beta_j,beta_k,rhs,Dinv,x_n,x_np1,RedBlack:BOX_ALIGN_JSTRIDE*sizeof(double))
         #endif
-        for(i=0;i<idim;i++){ 
+        #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=128
+        #pragma vector nontemporal // generally, we don't expect to reuse x_np1
+        for(i=0;i<idim;i++){
           int ijk = i + j*jStride + k*kStride;
           double Ax     = apply_op_ijk(x_n);
           x_np1[ijk] = x_n[ijk] + RedBlack[i]*Dinv[ijk]*(rhs[ijk]-Ax);
       }}}
+      #else // fused IJ loop
+      const int color000 = (level->my_boxes[box].low.i^level->my_boxes[box].low.j^level->my_boxes[box].low.k^jlo^klo^s)&1;  // is element 000 red or black on *THIS* sweep
+      for(k=0;k<kdim;k++){
+        const double * __restrict__ RedBlack = level->RedBlack_FP + ghosts*(1+jStride) + jStride*((k^color000)&1);// exploit pencil symmetry (only need two pencils, not two planes == low cache pressure)
+        #if (_OPENMP>=201307) // OpenMP 4.0
+        #pragma omp simd aligned(alpha,beta_i,beta_j,beta_k,rhs,Dinv,x_n,x_np1,RedBlack:BOX_ALIGN_JSTRIDE*sizeof(double))
+        #endif
+        #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=512
+        #pragma vector nontemporal // generally, we don't expect to reuse x_np1
+        for(ij=0;ij<jdim*jStride;ij++){  // This walks into the ghost zone but should be completely SIMDizable
+          int ijk = ij + k*kStride;
+          double Ax     = apply_op_ijk(x_n);
+          x_np1[ijk] = x_n[ijk] + RedBlack[ij]*Dinv[ijk]*(rhs[ijk]-Ax);
+      }}
+      #endif
 
 
 

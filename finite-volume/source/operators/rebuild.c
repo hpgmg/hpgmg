@@ -61,7 +61,6 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
   int        Ax_id = VECTOR_TEMP;
   int icolor,jcolor,kcolor;
   zero_vector(level,VECTOR_DINV);
-  zero_vector(level,VECTOR_L1INV);
   for(kcolor=0;kcolor<colors_in_each_dim;kcolor++){
   for(jcolor=0;jcolor<colors_in_each_dim;jcolor++){
   for(icolor=0;icolor<colors_in_each_dim;icolor++){
@@ -75,7 +74,11 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
 
   int         x_id = VECTOR_TEMP;
   int       Aii_id = VECTOR_DINV;
+  #ifdef VECTOR_L1INV
   int sumAbsAij_id = VECTOR_L1INV;
+  #else
+  int sumAbsAij_id = VECTOR_E; // stand in tempory vector
+  #endif
   int icolor,jcolor,kcolor;
   double dominant_eigenvalue = -1e9;
   int block;
@@ -124,7 +127,7 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
         int ijk = i + j*jStride + k*kStride;
         double Ax = apply_op_ijk(x);
               Aii[ijk] +=      (    x[ijk])*Ax; // add the effect of setting one grid point (i) to 1.0 to Aii
-        sumAbsAij[ijk] += fabs((1.0-x[ijk])*Ax);
+        sumAbsAij[ijk] += fabs((1.0-x[ijk])*Ax); // add the effect of setting a grid point away from i to 1.0 to sumAbsAij
       }}}
     }
   }}}

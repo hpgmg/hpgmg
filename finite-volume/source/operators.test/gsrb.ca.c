@@ -59,8 +59,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
               int ij  = i + j*jStride;
               int ijk = i + j*jStride + k*kStride;
               double Ax     = apply_op_ijk(phi);
-              double lambda =     Dinv_ijk();
-              phi_new[ijk] = phi[ijk] + RedBlack[EvenOdd][ij]*lambda*(rhs[ijk]-Ax); // compiler seems to get confused unless there are disjoint read/write pointers
+              phi_new[ijk] = phi[ijk] + RedBlack[EvenOdd][ij]*Dinv[ijk]*(rhs[ijk]-Ax); // compiler seems to get confused unless there are disjoint read/write pointers
         }}}
         #elif defined(GSRB_STRIDE2)
         #warning GSRB using stride-2 accesses to minimie the number of flop's
@@ -70,8 +69,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
         for(i=((j^k^ss^color000)&1)+1-ghosts;i<dim+ghostsToOperateOn;i+=2){ // stride-2 GSRB
               int ijk = i + j*jStride + k*kStride; 
               double Ax     = apply_op_ijk(phi);
-              double lambda =     Dinv_ijk();
-              phi_new[ijk] = phi[ijk] + lambda*(rhs[ijk]-Ax);
+              phi_new[ijk] = phi[ijk] + Dinv[ijk]*(rhs[ijk]-Ax);
         }}}
         #else
         #warning GSRB using if-then-else on loop indices for Red-Black because its easy to read...
@@ -82,8 +80,7 @@ void smooth(level_type * level, int phi_id, int rhs_id, double a, double b){
         if((i^j^k^ss^color000^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
               int ijk = i + j*jStride + k*kStride;
               double Ax     = apply_op_ijk(phi);
-              double lambda =     Dinv_ijk();
-              phi_new[ijk] = phi[ijk] + lambda*(rhs[ijk]-Ax);
+              phi_new[ijk] = phi[ijk] + Dinv[ijk]*(rhs[ijk]-Ax);
         }}}}
         #endif
       } // ss-loop

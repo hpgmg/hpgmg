@@ -57,8 +57,6 @@ void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_p2(level,x_id,
   #error This implementation does not support fusion of the boundary conditions with the operator
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-#define Dinv_ijk() Dinv[ijk]        // simply retrieve it rather than recalculating it
-//------------------------------------------------------------------------------------------------------------------------------
 #define apply_op_ijk(x)				\
 (						\
   a*x[ijk] - b*h2inv*(				\
@@ -113,9 +111,8 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   // black box rebuild of D^{-1}, l1^{-1}, dominant eigenvalue, ...
   rebuild_operator_blackbox(level,a,b,2);
 
-  // exchange Dinv/L1inv/...
+  // exchange Dinv...
   exchange_boundary(level,VECTOR_DINV ,STENCIL_SHAPE_BOX); // safe
-  exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
 }
 
 
@@ -132,14 +129,8 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #elif   USE_JACOBI
 #define NUM_SMOOTHS      6
 #include "operators/jacobi.c"
-#elif   USE_L1JACOBI
-#define NUM_SMOOTHS      6
-#include "operators/jacobi.c"
-#elif   USE_SYMGS
-#define NUM_SMOOTHS      2 // FBFB
-#include "operators/symgs.c"
 #else
-#error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, -DUSE_JACOBI, -DUSE_L1JACOBI, or -DUSE_SYMGS
+#error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, or -DUSE_JACOBI
 #endif
 #include "operators/residual.c"
 #include "operators/apply_op.c"

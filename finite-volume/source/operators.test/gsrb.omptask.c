@@ -85,9 +85,8 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
           int ij  = i + j*jStride;
           int ijk = i + j*jStride + k*kStride;
           double Ax     = apply_op_ijk(x_n);
-          double lambda =     Dinv_ijk();
-          x_np1[ijk] = x_n[ijk] + RedBlack[ij]*lambda*(rhs[ijk]-Ax);
-          //x_np1[ijk] = ((i^j^k^color000)&1) ? x_n[ijk] : x_n[ijk] + lambda*(rhs[ijk]-Ax);
+          x_np1[ijk] = x_n[ijk] + RedBlack[ij]*Dinv[ijk]*(rhs[ijk]-Ax);
+          //x_np1[ijk] = ((i^j^k^color000)&1) ? x_n[ijk] : x_n[ijk] + Dinv[ijk]*(rhs[ijk]-Ax);
       }}} // i,j,k
 
       #elif defined(GSRB_STRIDE2)
@@ -103,8 +102,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
         for(i=((j^k^color000)&1);i<level->box_dim;i+=2){ // stride-2 GSRB
           int ijk = i + j*jStride + k*kStride; 
           double Ax     = apply_op_ijk(x_n);
-          double lambda =     Dinv_ijk();
-          x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);
+          x_np1[ijk] = x_n[ijk] + Dinv[ijk]*(rhs[ijk]-Ax);
         } // i stencil
       }}  // j,k
 
@@ -115,8 +113,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
           int ijk = i + j*jStride + k*kStride;
           if((i^j^k^color000^1)&1){ // looks very clean when [0] is i,j,k=0,0,0 
             double Ax     = apply_op_ijk(x_n);
-            double lambda =     Dinv_ijk();
-            x_np1[ijk] = x_n[ijk] + lambda*(rhs[ijk]-Ax);
+            x_np1[ijk] = x_n[ijk] + Dinv[ijk]*(rhs[ijk]-Ax);
           #ifdef GSRB_OOP
           }else{
             x_np1[ijk] = x_n[ijk]; // copy old value when sweep color != cell color

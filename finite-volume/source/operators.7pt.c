@@ -46,8 +46,6 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_p1(level,x_id,shape);}
 //------------------------------------------------------------------------------------------------------------------------------
-#define Dinv_ijk() Dinv[ijk]        // simply retrieve it rather than recalculating it
-//------------------------------------------------------------------------------------------------------------------------------
 #ifdef STENCIL_VARIABLE_COEFFICIENT
 #ifdef USE_HELMHOLTZ // variable coefficient Helmholtz...
   #define apply_op_ijk(x)                               \
@@ -141,7 +139,9 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     double * __restrict__ beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + ghosts*(1+jStride+kStride);
     double * __restrict__ beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + ghosts*(1+jStride+kStride);
     double * __restrict__   Dinv = level->my_boxes[box].vectors[VECTOR_DINV  ] + ghosts*(1+jStride+kStride);
+    #ifdef VECTOR_L1INV
     double * __restrict__  L1inv = level->my_boxes[box].vectors[VECTOR_L1INV ] + ghosts*(1+jStride+kStride);
+    #endif
     double block_eigenvalue = -1e9;
 
     for(k=klo;k<khi;k++){
@@ -207,12 +207,13 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
                       );
       #endif
 
-      // calculate Dinv = D^{-1}, L1inv = ( D+D^{L1} )^{-1}, and the dominant eigenvalue...
-                             Dinv[ijk] = 1.0/Aii;				// inverse of the diagonal Aii
-                          //L1inv[ijk] = 1.0/(Aii+sumAbsAij);			// inverse of the L1 row norm... L1inv = ( D+D^{L1} )^{-1}
-      if(Aii>=1.5*sumAbsAij)L1inv[ijk] = 1.0/(Aii              ); 		// as suggested by eq 6.5 in Baker et al, "Multigrid smoothers for ultra-parallel computing: additional theory and discussion"...
-                       else L1inv[ijk] = 1.0/(Aii+0.5*sumAbsAij);		// 
+                             Dinv[ijk] = 1.0/Aii;					// inverse of the diagonal Aii
       double Di = (Aii + sumAbsAij)/Aii;if(Di>block_eigenvalue)block_eigenvalue=Di;	// upper limit to Gershgorin disc == bound on dominant eigenvalue
+      #ifdef VECTOR_L1INV
+                          //L1inv[ijk] = 1.0/(Aii+sumAbsAij);				// inverse of the L1 row norm... L1inv = ( D+D^{L1} )^{-1}
+      if(Aii>=1.5*sumAbsAij)L1inv[ijk] = 1.0/(Aii              ); 			// as suggested by eq 6.5 in Baker et al, "Multigrid smoothers for ultra-parallel computing: additional theory and discussion"...
+                       else L1inv[ijk] = 1.0/(Aii+0.5*sumAbsAij);			// 
+      #endif
     }}}
     if(block_eigenvalue>dominant_eigenvalue){dominant_eigenvalue = block_eigenvalue;}
   }
@@ -235,7 +236,9 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange Dinv/L1inv/...
   exchange_boundary(level,VECTOR_DINV ,STENCIL_SHAPE_BOX); // safe
+  #ifdef VECTOR_L1INV
   exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
+  #endif
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
 
@@ -251,14 +254,8 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #elif   USE_JACOBI
 #define NUM_SMOOTHS      6
 #include "operators/jacobi.c"
-#elif   USE_L1JACOBI
-#define NUM_SMOOTHS      6
-#include "operators/jacobi.c"
-#elif   USE_SYMGS
-#define NUM_SMOOTHS      2
-#include "operators/symgs.c"
 #else
-#error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, -DUSE_JACOBI, -DUSE_L1JACOBI, or -DUSE_SYMGS
+#error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, or -DUSE_JACOBI
 #endif
 #include "operators/residual.c"
 #include "operators/apply_op.c"

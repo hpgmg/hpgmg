@@ -50,39 +50,56 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_v4(level,x_id,shape);}
 //------------------------------------------------------------------------------------------------------------------------------
-#define Dinv_ijk() Dinv[ijk]        // simply retrieve it rather than recalculating it
-//------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_TWELFTH ( 0.0833333333333333333)  // 1.0/12.0;
 //------------------------------------------------------------------------------------------------------------------------------
 #ifdef STENCIL_VARIABLE_COEFFICIENT
 
 //fluxes at ijk-0.5e^d (low faces of cell ijk)...
-#define beta_dxdi(x,ijk)                                                                                                              \
-(                                                                                                                                     \
-  h2inv*STENCIL_TWELFTH*(                                                                                                             \
-    + beta_i[ijk]*( 15.0*(x[ijk]-x[ijk-1]) - (x[ijk+1]-x[ijk-2]) )                                                                    \
-    + 0.25*(beta_i[ijk+jStride]-beta_i[ijk-jStride]) * (x[ijk+jStride]-x[ijk-1      +jStride]-x[ijk-jStride]+x[ijk-1      -jStride])  \
-    + 0.25*(beta_i[ijk+kStride]-beta_i[ijk-kStride]) * (x[ijk+kStride]-x[ijk-1      +kStride]-x[ijk-kStride]+x[ijk-1      -kStride])  \
-  )                                                                                                                                   \
+#define beta_dxdi(x,ijk)                                                                           \
+(                                                                                                  \
+  h2inv*STENCIL_TWELFTH*(                                                                          \
+            beta_i[ijk]*( 15.0*(x[ijk]-x[ijk-1]) - x[ijk+1] + x[ijk-2] )                           \
+    + 0.25*(beta_i[ijk+jStride]-beta_i[ijk-jStride]) * (+x[ijk  +jStride]                          \
+                                                        -x[ijk-1+jStride]                          \
+                                                        -x[ijk  -jStride]                          \
+                                                        +x[ijk-1-jStride])                         \
+    + 0.25*(beta_i[ijk+kStride]-beta_i[ijk-kStride]) * (+x[ijk  +kStride]                          \
+                                                        -x[ijk-1+kStride]                          \
+                                                        -x[ijk  -kStride]                          \
+                                                        +x[ijk-1-kStride])                         \
+  )                                                                                                \
 )
 
-#define beta_dxdj(x,ijk)                                                                                                              \
-(                                                                                                                                     \
-  h2inv*STENCIL_TWELFTH*(                                                                                                             \
-    + beta_j[ijk]*( 15.0*(x[ijk]-x[ijk-jStride]) - (x[ijk+jStride]-x[ijk-2*jStride]) )                                                \
-    + 0.25*(beta_j[ijk+1      ]-beta_j[ijk-1      ]) * (x[ijk+1      ]-x[ijk-jStride+1      ]-x[ijk-1      ]+x[ijk-jStride-1      ])  \
-    + 0.25*(beta_j[ijk+kStride]-beta_j[ijk-kStride]) * (x[ijk+kStride]-x[ijk-jStride+kStride]-x[ijk-kStride]+x[ijk-jStride-kStride])  \
-  )                                                                                                                                   \
+#define beta_dxdj(x,ijk)                                                                           \
+(                                                                                                  \
+  h2inv*STENCIL_TWELFTH*(                                                                          \
+            beta_j[ijk]*( 15.0*(x[ijk]-x[ijk-jStride]) - x[ijk+jStride] + x[ijk-jStride-jStride] ) \
+    + 0.25*(beta_j[ijk+1      ]-beta_j[ijk-1      ]) * (+x[ijk        +1      ]                    \
+                                                        -x[ijk-jStride+1      ]                    \
+                                                        -x[ijk        -1      ]                    \
+                                                        +x[ijk-jStride-1      ])                   \
+    + 0.25*(beta_j[ijk+kStride]-beta_j[ijk-kStride]) * (+x[ijk        +kStride]                    \
+                                                        -x[ijk-jStride+kStride]                    \
+                                                        -x[ijk        -kStride]                    \
+                                                        +x[ijk-jStride-kStride])                   \
+  )                                                                                                \
 )
 
-#define beta_dxdk(x,ijk)                                                                                                              \
-(                                                                                                                                     \
-  h2inv*STENCIL_TWELFTH*(                                                                                                             \
-    + beta_k[ijk]*( 15.0*(x[ijk]-x[ijk-kStride]) - (x[ijk+kStride]-x[ijk-2*kStride]) )                                                \
-    + 0.25*(beta_k[ijk+1      ]-beta_k[ijk-1      ]) * (x[ijk+1      ]-x[ijk-kStride+1      ]-x[ijk-1      ]+x[ijk-kStride-1      ])  \
-    + 0.25*(beta_k[ijk+jStride]-beta_k[ijk-jStride]) * (x[ijk+jStride]-x[ijk-kStride+jStride]-x[ijk-jStride]+x[ijk-kStride-jStride])  \
-  )                                                                                                                                   \
+#define beta_dxdk(x,ijk)                                                                           \
+(                                                                                                  \
+  h2inv*STENCIL_TWELFTH*(                                                                          \
+            beta_k[ijk]*( 15.0*(x[ijk]-x[ijk-kStride]) - x[ijk+kStride] + x[ijk-kStride-kStride] ) \
+    + 0.25*(beta_k[ijk+1      ]-beta_k[ijk-1      ]) * (+x[ijk        +1      ]                    \
+                                                        -x[ijk-kStride+1      ]                    \
+                                                        -x[ijk        -1      ]                    \
+                                                        +x[ijk-kStride-1      ])                   \
+    + 0.25*(beta_k[ijk+jStride]-beta_k[ijk-jStride]) * (+x[ijk        +jStride]                    \
+                                                        -x[ijk-kStride+jStride]                    \
+                                                        -x[ijk        -jStride]                    \
+                                                        +x[ijk-kStride-jStride])                   \
+  )                                                                                                \
 )
+
 
 #define Laplacian_ijk(x)                         \
 (                                                \
@@ -151,9 +168,8 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   // black box rebuild of D^{-1}, l1^{-1}, dominant eigenvalue, ...
   rebuild_operator_blackbox(level,a,b,4);
 
-  // exchange Dinv/L1inv/...
+  // exchange Dinv...
   exchange_boundary(level,VECTOR_DINV ,STENCIL_SHAPE_BOX); // safe
-  exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
 }
 
 
@@ -170,14 +186,8 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #elif   USE_JACOBI
 #define NUM_SMOOTHS      6
 #include "operators/jacobi.c"
-#elif   USE_L1JACOBI
-#define NUM_SMOOTHS      6
-#include "operators/jacobi.c"
-#elif   USE_SYMGS
-#define NUM_SMOOTHS      2 // FBFB
-#include "operators/symgs.c"
 #else
-#error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, -DUSE_JACOBI, -DUSE_L1JACOBI, or -DUSE_SYMGS
+#error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, or -DUSE_JACOBI
 #endif
 #include "operators.test/residual.flux.c"
 #include "operators/apply_op.c"

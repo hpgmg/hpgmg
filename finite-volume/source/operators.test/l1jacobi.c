@@ -11,8 +11,6 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
     exit(0);
   }
 
-  double weight = 2.0/3.0;
- 
   int block,s;
   for(s=0;s<NUM_SMOOTHS;s++){
     // exchange ghost zone data... Jacobi ping pongs between x_id and VECTOR_TEMP
@@ -41,7 +39,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       const double * __restrict__ beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride);
       const double * __restrict__ beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + ghosts*(1+jStride+kStride);
       const double * __restrict__ beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + ghosts*(1+jStride+kStride);
-      const double * __restrict__ Dinv   = level->my_boxes[box].vectors[VECTOR_DINV  ] + ghosts*(1+jStride+kStride);
+      const double * __restrict__ l1inv  = level->my_boxes[box].vectors[VECTOR_L1INV ] + ghosts*(1+jStride+kStride);
       const double * __restrict__ x_n;
             double * __restrict__ x_np1;
                      if((s&1)==0){x_n    = level->my_boxes[box].vectors[         x_id] + ghosts*(1+jStride+kStride);
@@ -54,7 +52,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       for(i=ilo;i<ihi;i++){
         int ijk = i + j*jStride + k*kStride;
         double Ax_n = apply_op_ijk(x_n);
-        x_np1[ijk] = x_n[ijk] + weight*Dinv[ijk]*(rhs[ijk]-Ax_n);
+        x_np1[ijk] = x_n[ijk] + l1inv[ijk]*(rhs[ijk]-Ax_n);
       }}}
 
     } // box-loop

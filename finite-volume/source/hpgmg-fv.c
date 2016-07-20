@@ -47,7 +47,7 @@
 #include "operators.h"
 #include "solvers.h"
 //------------------------------------------------------------------------------------------------------------------------------
-void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dtol, double rtol){
+void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double rtol){
      int     doTiming;
      int    minSolves = 10; // do at least minSolves MGSolves
   double timePerSolve = 0;
@@ -77,9 +77,9 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
     while( (numSolves<minSolves) ){
       zero_vector(all_grids->levels[onLevel],VECTOR_U);
       #ifdef USE_FCYCLES
-      FMGSolve(all_grids,onLevel,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
+      FMGSolve(all_grids,onLevel,VECTOR_U,VECTOR_F,a,b,rtol);
       #else
-       MGSolve(all_grids,onLevel,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
+       MGSolve(all_grids,onLevel,VECTOR_U,VECTOR_F,a,b,rtol);
       #endif
       numSolves++;
     }
@@ -312,15 +312,17 @@ int main(int argc, char **argv){
   // HPGMG-500 benchmark proper
   // evaluate performance on problem sizes of h, 2h, and 4h
   // (i.e. examine dynamic range for problem sizes N, N/8, and N/64)
-//double dtol=1e-15;double rtol=  0.0; // converged if ||D^{-1}(b-Ax)|| < dtol
-  double dtol=  0.0;double rtol=1e-10; // converged if ||b-Ax|| / ||b|| < rtol
+  double rtol=1e-10; // converged if ||b-Ax|| / ||b|| < rtol
   int l;
   #ifndef TEST_ERROR
 
-  double AverageSolveTime[3];
-  for(l=0;l<3;l++){
+  // run at least 3 problem sizes with the caveat that the smallest is at least 16^3.
+  #define DYNAMIC_RANGE 3
+  double AverageSolveTime[DYNAMIC_RANGE];
+  for(l=0;l<DYNAMIC_RANGE;l++){
+    // if(problem size too small)break;
     if(l>0)restriction(MG_h.levels[l],VECTOR_F,MG_h.levels[l-1],VECTOR_F,RESTRICT_CELL);
-    bench_hpgmg(&MG_h,l,a,b,dtol,rtol);
+    bench_hpgmg(&MG_h,l,a,b,rtol);
     AverageSolveTime[l] = (double)MG_h.timers.MGSolve / (double)MG_h.MGSolves_performed;
     if(my_rank==0){fprintf(stdout,"\n\n===== Timing Breakdown =========================================================\n");}
     MGPrintTiming(&MG_h,l);
@@ -334,14 +336,16 @@ int main(int argc, char **argv){
     double SecondsPerCycle = 1.0;
     #endif
     fprintf(stdout,"\n\n===== Performance Summary ======================================================\n");
-    for(l=0;l<3;l++){
+    for(l=0;l<DYNAMIC_RANGE;l++){
+      // if(problem size too small)break;
       double DOF = (double)MG_h.levels[l]->dim.i*(double)MG_h.levels[l]->dim.j*(double)MG_h.levels[l]->dim.k;
       double seconds = SecondsPerCycle*(double)AverageSolveTime[l];
       double DOFs = DOF / seconds;
       fprintf(stdout,"  h=%0.15e  DOF=%0.15e  time=%0.6f  DOF/s=%0.3e  MPI=%d  OMP=%d\n",MG_h.levels[l]->h,DOF,seconds,DOFs,num_tasks,OMP_Threads);
     }
   }
-  #endif
+
+  #endif // TEST_ERROR not defined
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   if(my_rank==0){fprintf(stdout,"\n\n===== Richardson error analysis ================================================\n");}
@@ -354,9 +358,9 @@ int main(int argc, char **argv){
     if(l>0)restriction(MG_h.levels[l],VECTOR_F,MG_h.levels[l-1],VECTOR_F,RESTRICT_CELL);
            zero_vector(MG_h.levels[l],VECTOR_U);
     #ifdef USE_FCYCLES
-    FMGSolve(&MG_h,l,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
+    FMGSolve(&MG_h,l,VECTOR_U,VECTOR_F,a,b,rtol);
     #else
-     MGSolve(&MG_h,l,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
+     MGSolve(&MG_h,l,VECTOR_U,VECTOR_F,a,b,rtol);
     #endif
   }
   richardson_error(&MG_h,0,VECTOR_U);

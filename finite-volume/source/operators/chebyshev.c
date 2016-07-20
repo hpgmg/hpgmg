@@ -89,8 +89,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
         //  x_{n+1} = x_{n} + rho_{n} [ rho_{n-1}(x_{n} - x_{n-1}) + (2/delta)(b-Ax_{n}) ]
         //  x_temp[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_temp[ijk]) + c2*Dinv[ijk]*(rhs[ijk]-Ax_n);
         const double Ax_n   = apply_op_ijk(x_n);
-        const double lambda =     Dinv_ijk();
-        x_np1[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_nm1[ijk]) + c2*lambda*(rhs[ijk]-Ax_n);
+        x_np1[ijk] = x_n[ijk] + c1*(x_n[ijk]-x_nm1[ijk]) + c2*Dinv[ijk]*(rhs[ijk]-Ax_n);
       }}}
 
     } // box-loop

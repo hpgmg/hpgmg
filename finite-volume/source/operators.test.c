@@ -50,8 +50,6 @@
 //------------------------------------------------------------------------------------------------------------------------------
 void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_v4(level,x_id,shape);}
 //------------------------------------------------------------------------------------------------------------------------------
-#define Dinv_ijk() Dinv[ijk]        // simply retrieve it rather than recalculating it
-//------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_TWELFTH ( 0.0833333333333333333)  // 1.0/12.0;
 //------------------------------------------------------------------------------------------------------------------------------
 #ifdef STENCIL_VARIABLE_COEFFICIENT
@@ -61,12 +59,12 @@ void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_v4(level,x_id,
     a*alpha[ijk]*x[ijk]                                                                                                                              \
    -b*h2inv*(                                                                                                                                        \
       STENCIL_TWELFTH*(                                                                                                                              \
-        + beta_i[ijk        ]*( 15.0*(x[ijk-1      ]-x[ijk]) - (x[ijk-2        ]-x[ijk+1      ]) )                                                   \
-        + beta_i[ijk+1      ]*( 15.0*(x[ijk+1      ]-x[ijk]) - (x[ijk+2        ]-x[ijk-1      ]) )                                                   \
-        + beta_j[ijk        ]*( 15.0*(x[ijk-jStride]-x[ijk]) - (x[ijk-2*jStride]-x[ijk+jStride]) )                                                   \
-        + beta_j[ijk+jStride]*( 15.0*(x[ijk+jStride]-x[ijk]) - (x[ijk+2*jStride]-x[ijk-jStride]) )                                                   \
-        + beta_k[ijk        ]*( 15.0*(x[ijk-kStride]-x[ijk]) - (x[ijk-2*kStride]-x[ijk+kStride]) )                                                   \
-        + beta_k[ijk+kStride]*( 15.0*(x[ijk+kStride]-x[ijk]) - (x[ijk+2*kStride]-x[ijk-kStride]) )                                                   \
+        + beta_i[ijk        ]*( 15.0*(x[ijk-1      ]-x[ijk]) - (x[ijk-2              ]-x[ijk+1      ]) )                                                   \
+        + beta_i[ijk+1      ]*( 15.0*(x[ijk+1      ]-x[ijk]) - (x[ijk+2              ]-x[ijk-1      ]) )                                                   \
+        + beta_j[ijk        ]*( 15.0*(x[ijk-jStride]-x[ijk]) - (x[ijk-jStride-jStride]-x[ijk+jStride]) )                                                   \
+        + beta_j[ijk+jStride]*( 15.0*(x[ijk+jStride]-x[ijk]) - (x[ijk+jStride+jStride]-x[ijk-jStride]) )                                                   \
+        + beta_k[ijk        ]*( 15.0*(x[ijk-kStride]-x[ijk]) - (x[ijk-kStride-kStride]-x[ijk+kStride]) )                                                   \
+        + beta_k[ijk+kStride]*( 15.0*(x[ijk+kStride]-x[ijk]) - (x[ijk+kStride+kStride]-x[ijk-kStride]) )                                                   \
       )                                                                                                                                              \
       + 0.25*STENCIL_TWELFTH*(                                                                                                                       \
         + (beta_i[ijk        +jStride]-beta_i[ijk        -jStride]) * (x[ijk-1      +jStride]-x[ijk+jStride]-x[ijk-1      -jStride]+x[ijk-jStride])  \
@@ -90,12 +88,12 @@ void apply_BCs(level_type * level, int x_id, int shape){apply_BCs_v4(level,x_id,
   (                                                                                                                                                  \
    -b*h2inv*(                                                                                                                                        \
       STENCIL_TWELFTH*(                                                                                                                              \
-        + beta_i[ijk        ]*( 15.0*(x[ijk-1      ]-x[ijk]) - (x[ijk-2        ]-x[ijk+1      ]) )                                                   \
-        + beta_i[ijk+1      ]*( 15.0*(x[ijk+1      ]-x[ijk]) - (x[ijk+2        ]-x[ijk-1      ]) )                                                   \
-        + beta_j[ijk        ]*( 15.0*(x[ijk-jStride]-x[ijk]) - (x[ijk-2*jStride]-x[ijk+jStride]) )                                                   \
-        + beta_j[ijk+jStride]*( 15.0*(x[ijk+jStride]-x[ijk]) - (x[ijk+2*jStride]-x[ijk-jStride]) )                                                   \
-        + beta_k[ijk        ]*( 15.0*(x[ijk-kStride]-x[ijk]) - (x[ijk-2*kStride]-x[ijk+kStride]) )                                                   \
-        + beta_k[ijk+kStride]*( 15.0*(x[ijk+kStride]-x[ijk]) - (x[ijk+2*kStride]-x[ijk-kStride]) )                                                   \
+        + beta_i[ijk        ]*( 15.0*(x[ijk-1      ]-x[ijk]) - (x[ijk-2              ]-x[ijk+1      ]) )                                                   \
+        + beta_i[ijk+1      ]*( 15.0*(x[ijk+1      ]-x[ijk]) - (x[ijk+2              ]-x[ijk-1      ]) )                                                   \
+        + beta_j[ijk        ]*( 15.0*(x[ijk-jStride]-x[ijk]) - (x[ijk-jStride-jStride]-x[ijk+jStride]) )                                                   \
+        + beta_j[ijk+jStride]*( 15.0*(x[ijk+jStride]-x[ijk]) - (x[ijk+jStride+jStride]-x[ijk-jStride]) )                                                   \
+        + beta_k[ijk        ]*( 15.0*(x[ijk-kStride]-x[ijk]) - (x[ijk-kStride-kStride]-x[ijk+kStride]) )                                                   \
+        + beta_k[ijk+kStride]*( 15.0*(x[ijk+kStride]-x[ijk]) - (x[ijk+kStride+kStride]-x[ijk-kStride]) )                                                   \
       )                                                                                                                                              \
       + 0.25*STENCIL_TWELFTH*(                                                                                                                       \
         + (beta_i[ijk        +jStride]-beta_i[ijk        -jStride]) * (x[ijk-1      +jStride]-x[ijk+jStride]-x[ijk-1      -jStride]+x[ijk-jStride])  \
@@ -168,7 +166,9 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
   // exchange Dinv/L1inv/...
   exchange_boundary(level,VECTOR_DINV ,STENCIL_SHAPE_BOX); // safe
+  #ifdef VECTOR_L1INV
   exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
+  #endif
 }
 
 
@@ -176,7 +176,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #ifdef  USE_GSRB
 #define GSRB_OOP
 #define NUM_SMOOTHS      3 // RBRBRB
-#include "operators.test/gsrb.omptask.c"
+#include "operators.test/gsrb.ompsimd.c"
 #elif   USE_CHEBY
 #warning The Chebyshev smoother is currently underperforming for 4th order.  Please use -DUSE_GSRB or -DUSE_JACOBI
 #define NUM_SMOOTHS      1
@@ -187,14 +187,14 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #include "operators/jacobi.c"
 #elif   USE_L1JACOBI
 #define NUM_SMOOTHS      6
-#include "operators/jacobi.c"
+#include "operators.test/l1jacobi.c"
 #elif   USE_SYMGS
 #define NUM_SMOOTHS      2 // FBFB
-#include "operators/symgs.c"
+#include "operators.test/symgs.c"
 #else
 #error You must compile with either -DUSE_GSRB, -DUSE_CHEBY, -DUSE_JACOBI, -DUSE_L1JACOBI, or -DUSE_SYMGS
 #endif
-#include "operators/residual.c"
+#include "operators.test/residual.ompsimd.c"
 #include "operators/apply_op.c"
 #include "operators/rebuild.c"
 //------------------------------------------------------------------------------------------------------------------------------

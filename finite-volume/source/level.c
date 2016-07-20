@@ -783,8 +783,8 @@ void build_exchange_ghosts(level_type *level, int shape){
         /* write.kStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].kStride,
         /* write.scale   = */ 1,
         /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
-        /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
-        /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
+        /* blockcopy_j   = */ 8, //BLOCKCOPY_TILE_J, // default
+        /* blockcopy_k   = */ 8, //BLOCKCOPY_TILE_K, // default
         /* subtype       = */ 0  
       );
       else // append to the MPI pack list...
@@ -809,8 +809,8 @@ void build_exchange_ghosts(level_type *level, int shape){
         /* write.kStride = */ dim_i*dim_j, // contiguous block
         /* write.scale   = */ 1,
         /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
-        /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
-        /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
+        /* blockcopy_j   = */ 8, //BLOCKCOPY_TILE_J, // default
+        /* blockcopy_k   = */ 8, //BLOCKCOPY_TILE_K, // default
         /* subtype       = */ 0  
       );}
       if(neighbor>=0)level->exchange_ghosts[shape].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
@@ -957,8 +957,8 @@ void build_exchange_ghosts(level_type *level, int shape){
       /*write.kStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].kStride,
       /*write.scale   = */ 1,
       /* blockcopy_i  = */ BLOCKCOPY_TILE_I, // default
-      /* blockcopy_j  = */ BLOCKCOPY_TILE_J, // default
-      /* blockcopy_k  = */ BLOCKCOPY_TILE_K, // default
+      /* blockcopy_j  = */ 8, //BLOCKCOPY_TILE_J, // default
+      /* blockcopy_k  = */ 8, //BLOCKCOPY_TILE_K, // default
       /* subtype      = */ 0  
       );
       if(neighbor>=0)level->exchange_ghosts[shape].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
@@ -993,68 +993,123 @@ void build_exchange_ghosts(level_type *level, int shape){
 }
 
 
-
 //---------------------------------------------------------------------------------------------------------------------------------------------------
 // create the pointers in level_type to the contiguous vector FP data (useful for bulk copies to/from accelerators)
 // create the pointers in each box to their respective segment of the level's vector FP data (useful for box-relative operators)
 // if( (level->numVectors > 0) && (numVectors > level->numVectors) ) then allocate additional space for (numVectors-level->numVectors) and copy old leve->numVectors data
 void create_vectors(level_type *level, int numVectors){
+  int old_numVectors = level->numVectors;
   if(numVectors <= level->numVectors)return; // already have enough space
-  double          * old_vectors_base = level->vectors_base; // save a pointer to the originally allocated data for subsequent free()
-  double               * old_vector0 = NULL;
-  if(level->numVectors>0)old_vector0 = level->vectors[0];   // save a pointer to old FP data to copy
-
 
   // calculate the size of each box...
+  #ifdef USE_MAGIC_PADDING
+  // conceptually rectangular, but physically(in memory) non-rectangular box
+  level->box_jStride =                    (level->box_dim+2*level->box_ghosts);while(level->box_jStride % BOX_ALIGN_JSTRIDE)level->box_jStride++; // pencil
+  level->box_kStride = level->box_jStride*(level->box_dim+2*level->box_ghosts);while(level->box_kStride % BOX_ALIGN_JSTRIDE)level->box_kStride++; // plane alignment
+  while( level->box_kStride      %  512 <   96 )level->box_kStride+=BOX_ALIGN_JSTRIDE; // pad planes to avoid conflicts in the L1 cache.
+                                                                                       // ensures the 5 planes of 4th order stencil hit different sets in a 32KB/8way cache
+  level->box_volume  = level->box_kStride*(level->box_dim+2*level->box_ghosts);while(level->box_volume  % BOX_ALIGN_JSTRIDE)level->box_volume++;  // volume
+  while( level->box_volume       % 1024 != 568 )level->box_volume++; // pad volumes to avoid conflicts in the L2 cache
+                                                                     // %1024==512 ensures volumes map to different L2 sets but the same L1 set
+                                                                     // +56 ensures volumes map to different L1 sets as well
+  #else
+  // default simply pads pencils/planes/volumes (resultant box is rectangular iff BOX_ALIGN_VOLUME==BOX_ALIGN_KSTRIDE==BOX_ALIGN_JSTRIDE)
   level->box_jStride =                    (level->box_dim+2*level->box_ghosts);while(level->box_jStride % BOX_ALIGN_JSTRIDE)level->box_jStride++; // pencil
   level->box_kStride = level->box_jStride*(level->box_dim+2*level->box_ghosts);while(level->box_kStride % BOX_ALIGN_KSTRIDE)level->box_kStride++; // plane
   level->box_volume  = level->box_kStride*(level->box_dim+2*level->box_ghosts);while(level->box_volume  % BOX_ALIGN_VOLUME )level->box_volume++;  // volume
+  #endif
 
 
-  #define VECTOR_MALLOC_BULK
-  #ifdef  VECTOR_MALLOC_BULK
-    // allocate one aligned, double-precision array and divide it among vectors...
-    uint64_t malloc_size = (uint64_t)numVectors*level->num_my_boxes*level->box_volume*sizeof(double) + 4096;
-    level->vectors_base = (double*)malloc(malloc_size);
-    if((numVectors>0)&&(level->vectors_base==NULL)){fprintf(stderr,"malloc failed - level->vectors_base\n");exit(0);}
-    double * tmpbuf = level->vectors_base;
-    while( (uint64_t)(tmpbuf+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & 0xff ){tmpbuf++;} // align first *non-ghost* zone element of first component to a 256-Byte boundary
-    uint64_t ofs;
+  int box,v;
+  uint64_t ofs;
+  #define GHOST_ALIGNMENT 512
+
+
+  #ifdef USE_BVKJI_LAYOUT
+  // [box][vector][k][j][i] data layout where boxes (including all vectors) are individually allocated
+  for(box=0;box<level->num_my_boxes;box++){
+    // save old pointer to FP data...
+    double * old_fp_base = level->my_boxes[box].fp_base;
+    // allocate 4D FP array...
+    uint64_t malloc_size = (uint64_t)numVectors*level->box_volume*sizeof(double) + GHOST_ALIGNMENT;
+    level->my_boxes[box].fp_base = (double*)malloc(malloc_size);
+    //posix_memalign((void**)&(level->my_boxes[box].fp_base),1<<21,malloc_size); // 2MB aligned allocation
+    if((numVectors>0)&&(level->my_boxes[box].fp_base==NULL)){fprintf(stderr,"malloc failed - level->my_boxes[box].fp_base\n");exit(0);}
+    double * fp_base_aligned = level->my_boxes[box].fp_base;
+    while( (uint64_t)(fp_base_aligned+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & (GHOST_ALIGNMENT-1) ){fp_base_aligned++;} // align first *non-ghost* zone element of first component to GHOST_ALIGNMENT bytes
+    // init ...
     #ifdef _OPENMP
     #pragma omp parallel for
     #endif
-    for(ofs=0;ofs<(uint64_t)numVectors*level->num_my_boxes*level->box_volume;ofs++){tmpbuf[ofs]=0.0;} // Faster in MPI+OpenMP environments, but not NUMA-aware
-    // if there is existing FP data... copy it, then free old data and pointer array
-    if(level->numVectors>0){
-      memcpy(tmpbuf,old_vector0,(uint64_t)level->numVectors*level->num_my_boxes*level->box_volume*sizeof(double)); // FIX... omp thread ???
-      if(old_vectors_base)free(old_vectors_base); // free old data...
+    for(ofs=0;ofs<(uint64_t)numVectors*level->box_volume;ofs++){level->my_boxes[box].fp_base[ofs]=0.0;} // FIX... NOT NUMA-aware !!!
+    // setup vectors...
+    double * old_vectors0; // save pointer to old vector[0] pointer for future copying
+    if(old_numVectors>0){
+      old_vectors0 = level->my_boxes[box].vectors[0]; // save pointer to old vector[0] pointer for future copying
+      free(level->my_boxes[box].vectors); // free previously allocated vector array
     }
-    // allocate an array of pointers which point to the union of boxes for each vector
-    // NOTE, this requires just one copyin per vector to an accelerator rather than requiring one copyin per box per vector
-    if(level->numVectors>0)free(level->vectors); // free any previously allocated vector array
-    level->vectors = (double **)malloc(numVectors*sizeof(double*));
-    if((numVectors>0)&&(level->vectors==NULL)){fprintf(stderr,"malloc failed - level->vectors\n");exit(0);}
-    uint64_t c;for(c=0;c<numVectors;c++){level->vectors[c] = tmpbuf + (uint64_t)c*level->num_my_boxes*level->box_volume;}
-  #else
-    // allocate vectors individually (simple, but may cause conflict misses)
-    double ** old_vectors = level->vectors;
-    level->vectors = (double **)malloc(numVectors*sizeof(double*));
-    uint64_t c;
-    for(c=                0;c<level->numVectors;c++){level->vectors[c] = old_vectors[c];}
-    for(c=level->numVectors;c<       numVectors;c++){
-      level->vectors[c] = (double*)malloc((uint64_t)level->num_my_boxes*level->box_volume*sizeof(double));
-      uint64_t ofs;
+    level->my_boxes[box].vectors = (double **)malloc(numVectors*sizeof(double*)); // allocate
+    if((old_numVectors>0)&&(level->my_boxes[box].vectors==NULL)){fprintf(stderr,"malloc failed - level->my_boxes[box].vectors\n");exit(0);}
+    for(v=0;v<numVectors;v++){level->my_boxes[box].vectors[v] = fp_base_aligned + (uint64_t)level->box_volume*v;} // setup vector pointers
+    // copy old vectors (if present) ...
+    if(old_numVectors>0){ 
       #ifdef _OPENMP
       #pragma omp parallel for
       #endif
-      for(ofs=0;ofs<(uint64_t)level->num_my_boxes*level->box_volume;ofs++){level->vectors[c][ofs]=0.0;} // Faster in MPI+OpenMP environments, but not NUMA-aware
+      for(ofs=0;ofs<(uint64_t)old_numVectors*level->box_volume;ofs++){level->my_boxes[box].vectors[0][ofs] = old_vectors0[ofs];} // FIX... NOT NUMA-aware !!!
+      if(old_fp_base)free(old_fp_base); // free old FP data
     }
-    free(old_vectors);
+  }
+  #endif
+
+
+  #ifdef USE_VBKJI_LAYOUT
+  // [vector][box][k][j][i] data layout where vectors (across all boxes) are individually allocated
+  double ** old_vectors      = level->vectors;
+  double ** old_vectors_base = level->vectors_base;
+  if(numVectors > old_numVectors){
+    // allocate an array of pointers which point to the union of boxes for each vector
+    // NOTE, this requires just one copyin per vector to an accelerator rather than requiring one copyin per box per vector
+    level->vectors      = (double **)malloc(numVectors*sizeof(double*));
+    level->vectors_base = (double **)malloc(numVectors*sizeof(double*));
+  }
+  for(v=0;v<numVectors;v++){
+    if(v<old_numVectors){
+      // vector v already exists... copy old pointers...
+      level->vectors_base[v] = old_vectors_base[v];
+      level->vectors[v]      = old_vectors[v];
+    }else{
+      // allocate
+      uint64_t malloc_size = (uint64_t)level->num_my_boxes*level->box_volume*sizeof(double) + GHOST_ALIGNMENT;
+      level->vectors_base[v] = (double*)malloc(malloc_size);
+      //posix_memalign((void**)&(level->vectors_base[v]),1<<21,malloc_size); // 2MB aligned allocation
+      if((numVectors>0)&&(level->vectors_base[v]==NULL)){fprintf(stderr,"malloc failed - level->vectors_base[v]\n");exit(0);}
+      double * fp_base_aligned = level->vectors_base[v];
+      while( (uint64_t)(fp_base_aligned+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & (GHOST_ALIGNMENT-1) ){fp_base_aligned++;} // align first *non-ghost* zone element of first component to GHOST_ALIGNMENT bytes
+      level->vectors[v] = fp_base_aligned;
+      // init
+      #ifdef _OPENMP
+      #pragma omp parallel for
+      #endif
+      for(ofs=0;ofs<(uint64_t)level->num_my_boxes*level->box_volume;ofs++){level->vectors_base[v][ofs]=0.0;} // FIX... NOT NUMA-aware !!!
+    }
+  }
+  // setup vector pointers for each box...
+  for(box=0;box<level->num_my_boxes;box++){ // setup pointer to vector v for all boxes
+    if(old_numVectors>0)free(level->my_boxes[box].vectors); // free previously allocated vector array
+    level->my_boxes[box].vectors = (double **)malloc(numVectors*sizeof(double*)); // allocate
+    if((old_numVectors>0)&&(level->my_boxes[box].vectors==NULL)){fprintf(stderr,"malloc failed - level->my_boxes[box].vectors\n");exit(0);}
+    for(v=0;v<numVectors;v++){level->my_boxes[box].vectors[v] = level->vectors[v] + (uint64_t)level->box_volume*box;} // setup pointer to vector v
+  }
+  if(numVectors > old_numVectors){
+    free(old_vectors     );
+    free(old_vectors_base);
+  }
   #endif
 
 
   // build the list of boxes...
-  int box=0;
+  box=0;
   int i,j,k;
   for(k=0;k<level->boxes_in.k;k++){
   for(j=0;j<level->boxes_in.j;j++){
@@ -1063,10 +1118,6 @@ void create_vectors(level_type *level, int numVectors){
     int kStride = level->boxes_in.i*level->boxes_in.j;
     int b=i + j*jStride + k*kStride;
     if(level->rank_of_box[b]==level->my_rank){
-      if(level->numVectors>0)free(level->my_boxes[box].vectors); // free previously allocated vector array
-      level->my_boxes[box].vectors = (double **)malloc(numVectors*sizeof(double*));
-      if((numVectors>0)&&(level->my_boxes[box].vectors==NULL)){fprintf(stderr,"malloc failed - level->my_boxes[box].vectors\n");exit(0);}
-      uint64_t c;for(c=0;c<numVectors;c++){level->my_boxes[box].vectors[c] = level->vectors[c] + (uint64_t)box*level->box_volume;}
       level->my_boxes[box].numVectors = numVectors;
       level->my_boxes[box].dim        = level->box_dim;
       level->my_boxes[box].ghosts     = level->box_ghosts;
@@ -1122,8 +1173,10 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->box_dim        = box_dim;
   level->box_ghosts     = box_ghosts;
   level->numVectors     = 0; // no vectors have been allocated yet
+  #ifdef USE_VBKJI_LAYOUT
   level->vectors_base   = NULL; // pointer returned by bulk malloc
   level->vectors        = NULL; // pointers to individual vectors
+  #endif
   level->boxes_in.i     = boxes_in_i;
   level->boxes_in.j     = boxes_in_i;
   level->boxes_in.k     = boxes_in_i;
@@ -1194,10 +1247,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 
   // Build and auxilarlly data structure that flattens boxes into blocks...
   for(box=0;box<level->num_my_boxes;box++){
-    int blockcopy_i = BLOCKCOPY_TILE_I;
-    int blockcopy_j = BLOCKCOPY_TILE_J;
-    int blockcopy_k = BLOCKCOPY_TILE_K;
-
     append_block_to_list(&(level->my_blocks),&(level->allocated_blocks),&(level->num_my_blocks),
       /* dim.i         = */ level->my_boxes[box].dim,
       /* dim.j         = */ level->my_boxes[box].dim,
@@ -1218,9 +1267,9 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
       /* write.jStride = */ level->my_boxes[box].jStride,
       /* write.kStride = */ level->my_boxes[box].kStride,
       /* write.scale   = */ 1,
-      /* blockcopy_i   = */ blockcopy_i,
-      /* blockcopy_j   = */ blockcopy_j,
-      /* blockcopy_k   = */ blockcopy_k,
+      /* blockcopy_i   = */ BLOCKCOPY_TILE_I,
+      /* blockcopy_j   = */ BLOCKCOPY_TILE_J,
+      /* blockcopy_k   = */ BLOCKCOPY_TILE_K,
       /* subtype       = */ 0  
     );
   }
@@ -1336,6 +1385,9 @@ void destroy_level(level_type *level){
 
   // box ...
   for(i=0;i<level->num_my_boxes;i++)if(level->my_boxes[i].vectors)free(level->my_boxes[i].vectors);
+  #ifdef USE_BVKJI_LAYOUT
+  for(i=0;i<level->num_my_boxes;i++)if(level->my_boxes[i].fp_base)free(level->my_boxes[i].fp_base);
+  #endif
 
   // misc ...
   if(level->rank_of_box )free(level->rank_of_box);
@@ -1344,12 +1396,10 @@ void destroy_level(level_type *level){
   if(level->RedBlack_base)free(level->RedBlack_base);
 
   // FP vector data...
-  #ifdef VECTOR_MALLOC_BULK
-  if(level->vectors_base)free(level->vectors_base);
-  if(level->vectors     )free(level->vectors);
-  #else
-  for(i=0;i<level->numVectors;i++)if(level->vectors[i])free(level->vectors[i]);
-  if(level->vectors     )free(level->vectors);
+  #ifdef USE_VBKJI_LAYOUT
+  for(i=0;i<level->numVectors;i++)if(level->vectors_base[i])free(level->vectors_base[i]);
+                                  if(level->vectors_base   )free(level->vectors_base   );
+                                  if(level->vectors        )free(level->vectors        );
   #endif
 
   // boundary condition mini program...

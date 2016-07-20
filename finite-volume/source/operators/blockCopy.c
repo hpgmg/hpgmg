@@ -49,6 +49,7 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
     for(j=0;j<dim_j;j++){
       int  read_ijk = ( read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
       int write_ijk = (write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
+      // FIX... compiler cannot tell iterations j and j+1 are independent
       write[write_ijk+0] = read[read_ijk+0];
       write[write_ijk+1] = read[read_ijk+1];
     }}

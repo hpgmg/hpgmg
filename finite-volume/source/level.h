@@ -44,10 +44,18 @@
 #define BOX_ALIGN_JSTRIDE   4  // j-stride(unit stride dimension including ghosts and padding) is a multiple of BOX_ALIGN_JSTRIDE... useful for SIMD in j+/-1
 #endif
 #ifndef BOX_ALIGN_KSTRIDE
-#define BOX_ALIGN_KSTRIDE   8  // k-stride is a multiple of BOX_ALIGN_KSTRIDE ... useful for SIMD in k+/-1
+#define BOX_ALIGN_KSTRIDE   4  // k-stride is a multiple of BOX_ALIGN_KSTRIDE ... useful for SIMD in k+/-1
 #endif
 #ifndef BOX_ALIGN_VOLUME
-#define BOX_ALIGN_VOLUME    8  // box volumes are a multiple of BOX_ALIGN_VOLUME ... useful for SIMD on different vectors
+#define BOX_ALIGN_VOLUME    4  // box volumes are a multiple of BOX_ALIGN_VOLUME ... useful for SIMD on different vectors
+#endif
+//------------------------------------------------------------------------------------------------------------------------------
+//#define USE_VBKJI_LAYOUT // [vector][box][k][j][i] ... nice for OpenACC target clauses
+#ifndef USE_VBKJI_LAYOUT
+#define USE_BVKJI_LAYOUT // [box][vector][k][j][i] ... generally better locality as a given thread operates on multiple vectors of one box at a time
+#endif
+#if !defined(USE_BVKJI_LAYOUT) && !defined(USE_VBKJI_LAYOUT)
+#error You must specify either USE_BVKJI_LAYOUT or USE_VBKJI_LAYOUT
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
@@ -90,6 +98,9 @@ typedef struct {
   int                jStride,kStride,volume;	// useful for offsets
   int                            numVectors;	//
   double   ** __restrict__          vectors;	// vectors[c] = pointer to 3D array for vector c for one box
+  #ifdef USE_BVKJI_LAYOUT
+  double    * __restrict__          fp_base;	//              pointer to 4D array for FP data for one box
+  #endif
 } box_type;
 
 
@@ -112,8 +123,11 @@ typedef struct {
   box_type * my_boxes;				// pointer to array of boxes owned by this rank
 
   // create flattened FP data... useful for CUDA/OpenMP4/OpenACC when you want to copy an entire vector to/from an accelerator
+  #ifdef USE_VBKJI_LAYOUT
   double   ** __restrict__          vectors;	// vectors[v][box][k][j][i] = pointer to 5D array for vector v encompasing all boxes on this process... 
-  double    * __restrict__     vectors_base;    // pointer used for malloc/free.  vectors[v] are shifted from this for alignment
+  double   ** __restrict__     vectors_base;	//                            pointer used for malloc/free.  allocated (before shifting for alignment) vectors[].
+  #endif
+//double    * __restrict__          fp_base;    // pointer used for malloc/free.  vectors[v] are shifted from this for alignment
 
   int       allocated_blocks;			//       number of blocks allocated by this rank (note, this represents a flattening of the box/cell hierarchy to facilitate threading)
   int          num_my_blocks;			//       number of blocks     owned by this rank (note, this represents a flattening of the box/cell hierarchy to facilitate threading)
