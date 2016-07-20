@@ -30,7 +30,7 @@ def main():
     cf.add_argument('--LDFLAGS', help='Flags to pass to linker', default=os.environ.get('LDFLAGS',''))
     cf.add_argument('--LDLIBS', help='Libraries to pass to linker', default=os.environ.get('LDLIBS',''))
     fe = parser.add_argument_group('Finite Element options')
-    fe.add_argument('--no-fe', action='store_false', dest='fe', help='Do not build the Finite-Element solver')
+    fe.add_argument('--fe',    action='store_true',  dest='fe', help='Build the Finite-Element solver')
     fv = parser.add_argument_group('Finite Volume options')
     fv.add_argument('--no-fv', action='store_false', dest='fv', help='Do not build the Finite-Volume solver')
     fv.add_argument('--no-fv-mpi', action='store_false', dest='fv_mpi', help='Use MPI')
@@ -62,10 +62,13 @@ def configure(args):
     print('To build: make -j3 -C %s' % args.arch)
 
 def makefile(args):
-    if args.petsc_dir and not args.CC:
-        CC = '$(PCC)'
-    else:
+    if args.CC:
         CC = args.CC
+    else:
+        if args.petsc_dir:
+            CC = '$(PCC)'
+        else:
+            CC = 'mpicc'
     m = ['HPGMG_ARCH = %s' % args.arch,
          'HPGMG_CC = %s' % CC,
          'HPGMG_CFLAGS = %s' % (args.CFLAGS if args.CFLAGS else ('$(PCC_FLAGS) ' if args.petsc_dir else '')),
