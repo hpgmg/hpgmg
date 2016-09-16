@@ -35,6 +35,7 @@ PetscErrorCode ProcessGridFindSquarest(PetscMPIInt nranks,PetscInt best[3]) {
       }
     }
   }
+  SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_INCOMP,"Could not find squarest grid");
   PetscFunctionReturn(0);
 }
 
