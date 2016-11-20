@@ -21,8 +21,11 @@ static inline void restriction_pc_block(level_type *level_c, int id_c, level_typ
   int write_jStride = block->write.jStride;
   int write_kStride = block->write.kStride;
 
+  // general case is a copy to/from a general pointer...
   double * __restrict__  read = block->read.ptr;
   double * __restrict__ write = block->write.ptr;
+
+  // copies to/from boxes need a different pointer...
   if(block->read.box >=0){
      read_jStride = level_f->my_boxes[block->read.box ].jStride;
      read_kStride = level_f->my_boxes[block->read.box ].kStride;
@@ -34,6 +37,9 @@ static inline void restriction_pc_block(level_type *level_c, int id_c, level_typ
     write = level_c->my_boxes[block->write.box].vectors[id_c] + level_c->my_boxes[block->write.box].ghosts*(1+write_jStride+write_kStride);
   }
 
+  // shift pointers by starting coordinates of the block...
+   read += ( read_i) + ( read_j)* read_jStride + ( read_k)* read_kStride;
+  write += (write_i) + (write_j)*write_jStride + (write_k)*write_kStride;
 
 
   int i,j,k;
@@ -43,8 +49,8 @@ static inline void restriction_pc_block(level_type *level_c, int id_c, level_typ
          for(k=0,kk=0;k<dim_k;k++,kk+=2){
          for(j=0,jj=0;j<dim_j;j++,jj+=2){
          for(i=0,ii=0;i<dim_i;i++,ii+=2){
-           int write_ijk = (i +write_i) + (j +write_j)*write_jStride + (k +write_k)*write_kStride;
-           int  read_ijk = (ii+ read_i) + (jj+ read_j)* read_jStride + (kk+ read_k)* read_kStride;
+           int write_ijk = i  + j *write_jStride + k *write_kStride;
+           int  read_ijk = ii + jj* read_jStride + kk* read_kStride;
            write[write_ijk] = ( read[read_ijk                            ]+read[read_ijk+1                          ] +
                                 read[read_ijk  +read_jStride             ]+read[read_ijk+1+read_jStride             ] +
                                 read[read_ijk               +read_kStride]+read[read_ijk+1             +read_kStride] +
@@ -54,8 +60,8 @@ static inline void restriction_pc_block(level_type *level_c, int id_c, level_typ
          for(k=0,kk=0;k<dim_k;k++,kk+=2){
          for(j=0,jj=0;j<dim_j;j++,jj+=2){
          for(i=0,ii=0;i<dim_i;i++,ii+=2){
-           int write_ijk = (i +write_i) + (j +write_j)*write_jStride + (k +write_k)*write_kStride;
-           int  read_ijk = (ii+ read_i) + (jj+ read_j)* read_jStride + (kk+ read_k)* read_kStride;
+           int write_ijk = i  + j *write_jStride + k *write_kStride;
+           int  read_ijk = ii + jj* read_jStride + kk* read_kStride;
            write[write_ijk] = ( read[read_ijk                          ] +
                                 read[read_ijk+read_jStride             ] +
                                 read[read_ijk             +read_kStride] +
@@ -65,8 +71,8 @@ static inline void restriction_pc_block(level_type *level_c, int id_c, level_typ
          for(k=0,kk=0;k<dim_k;k++,kk+=2){
          for(j=0,jj=0;j<dim_j;j++,jj+=2){
          for(i=0,ii=0;i<dim_i;i++,ii+=2){
-           int write_ijk = (i +write_i) + (j +write_j)*write_jStride + (k +write_k)*write_kStride;
-           int  read_ijk = (ii+ read_i) + (jj+ read_j)* read_jStride + (kk+ read_k)* read_kStride;
+           int write_ijk = i  + j *write_jStride + k *write_kStride;
+           int  read_ijk = ii + jj* read_jStride + kk* read_kStride;
            write[write_ijk] = ( read[read_ijk               ] +
                                 read[read_ijk+1             ] +
                                 read[read_ijk  +read_kStride] +
@@ -76,8 +82,8 @@ static inline void restriction_pc_block(level_type *level_c, int id_c, level_typ
          for(k=0,kk=0;k<dim_k;k++,kk+=2){
          for(j=0,jj=0;j<dim_j;j++,jj+=2){
          for(i=0,ii=0;i<dim_i;i++,ii+=2){
-           int write_ijk = (i +write_i) + (j +write_j)*write_jStride + (k +write_k)*write_kStride;
-           int  read_ijk = (ii+ read_i) + (jj+ read_j)* read_jStride + (kk+ read_k)* read_kStride;
+           int write_ijk = i  + j *write_jStride + k *write_kStride;
+           int  read_ijk = ii + jj* read_jStride + kk* read_kStride;
            write[write_ijk] = ( read[read_ijk               ] +
                                 read[read_ijk+1             ] +
                                 read[read_ijk  +read_jStride] +

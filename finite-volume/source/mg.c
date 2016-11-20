@@ -228,7 +228,9 @@ void build_interpolation(mg_type *all_grids){
     }
 
     int elementSize = all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim;
-    double * all_send_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
+    //double * all_send_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
+    double * all_send_buffers;
+    posix_memalign( (void**)&all_send_buffers, 1<<21, numFineBoxesRemote*elementSize*sizeof(double) );
           if(numFineBoxesRemote*elementSize>0)
           if(all_send_buffers==NULL){fprintf(stderr,"malloc failed - interpolation/all_send_buffers\n");exit(0);}
                       memset(all_send_buffers,0,numFineBoxesRemote*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
@@ -361,7 +363,9 @@ void build_interpolation(mg_type *all_grids){
     }
 
     int elementSize = all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim;
-    double * all_recv_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double)); 
+    //double * all_recv_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
+    double * all_recv_buffers;
+    posix_memalign( (void**)&all_recv_buffers, 1<<21, numCoarseBoxes*elementSize*sizeof(double) );
           if(numCoarseBoxes*elementSize>0)
           if(all_recv_buffers==NULL){fprintf(stderr,"malloc failed - interpolation/all_recv_buffers\n");exit(0);}
                       memset(all_recv_buffers,0,numCoarseBoxes*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
@@ -544,7 +548,9 @@ void build_restriction(mg_type *all_grids, int restrictionType){
     }
     elementSize = restrict_dim_i*restrict_dim_j*restrict_dim_k;
    
-    double * all_send_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
+    //double * all_send_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
+    double * all_send_buffers;
+    posix_memalign( (void**)&all_send_buffers, 1<<21, numCoarseBoxes*elementSize*sizeof(double) );
           if(numCoarseBoxes*elementSize>0)
           if(all_send_buffers==NULL){fprintf(stderr,"malloc failed - restriction/all_send_buffers\n");exit(0);}
                       memset(all_send_buffers,0,numCoarseBoxes*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
@@ -711,7 +717,9 @@ void build_restriction(mg_type *all_grids, int restrictionType){
     }
     elementSize = restrict_dim_i*restrict_dim_j*restrict_dim_k;
 
-    double * all_recv_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
+    //double * all_recv_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
+    double * all_recv_buffers;
+    posix_memalign( (void**)&all_recv_buffers, 1<<21, numFineBoxesRemote*elementSize*sizeof(double) );
           if(numFineBoxesRemote*elementSize>0)
           if(all_recv_buffers==NULL){fprintf(stderr,"malloc failed - restriction/all_recv_buffers\n");exit(0);}
                       memset(all_recv_buffers,0,numFineBoxesRemote*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve

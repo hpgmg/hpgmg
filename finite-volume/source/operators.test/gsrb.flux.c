@@ -14,50 +14,49 @@
 #error operators.flux.c cannot block the unit stride dimension (BLOCKCOPY_TILE_I!=10000).
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
+#include<immintrin.h>
+//------------------------------------------------------------------------------------------------------------------------------
 void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
-  // BLOCKCOPY_TILE_J+1 is required for flux_j, but BLOCKCOPY_TILE_J+2 seems to be faster (avoids prefetcher/coherency effects??)
-  if(level->fluxes==NULL){posix_memalign( (void**)&(level->fluxes), 512, (4)*(level->num_threads)*(BLOCKCOPY_TILE_J+2)*(level->box_jStride)*sizeof(double) );}
+  if(level->fluxes==NULL){posix_memalign( (void**)&(level->fluxes), 4096, (4)*(level->num_threads)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride)*sizeof(double) );}
 
   int s;for(s=0;s<2*NUM_SMOOTHS;s++){ // there are two sweeps per GSRB smooth
 
   // exchange the ghost zone...
-  if((s&1)==0){exchange_boundary(level,       x_id,stencil_get_shape());apply_BCs(level,       x_id,stencil_get_shape());}
-          else{exchange_boundary(level,VECTOR_TEMP,stencil_get_shape());apply_BCs(level,VECTOR_TEMP,stencil_get_shape());}
+  if((s&1)==0){
+    exchange_boundary(level,       x_id,stencil_get_shape());
+            apply_BCs(level,       x_id,stencil_get_shape());
+  }else{
+    exchange_boundary(level,VECTOR_TEMP,stencil_get_shape());
+            apply_BCs(level,VECTOR_TEMP,stencil_get_shape());
+  }
 
   // apply the smoother...
   double _timeStart = getTime();
   double h2inv = 1.0/(level->h*level->h);
 
   // loop over all block/tiles this process owns...
+  #ifdef _OPENMP
   #pragma omp parallel if(level->num_my_blocks>1)
+  #endif
   {
     int block;
-    int    threadID=omp_get_thread_num();
-    int num_threads=omp_get_num_threads();
-
-    #if 0 // [flux][thread][ij] layout
-    double * __restrict__ flux_i    =  level->fluxes + (0*level->num_threads + threadID)*(BLOCKCOPY_TILE_J+2)*(level->box_jStride);
-    double * __restrict__ flux_j    =  level->fluxes + (1*level->num_threads + threadID)*(BLOCKCOPY_TILE_J+2)*(level->box_jStride);
-    double * __restrict__ flux_k[2] = {level->fluxes + (2*level->num_threads + threadID)*(BLOCKCOPY_TILE_J+2)*(level->box_jStride),
-                                       level->fluxes + (3*level->num_threads + threadID)*(BLOCKCOPY_TILE_J+2)*(level->box_jStride)};
-    #else // [thread][flux][ij] layout
-    double * __restrict__ flux_i    =  level->fluxes + (4*threadID + 0)*(BLOCKCOPY_TILE_J+2)*(level->box_jStride);
-    double * __restrict__ flux_j    =  level->fluxes + (4*threadID + 1)*(BLOCKCOPY_TILE_J+2)*(level->box_jStride);
-    double * __restrict__ flux_k[2] = {level->fluxes + (4*threadID + 2)*(BLOCKCOPY_TILE_J+2)*(level->box_jStride),
-                                       level->fluxes + (4*threadID + 3)*(BLOCKCOPY_TILE_J+2)*(level->box_jStride)};
+    int threadID=0;
+    #ifdef _OPENMP
+    threadID=omp_get_thread_num();
     #endif
 
-    #if 1 // static, chunksize == 1... try to exploit constructive locality in the cache
-    int blockStart  = threadID;
-    int blockEnd    = level->num_my_blocks;
-    int blockStride = num_threads;
-    #else // static uniform
-    int blockStart  = level->num_my_blocks*(threadID  )/num_threads;
-    int blockEnd    = level->num_my_blocks*(threadID+1)/num_threads;
-    int blockStride = 1;
-    #endif
+    // [thread][flux][ij] layout
+    double * __restrict__ flux_i    =  level->fluxes + (4*threadID + 0)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride);
+    double * __restrict__ flux_j    =  level->fluxes + (4*threadID + 1)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride);
+    double * __restrict__ flux_k[2] = {level->fluxes + (4*threadID + 2)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride),
+                                       level->fluxes + (4*threadID + 3)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride)};
 
-    for(block=blockStart;block<blockEnd;block+=blockStride){
+
+    // loop over (cache) blocks...
+    #ifdef _OPENMP
+    #pragma omp for schedule(static,1)
+    #endif
+    for(block=0;block<level->num_my_blocks;block++){
       const int box  = level->my_blocks[block].read.box;
       const int jlo  = level->my_blocks[block].read.j;
       const int klo  = level->my_blocks[block].read.k;
@@ -137,7 +136,6 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
         double * __restrict__ flux_khi = flux_k[(k+1)&0x1];
 
 
-        #if 1
         // calculate flux_i and flux_j together
         #if (_OPENMP>=201307)
         #pragma omp simd aligned(beta_i,beta_j,x_n,flux_i,flux_j:BOX_ALIGN_JSTRIDE*sizeof(double))
@@ -145,35 +143,24 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
         #ifdef __INTEL_COMPILER
         #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=512
         #endif
-        for(ij=0;ij<(jdim+1)*jStride;ij++){
+        for(ij=0;ij<jdim*jStride;ij++){
           int ijk = ij + k*kStride;
           flux_i[ij] = beta_dxdi(x_n,ijk);
           flux_j[ij] = beta_dxdj(x_n,ijk);
         }
-        #else
-        // calculate flux_i
-        #if (_OPENMP>=201307)
-        #pragma omp simd aligned(beta_i,x_n,flux_i:BOX_ALIGN_JSTRIDE*sizeof(double))
-        #endif
-        #ifdef __INTEL_COMPILER
-        #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=512
-        #endif
-        for(ij=0;ij<jdim*jStride;ij++){
-          int ijk = ij + k*kStride;
-          flux_i[ij] = beta_dxdi(x_n,ijk);
-        }
-        // calculate flux_j
+
+
+        // calculate flux_jhi
         #if (_OPENMP>=201307)
         #pragma omp simd aligned(beta_j,x_n,flux_j:BOX_ALIGN_JSTRIDE*sizeof(double))
         #endif
         #ifdef __INTEL_COMPILER
-        #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=512
+        #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=64
         #endif
-        for(ij=0;ij<(jdim+1)*jStride;ij++){
+        for(ij=jdim*jStride;ij<(jdim+1)*jStride;ij++){
           int ijk = ij + k*kStride;
           flux_j[ij] = beta_dxdj(x_n,ijk);
         }
-        #endif
 
 
         // calculate flux_khi (top of cell)

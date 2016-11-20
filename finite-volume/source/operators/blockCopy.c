@@ -21,9 +21,11 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
   int write_jStride = block->write.jStride;
   int write_kStride = block->write.kStride;
 
+  // general case is a copy to/from a general pointer...
   const double * __restrict__  read = block->read.ptr;
         double * __restrict__ write = block->write.ptr;
 
+  // copies to/from boxes need a different pointer...
   if(block->read.box >=0){
      read_jStride = level->my_boxes[block->read.box ].jStride;
      read_kStride = level->my_boxes[block->read.box ].kStride;
@@ -35,20 +37,24 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
     write = level->my_boxes[block->write.box].vectors[id] + level->box_ghosts*(1+write_jStride+write_kStride);
   }
 
+  // shift pointers by starting coordinates of the block...
+   read += ( read_i) + ( read_j)* read_jStride + ( read_k)* read_kStride;
+  write += (write_i) + (write_j)*write_jStride + (write_k)*write_kStride;
+
 
   int i,j,k;
   if(dim_i==1){ // be smart and don't have an inner loop from 0 to 0
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
-      int  read_ijk = ( read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
-      int write_ijk = (write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
+      int  read_ijk = j* read_jStride + k* read_kStride;
+      int write_ijk = j*write_jStride + k*write_kStride;
       write[write_ijk] = read[read_ijk];
     }}
   }else if(dim_i==2){ // be smart and don't have an inner loop from 0 to 1
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
-      int  read_ijk = ( read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
-      int write_ijk = (write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
+      int  read_ijk = j* read_jStride + k* read_kStride;
+      int write_ijk = j*write_jStride + k*write_kStride;
       // FIX... compiler cannot tell iterations j and j+1 are independent
       write[write_ijk+0] = read[read_ijk+0];
       write[write_ijk+1] = read[read_ijk+1];
@@ -56,8 +62,8 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
   }else if(dim_i==4){ // be smart and don't have an inner loop from 0 to 3
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
-      int  read_ijk = ( read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
-      int write_ijk = (write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
+      int  read_ijk = j* read_jStride + k* read_kStride;
+      int write_ijk = j*write_jStride + k*write_kStride;
       write[write_ijk+0] = read[read_ijk+0];
       write[write_ijk+1] = read[read_ijk+1];
       write[write_ijk+2] = read[read_ijk+2];
@@ -66,23 +72,23 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
   }else if(dim_j==1){ // don't have a 0..0 loop
     for(k=0;k<dim_k;k++){
     for(i=0;i<dim_i;i++){
-      int  read_ijk = (i+ read_i) + ( read_j)* read_jStride + (k+ read_k)* read_kStride;
-      int write_ijk = (i+write_i) + (write_j)*write_jStride + (k+write_k)*write_kStride;
+      int  read_ijk = i + k* read_kStride;
+      int write_ijk = i + k*write_kStride;
       write[write_ijk] = read[read_ijk];
     }}
   }else if(dim_k==1){ // don't have a 0..0 loop
     for(j=0;j<dim_j;j++){
     for(i=0;i<dim_i;i++){
-      int  read_ijk = (i+ read_i) + (j+ read_j)* read_jStride + ( read_k)* read_kStride;
-      int write_ijk = (i+write_i) + (j+write_j)*write_jStride + (write_k)*write_kStride;
+      int  read_ijk = i + j* read_jStride;
+      int write_ijk = i + j*write_jStride;
       write[write_ijk] = read[read_ijk];
     }}
   }else{ // general case...
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
     for(i=0;i<dim_i;i++){
-      int  read_ijk = (i+ read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
-      int write_ijk = (i+write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
+      int  read_ijk = i + j* read_jStride + k* read_kStride;
+      int write_ijk = i + j*write_jStride + k*write_kStride;
       write[write_ijk] = read[read_ijk];
     }}}
   }
@@ -109,9 +115,11 @@ static inline void IncrementBlock(level_type *level, int id, double prescale, bl
   int write_jStride = block->write.jStride;
   int write_kStride = block->write.kStride;
 
+  // general case is a copy to/from a general pointer...
   const double * __restrict__  read = block->read.ptr;
         double * __restrict__ write = block->write.ptr;
 
+  // copies to/from boxes need a different pointer...
   if(block->read.box >=0){
      read_jStride = level->my_boxes[block->read.box ].jStride;
      read_kStride = level->my_boxes[block->read.box ].kStride;
@@ -123,12 +131,16 @@ static inline void IncrementBlock(level_type *level, int id, double prescale, bl
     write = level->my_boxes[block->write.box].vectors[id] + level->box_ghosts*(1+write_jStride+write_kStride);
   }
 
+  // shift pointers by starting coordinates of the block...
+   read += ( read_i) + ( read_j)* read_jStride + ( read_k)* read_kStride;
+  write += (write_i) + (write_j)*write_jStride + (write_k)*write_kStride;
+
   int i,j,k;
   for(k=0;k<dim_k;k++){
   for(j=0;j<dim_j;j++){
   for(i=0;i<dim_i;i++){
-    int  read_ijk = (i+ read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
-    int write_ijk = (i+write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
+    int  read_ijk = i + j* read_jStride + k* read_kStride;
+    int write_ijk = i + j*write_jStride + k*write_kStride;
     write[write_ijk] = prescale*write[write_ijk] + read[read_ijk]; // CAREFUL !!!  you must guarantee you zero'd the MPI buffers(write[]) and destination boxes at some point to avoid 0.0*NaN or 0.0*inf
   }}}
 

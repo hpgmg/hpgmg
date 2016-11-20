@@ -326,8 +326,8 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
       }
       // FIX... optimize for rStride==1 (unit-stride)
       // FIX... optimize for dt==+/-1
-      double * __restrict__  ghost0 = (double * __restrict__)(x   ); // convince the compiler that read (box) & write (ghost zone) are disjoint
-      double * __restrict__  ghost1 = (double * __restrict__)(x-dt); // convince the compiler that read (box) & write (ghost zone) are disjoint
+      double * __restrict__  ghost0 = (double * __restrict__)(xn   ); // convince the compiler that read (box) & write (ghost zone) are disjoint
+      double * __restrict__  ghost1 = (double * __restrict__)(xn-dt); // convince the compiler that read (box) & write (ghost zone) are disjoint
       for(s=0;s<dim_s;s++){
       for(r=0;r<dim_r;r++){
         int ijk = (r+rlo)*rStride + (s+slo)*sStride + (t)*tStride;
@@ -395,10 +395,10 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
       }
       // FIX... optimize for rStride==1 (unit-stride)
       // FIX... optimize for ds==+/-1
-      double * __restrict__  ghost00 = (double * __restrict__)(x      ); // convince the compiler that read (box) & write (ghost zone) are disjoint
-      double * __restrict__  ghost01 = (double * __restrict__)(x   -dt); // convince the compiler that read (box) & write (ghost zone) are disjoint
-      double * __restrict__  ghost10 = (double * __restrict__)(x-ds   ); // convince the compiler that read (box) & write (ghost zone) are disjoint
-      double * __restrict__  ghost11 = (double * __restrict__)(x-ds-dt); // convince the compiler that read (box) & write (ghost zone) are disjoint
+      double * __restrict__  ghost00 = (double * __restrict__)(xn      ); // convince the compiler that read (box) & write (ghost zone) are disjoint
+      double * __restrict__  ghost01 = (double * __restrict__)(xn   -dt); // convince the compiler that read (box) & write (ghost zone) are disjoint
+      double * __restrict__  ghost10 = (double * __restrict__)(xn-ds   ); // convince the compiler that read (box) & write (ghost zone) are disjoint
+      double * __restrict__  ghost11 = (double * __restrict__)(xn-ds-dt); // convince the compiler that read (box) & write (ghost zone) are disjoint
       for(r=0;r<dim_r;r++){
         int ijk = (r+rlo)*rStride + (s)*sStride + (t)*tStride;
         double x11 = x[ijk+  ds+  dt], x21 = x[ijk+2*ds+  dt], x31 = x[ijk+3*ds+  dt], x41 = x[ijk+4*ds+  dt];

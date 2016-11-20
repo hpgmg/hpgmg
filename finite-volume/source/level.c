@@ -82,40 +82,6 @@ int qsortInt(const void *a, const void *b){
                return( 0);
 }
 
-int qsortBlock(const void *a, const void *b){
-  blockCopy_type *ba = (blockCopy_type*)a;
-  blockCopy_type *bb = (blockCopy_type*)b;
-
-  if(ba->write.box >= 0){
-    // sort by box...
-    if(ba->write.box < bb->write.box)return(-1);
-    if(ba->write.box > bb->write.box)return( 1);
-    // now sort by k
-    if(ba->write.k   < bb->write.k  )return(-1);
-    if(ba->write.k   > bb->write.k  )return( 1);
-    // now sort by j
-    if(ba->write.j   < bb->write.j  )return(-1);
-    if(ba->write.j   > bb->write.j  )return( 1);
-    // now sort by i
-    if(ba->write.i   < bb->write.i  )return(-1);
-    if(ba->write.i   > bb->write.i  )return( 1);
-  }else if(ba->read.box >= 0){
-    // sort by box...
-    if(ba->read.box  < bb->read.box )return(-1);
-    if(ba->read.box  > bb->read.box )return( 1);
-    // now sort by k
-    if(ba->read.k    < bb->read.k   )return(-1);
-    if(ba->read.k    > bb->read.k   )return( 1);
-    // now sort by j
-    if(ba->read.j    < bb->read.j   )return(-1);
-    if(ba->read.j    > bb->read.j   )return( 1);
-    // now sort by i
-    if(ba->read.i    < bb->read.i   )return(-1);
-    if(ba->read.i    > bb->read.i   )return( 1);
-  }
-                                     return( 0);
-}
-
 
 //------------------------------------------------------------------------------------------------------------------------------
 void decompose_level_lex(int *rank_of_box, int idim, int jdim, int kdim, int ranks){
@@ -336,59 +302,6 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
   // Take a dim_j x dim_k iteration space and tile it into smaller faces of size blockcopy_tile_j x blockcopy_tile_k
   // This increases the number of blockCopies in the ghost zone exchange and thereby increases the thread-level parallelism
 
-  #if 0
-  // use recursive (z-mort) ordering of tiles in order to improve locality on deep memory hierarchies...
-  int doRecursion=0;
-  if(dim_i > blockcopy_tile_i)doRecursion=1;
-  if(dim_j > blockcopy_tile_j)doRecursion=1;
-  if(dim_k > blockcopy_tile_k)doRecursion=1;
-  if( read_scale != 1)doRecursion=0; // disable recursion for restriction
-  if(write_scale != 1)doRecursion=0; // disable recursion for interpolation
-  if(doRecursion){
-    int mid_i = (dim_i + 1)/2;
-    int mid_j = (dim_j + 1)/2;
-    int mid_k = (dim_k + 1)/2;
-        mid_i = blockcopy_tile_i*( (mid_i+blockcopy_tile_i-1)/blockcopy_tile_i);
-        mid_j = blockcopy_tile_j*( (mid_j+blockcopy_tile_j-1)/blockcopy_tile_j);
-        mid_k = blockcopy_tile_k*( (mid_k+blockcopy_tile_k-1)/blockcopy_tile_k);
-     if(mid_i>dim_i)mid_i=dim_i;
-     if(mid_j>dim_j)mid_j=dim_j;
-     if(mid_k>dim_k)mid_k=dim_k;
-    append_block_to_list(blocks,allocated_blocks,num_blocks,      mid_i,      mid_j,      mid_k,
-                          read_box, read_ptr, read_i      , read_j      , read_k      , read_jStride, read_kStride, read_scale,
-                         write_box,write_ptr,write_i      ,write_j      ,write_k      ,write_jStride,write_kStride,write_scale,
-                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
-    append_block_to_list(blocks,allocated_blocks,num_blocks,dim_i-mid_i,      mid_j,      mid_k,
-                          read_box, read_ptr, read_i+mid_i, read_j      , read_k      , read_jStride, read_kStride, read_scale,
-                         write_box,write_ptr,write_i+mid_i,write_j      ,write_k      ,write_jStride,write_kStride,write_scale,
-                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
-    append_block_to_list(blocks,allocated_blocks,num_blocks,      mid_i,dim_j-mid_j,      mid_k,
-                          read_box, read_ptr, read_i      , read_j+mid_j, read_k      , read_jStride, read_kStride, read_scale,
-                         write_box,write_ptr,write_i      ,write_j+mid_j,write_k      ,write_jStride,write_kStride,write_scale,
-                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
-    append_block_to_list(blocks,allocated_blocks,num_blocks,dim_i-mid_i,dim_j-mid_j,      mid_k,
-                          read_box, read_ptr, read_i+mid_i, read_j+mid_j, read_k      , read_jStride, read_kStride, read_scale,
-                         write_box,write_ptr,write_i+mid_i,write_j+mid_j,write_k      ,write_jStride,write_kStride,write_scale,
-                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
-    append_block_to_list(blocks,allocated_blocks,num_blocks,      mid_i,      mid_j,dim_k-mid_k,
-                          read_box, read_ptr, read_i      , read_j      , read_k+mid_k, read_jStride, read_kStride, read_scale,
-                         write_box,write_ptr,write_i      ,write_j      ,write_k+mid_k,write_jStride,write_kStride,write_scale,
-                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
-    append_block_to_list(blocks,allocated_blocks,num_blocks,dim_i-mid_i,      mid_j,dim_k-mid_k,
-                          read_box, read_ptr, read_i+mid_i, read_j      , read_k+mid_k, read_jStride, read_kStride, read_scale,
-                         write_box,write_ptr,write_i+mid_i,write_j      ,write_k+mid_k,write_jStride,write_kStride,write_scale,
-                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
-    append_block_to_list(blocks,allocated_blocks,num_blocks,      mid_i,dim_j-mid_j,dim_k-mid_k,
-                          read_box, read_ptr, read_i      , read_j+mid_j, read_k+mid_k, read_jStride, read_kStride, read_scale,
-                         write_box,write_ptr,write_i      ,write_j+mid_j,write_k+mid_k,write_jStride,write_kStride,write_scale,
-                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
-    append_block_to_list(blocks,allocated_blocks,num_blocks,dim_i-mid_i,dim_j-mid_j,dim_k-mid_k,
-                          read_box, read_ptr, read_i+mid_i, read_j+mid_j, read_k+mid_k, read_jStride, read_kStride, read_scale,
-                         write_box,write_ptr,write_i+mid_i,write_j+mid_j,write_k+mid_k,write_jStride,write_kStride,write_scale,
-                         blockcopy_tile_i,blockcopy_tile_j,blockcopy_tile_k,subtype);
-    return;
-  }
-  #endif
   // read_/write_scale are used to stride appropriately when read and write loop iterations spaces are different 
   // ghostZone:     read_scale=1, write_scale=1
   // interpolation: read_scale=1, write_scale=2
@@ -494,38 +407,14 @@ void build_boundary_conditions(level_type *level, int shape){
 
     // default tile sizes...
     // NOTE, BC's may never tile smaller than the ghost zone depth
+    //int blockcopy_i = (BLOCKCOPY_TILE_I < level->box_ghosts) ? level->box_ghosts : BLOCKCOPY_TILE_I;
+    //int blockcopy_j = (BLOCKCOPY_TILE_J < level->box_ghosts) ? level->box_ghosts : BLOCKCOPY_TILE_J;
+    //int blockcopy_k = (BLOCKCOPY_TILE_K < level->box_ghosts) ? level->box_ghosts : BLOCKCOPY_TILE_K;
+    // maximize thread parallelism on JK faces as prefetchers are likely to be totally ineffective.
     int blockcopy_i = (BLOCKCOPY_TILE_I < level->box_ghosts) ? level->box_ghosts : BLOCKCOPY_TILE_I;
-    int blockcopy_j = (BLOCKCOPY_TILE_J < level->box_ghosts) ? level->box_ghosts : BLOCKCOPY_TILE_J;
-    int blockcopy_k = (BLOCKCOPY_TILE_K < level->box_ghosts) ? level->box_ghosts : BLOCKCOPY_TILE_K;
+    int blockcopy_j = (              16 < level->box_ghosts) ? level->box_ghosts : 16;
+    int blockcopy_k = (              16 < level->box_ghosts) ? level->box_ghosts : 16;
 
-    #if 0
-    // 2D tiling of faces
-    // 1D tiling of edges
-    // corners use defaults
-    switch(dir){
-      case  1:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=10000;break; //  i edge
-      case  3:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=10000;break; //  j edge
-      case  4:blockcopy_i=    8;blockcopy_j=    8;blockcopy_k=10000;break; // ij face
-      case  5:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=10000;break; //  j edge
-      case  7:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=10000;break; //  i edge
-
-      case  9:blockcopy_i=10000;blockcopy_j=10000;blockcopy_k=    8;break; //  k edge
-      case 10:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=    8;break; // ik face
-      case 11:blockcopy_i=10000;blockcopy_j=10000;blockcopy_k=    8;break; //  k edge
-      case 12:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=    8;break; // jk face
-
-      case 14:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=    8;break; // jk face
-      case 15:blockcopy_i=10000;blockcopy_j=10000;blockcopy_k=    8;break; //  k edge
-      case 16:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=    8;break; // ik face
-      case 17:blockcopy_i=10000;blockcopy_j=10000;blockcopy_k=    8;break; //  k edge
-
-      case 19:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=10000;break; //  i edge
-      case 21:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=10000;break; //  j edge
-      case 22:blockcopy_i=    8;blockcopy_j=    8;blockcopy_k=10000;break; // ij face
-      case 23:blockcopy_i=10000;blockcopy_j=    8;blockcopy_k=10000;break; //  j edge
-      case 25:blockcopy_i=    8;blockcopy_j=10000;blockcopy_k=10000;break; //  i edge
-    }
-    #endif
 
     if(regionIsOutside){
     append_block_to_list(&(level->boundary_condition.blocks[shape]),&(level->boundary_condition.allocated_blocks[shape]),&(level->boundary_condition.num_blocks[shape]),
@@ -555,10 +444,6 @@ void build_boundary_conditions(level_type *level, int shape){
     );
   }}}}}
 
-  #ifdef BLOCK_SPATIAL_SORT
-  // sort all the resultant blocks by box,k,j,i (good locality)
-  qsort(level->boundary_condition.blocks[shape],level->boundary_condition.num_blocks[shape],sizeof(blockCopy_type),qsortBlock);
-  #endif
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -711,13 +596,19 @@ void build_exchange_ghosts(level_type *level, int shape){
   level->exchange_ghosts[shape].num_blocks[1] = 0;
   level->exchange_ghosts[shape].allocated_blocks[0] = 0;
   level->exchange_ghosts[shape].allocated_blocks[1] = 0;
+  uint64_t TotalBufferSize = 0;
   for(stage=0;stage<=1;stage++){
     // stage=0... traverse the list and calculate the buffer sizes
     // stage=1... allocate MPI send buffers, traverse the list, and populate the unpack/local lists...
+    double *all_send_buffers=NULL;
+    if(stage==1)posix_memalign( (void**)&all_send_buffers,1<<21,TotalBufferSize*sizeof(double)); // KNL/Aries prefers 2MB aligned pages (allocate in bulk to minimize Aries TLB pressure) 
     int neighbor;
     for(neighbor=0;neighbor<numSendRanks;neighbor++){
       if(stage==1){
-             level->exchange_ghosts[shape].send_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double));
+          level->exchange_ghosts[shape].send_buffers[neighbor] = all_send_buffers;
+          all_send_buffers+=level->exchange_ghosts[shape].send_sizes[neighbor];
+          //posix_memalign( (void**)&(level->exchange_ghosts[shape].send_buffers[neighbor]),1<<21,level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double)); // KNL/Aries prefers 2MB aligned pages
+          // level->exchange_ghosts[shape].send_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double));
           if(level->exchange_ghosts[shape].send_sizes[neighbor]>0)
           if(level->exchange_ghosts[shape].send_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_buffers[neighbor]\n",shape);exit(0);}
       memset(level->exchange_ghosts[shape].send_buffers[neighbor],                0,level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double));
@@ -783,8 +674,8 @@ void build_exchange_ghosts(level_type *level, int shape){
         /* write.kStride = */ level->my_boxes[ghostsToSend[ghost].recvBox].kStride,
         /* write.scale   = */ 1,
         /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
-        /* blockcopy_j   = */ 8, //BLOCKCOPY_TILE_J, // default
-        /* blockcopy_k   = */ 8, //BLOCKCOPY_TILE_K, // default
+        /* blockcopy_j   = */ 16, //BLOCKCOPY_TILE_J, // default
+        /* blockcopy_k   = */ 16, //BLOCKCOPY_TILE_K, // default
         /* subtype       = */ 0  
       );
       else // append to the MPI pack list...
@@ -809,11 +700,12 @@ void build_exchange_ghosts(level_type *level, int shape){
         /* write.kStride = */ dim_i*dim_j, // contiguous block
         /* write.scale   = */ 1,
         /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
-        /* blockcopy_j   = */ 8, //BLOCKCOPY_TILE_J, // default
-        /* blockcopy_k   = */ 8, //BLOCKCOPY_TILE_K, // default
+        /* blockcopy_j   = */ 16, //BLOCKCOPY_TILE_J, // default
+        /* blockcopy_k   = */ 16, //BLOCKCOPY_TILE_K, // default
         /* subtype       = */ 0  
       );}
       if(neighbor>=0)level->exchange_ghosts[shape].send_sizes[neighbor]+=dim_i*dim_j*dim_k;
+      if(neighbor>=0)TotalBufferSize+=dim_i*dim_j*dim_k;
     } // ghost for-loop
   } // stage for-loop
 
@@ -895,13 +787,19 @@ void build_exchange_ghosts(level_type *level, int shape){
   level->exchange_ghosts[shape].blocks[2] = NULL;
   level->exchange_ghosts[shape].num_blocks[2] = 0;
   level->exchange_ghosts[shape].allocated_blocks[2] = 0;
+  TotalBufferSize = 0;
   for(stage=0;stage<=1;stage++){
     // stage=0... traverse the list and calculate the buffer sizes
     // stage=1... allocate MPI recv buffers, traverse the list, and populate the unpack/local lists...
+    double *all_recv_buffers=NULL;
+    if(stage==1)posix_memalign( (void**)&all_recv_buffers,1<<21,TotalBufferSize*sizeof(double)); // KNL/Aries prefers 2MB aligned pages (allocate in bulk to minimize Aries TLB pressure) 
     int neighbor;
     for(neighbor=0;neighbor<numRecvRanks;neighbor++){
       if(stage==1){
-             level->exchange_ghosts[shape].recv_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double));
+          level->exchange_ghosts[shape].recv_buffers[neighbor] = all_recv_buffers;
+          all_recv_buffers+=level->exchange_ghosts[shape].recv_sizes[neighbor];
+          //posix_memalign( (void**)&(level->exchange_ghosts[shape].recv_buffers[neighbor]),1<<21,level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double)); // KNL/Aries prefers 2MB aligned pages
+          // level->exchange_ghosts[shape].recv_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double));
           if(level->exchange_ghosts[shape].recv_sizes[neighbor]>0)
           if(level->exchange_ghosts[shape].recv_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_buffers[neighbor]\n",shape);exit(0);}
       memset(level->exchange_ghosts[shape].recv_buffers[neighbor],                0,level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double));
@@ -957,11 +855,12 @@ void build_exchange_ghosts(level_type *level, int shape){
       /*write.kStride = */ level->my_boxes[ghostsToRecv[ghost].recvBox].kStride,
       /*write.scale   = */ 1,
       /* blockcopy_i  = */ BLOCKCOPY_TILE_I, // default
-      /* blockcopy_j  = */ 8, //BLOCKCOPY_TILE_J, // default
-      /* blockcopy_k  = */ 8, //BLOCKCOPY_TILE_K, // default
+      /* blockcopy_j  = */ 16, //BLOCKCOPY_TILE_J, // default
+      /* blockcopy_k  = */ 16, //BLOCKCOPY_TILE_K, // default
       /* subtype      = */ 0  
       );
       if(neighbor>=0)level->exchange_ghosts[shape].recv_sizes[neighbor]+=dim_i*dim_j*dim_k;
+      if(neighbor>=0)TotalBufferSize+=dim_i*dim_j*dim_k;
     } // ghost for-loop
   } // stage for-loop
 
@@ -983,13 +882,6 @@ void build_exchange_ghosts(level_type *level, int shape){
   }
   #endif
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  #ifdef BLOCK_SPATIAL_SORT
-  // sort all the resultant blocks by box,k,j,i (good locality)
-  qsort(level->exchange_ghosts[shape].blocks[0],level->exchange_ghosts[shape].num_blocks[0],sizeof(blockCopy_type),qsortBlock);
-  qsort(level->exchange_ghosts[shape].blocks[1],level->exchange_ghosts[shape].num_blocks[1],sizeof(blockCopy_type),qsortBlock);
-  qsort(level->exchange_ghosts[shape].blocks[2],level->exchange_ghosts[shape].num_blocks[2],sizeof(blockCopy_type),qsortBlock);
-  #endif
 }
 
 
@@ -1005,13 +897,11 @@ void create_vectors(level_type *level, int numVectors){
   #ifdef USE_MAGIC_PADDING
   // conceptually rectangular, but physically(in memory) non-rectangular box
   level->box_jStride =                    (level->box_dim+2*level->box_ghosts);while(level->box_jStride % BOX_ALIGN_JSTRIDE)level->box_jStride++; // pencil
-  level->box_kStride = level->box_jStride*(level->box_dim+2*level->box_ghosts);while(level->box_kStride % BOX_ALIGN_JSTRIDE)level->box_kStride++; // plane alignment
-  while( level->box_kStride      %  512 <   96 )level->box_kStride+=BOX_ALIGN_JSTRIDE; // pad planes to avoid conflicts in the L1 cache.
-                                                                                       // ensures the 5 planes of 4th order stencil hit different sets in a 32KB/8way cache
+  level->box_kStride = level->box_jStride*(level->box_dim+2*level->box_ghosts);while(level->box_kStride % BOX_ALIGN_JSTRIDE)level->box_kStride++; // plane
   level->box_volume  = level->box_kStride*(level->box_dim+2*level->box_ghosts);while(level->box_volume  % BOX_ALIGN_JSTRIDE)level->box_volume++;  // volume
-  while( level->box_volume       % 1024 != 568 )level->box_volume++; // pad volumes to avoid conflicts in the L2 cache
-                                                                     // %1024==512 ensures volumes map to different L2 sets but the same L1 set
-                                                                     // +56 ensures volumes map to different L1 sets as well
+  while( level->box_volume % 8192 != 568 )level->box_volume++; // pad volumes to avoid conflicts in the L2 cache
+                                                               // %8192==512 ensures volumes map to different L2 sets but the same L1 set
+                                                               // +56 ensures volumes map to different L1 sets as well ~= (512/10)
   #else
   // default simply pads pencils/planes/volumes (resultant box is rectangular iff BOX_ALIGN_VOLUME==BOX_ALIGN_KSTRIDE==BOX_ALIGN_JSTRIDE)
   level->box_jStride =                    (level->box_dim+2*level->box_ghosts);while(level->box_jStride % BOX_ALIGN_JSTRIDE)level->box_jStride++; // pencil
@@ -1022,7 +912,7 @@ void create_vectors(level_type *level, int numVectors){
 
   int box,v;
   uint64_t ofs;
-  #define GHOST_ALIGNMENT 512
+  #define GHOST_ALIGNMENT 64 // Bytes
 
 
   #ifdef USE_BVKJI_LAYOUT
@@ -1032,8 +922,8 @@ void create_vectors(level_type *level, int numVectors){
     double * old_fp_base = level->my_boxes[box].fp_base;
     // allocate 4D FP array...
     uint64_t malloc_size = (uint64_t)numVectors*level->box_volume*sizeof(double) + GHOST_ALIGNMENT;
-    level->my_boxes[box].fp_base = (double*)malloc(malloc_size);
-    //posix_memalign((void**)&(level->my_boxes[box].fp_base),1<<21,malloc_size); // 2MB aligned allocation
+    //level->my_boxes[box].fp_base = (double*)malloc(malloc_size);
+    posix_memalign((void**)&(level->my_boxes[box].fp_base),1<<21,malloc_size); // 2MB aligned allocation
     if((numVectors>0)&&(level->my_boxes[box].fp_base==NULL)){fprintf(stderr,"malloc failed - level->my_boxes[box].fp_base\n");exit(0);}
     double * fp_base_aligned = level->my_boxes[box].fp_base;
     while( (uint64_t)(fp_base_aligned+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & (GHOST_ALIGNMENT-1) ){fp_base_aligned++;} // align first *non-ghost* zone element of first component to GHOST_ALIGNMENT bytes
@@ -1081,8 +971,8 @@ void create_vectors(level_type *level, int numVectors){
     }else{
       // allocate
       uint64_t malloc_size = (uint64_t)level->num_my_boxes*level->box_volume*sizeof(double) + GHOST_ALIGNMENT;
-      level->vectors_base[v] = (double*)malloc(malloc_size);
-      //posix_memalign((void**)&(level->vectors_base[v]),1<<21,malloc_size); // 2MB aligned allocation
+      //level->vectors_base[v] = (double*)malloc(malloc_size);
+      posix_memalign((void**)&(level->vectors_base[v]),1<<21,malloc_size); // 2MB aligned allocation
       if((numVectors>0)&&(level->vectors_base[v]==NULL)){fprintf(stderr,"malloc failed - level->vectors_base[v]\n");exit(0);}
       double * fp_base_aligned = level->vectors_base[v];
       while( (uint64_t)(fp_base_aligned+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & (GHOST_ALIGNMENT-1) ){fp_base_aligned++;} // align first *non-ghost* zone element of first component to GHOST_ALIGNMENT bytes
@@ -1410,13 +1300,15 @@ void destroy_level(level_type *level){
   // ghost zone exchange mini programs...
   for(i=0;i<STENCIL_MAX_SHAPES;i++){
     if(level->exchange_ghosts[i].num_recvs>0){
-    for(j=0;j<level->exchange_ghosts[i].num_recvs;j++)if(level->exchange_ghosts[i].recv_buffers[j])free(level->exchange_ghosts[i].recv_buffers[j]);
+    //for(j=0;j<level->exchange_ghosts[i].num_recvs;j++)if(level->exchange_ghosts[i].recv_buffers[j])free(level->exchange_ghosts[i].recv_buffers[j]);
+    if(level->exchange_ghosts[i].recv_buffers[0])free(level->exchange_ghosts[i].recv_buffers[0]); // allocated in bulk
     if(level->exchange_ghosts[i].recv_buffers)free(level->exchange_ghosts[i].recv_buffers);
     if(level->exchange_ghosts[i].recv_ranks  )free(level->exchange_ghosts[i].recv_ranks  );
     if(level->exchange_ghosts[i].recv_sizes  )free(level->exchange_ghosts[i].recv_sizes  );
     }
     if(level->exchange_ghosts[i].num_sends>0){
-    for(j=0;j<level->exchange_ghosts[i].num_sends;j++)if(level->exchange_ghosts[i].send_buffers[j])free(level->exchange_ghosts[i].send_buffers[j]);
+    //for(j=0;j<level->exchange_ghosts[i].num_sends;j++)if(level->exchange_ghosts[i].send_buffers[j])free(level->exchange_ghosts[i].send_buffers[j]);
+    if(level->exchange_ghosts[i].send_buffers[0])free(level->exchange_ghosts[i].send_buffers[0]); // allocated in bulk
     if(level->exchange_ghosts[i].send_buffers)free(level->exchange_ghosts[i].send_buffers);
     if(level->exchange_ghosts[i].send_ranks  )free(level->exchange_ghosts[i].send_ranks  );
     if(level->exchange_ghosts[i].send_sizes  )free(level->exchange_ghosts[i].send_sizes  );
