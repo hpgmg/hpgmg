@@ -35,6 +35,7 @@ PetscErrorCode ProcessGridFindSquarest(PetscMPIInt nranks,PetscInt best[3]) {
       }
     }
   }
+  SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_INCOMP,"Could not find squarest grid");
   PetscFunctionReturn(0);
 }
 
@@ -86,7 +87,7 @@ PetscErrorCode SampleGridRangeCreate(PetscMPIInt nranks,PetscInt minlocal,PetscI
   for (target=maxlocal,n=0; target>=minlocal; n++) {
     ierr = FindCompatibleProblemSize(nranks,target,gsize[n]);CHKERRQ(ierr);
     if (SampleGridNumElements(gsize[n]) < minlocal) {
-      n--;
+      if (!n) n = 1; // Keep whatever we found if it's the only one
       break;
     }
     target = (SampleGridNumElements(gsize[n]) - 1)/nranks;
@@ -222,6 +223,7 @@ PetscErrorCode RunSample() {
   PetscFunctionBegin;
   ierr = PetscOptionsBegin(comm,NULL,"FMG Performance Sampler options",NULL);CHKERRQ(ierr);
   ierr = PetscOptionsRealArray("-local","range of local problem sizes","",local,&two,NULL);CHKERRQ(ierr);
+  if (two == 1) local[1] = local[0];
   ierr = PetscOptionsInt("-maxsamples","maximum number of samples across range","",maxsamples,&maxsamples,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsInt("-repeat","Minimum number of repetitions for each problem size","",repeat,&repeat,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsReal("-mintime","Minimum interval (in seconds) for repeatedly solving each problem size","",mintime,&mintime,NULL);CHKERRQ(ierr);

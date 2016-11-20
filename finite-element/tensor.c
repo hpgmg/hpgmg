@@ -79,6 +79,7 @@ static PetscErrorCode TensorContract_Ref_4_3_3_3(Tensor ten,const PetscReal Rf[]
 }
 
 PetscErrorCode TensorSelect_AVX(Tensor);
+PetscErrorCode TensorSelect_AVX512(Tensor);
 PetscErrorCode TensorSelect_QPX(Tensor);
 
 PetscErrorCode TensorCreate(PetscInt ne,PetscInt dof,PetscInt P,PetscInt Q,Tensor *ten) {
@@ -105,6 +106,7 @@ PetscErrorCode TensorCreate(PetscInt ne,PetscInt dof,PetscInt P,PetscInt Q,Tenso
     }
   }
   ierr = TensorSelect_AVX(t);CHKERRQ(ierr);
+  ierr = TensorSelect_AVX512(t);CHKERRQ(ierr);
   ierr = TensorSelect_QPX(t);CHKERRQ(ierr);
   *ten = t;
   PetscFunctionReturn(0);

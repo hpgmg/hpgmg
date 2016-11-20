@@ -4,7 +4,7 @@
 #include "../pointwise.h"
 #include <strings.h>
 
-#define NE 4
+#define NE 8
 
 typedef struct Ctx_private *Ctx;
 struct Ctx_private {

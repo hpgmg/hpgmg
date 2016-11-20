@@ -422,7 +422,7 @@ PetscErrorCode OpCreateFromOptions(MPI_Comm comm,Op *op)
 {
   PetscErrorCode ierr,(*f)(Op);
   Op o;
-  char opname[256] = "poisson1";
+  char opname[256] = "poisson2";
 
   PetscFunctionBegin;
   ierr = OpInitializePackage();CHKERRQ(ierr);

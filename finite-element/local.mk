@@ -7,6 +7,7 @@ hpgmg-fe-y.c += $(call thisdir, \
 	sampler.c \
 	tensor.c \
 	tensor-fma.c \
+	tensor-avx512.c \
 	tensor-qpx.c \
 	)
 
