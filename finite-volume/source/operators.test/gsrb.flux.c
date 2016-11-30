@@ -14,8 +14,6 @@
 #error operators.flux.c cannot block the unit stride dimension (BLOCKCOPY_TILE_I!=10000).
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
-#include<immintrin.h>
-//------------------------------------------------------------------------------------------------------------------------------
 void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   if(level->fluxes==NULL){posix_memalign( (void**)&(level->fluxes), 4096, (4)*(level->num_threads)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride)*sizeof(double) );}
 
