@@ -41,7 +41,9 @@ void smooth(level_type * level, int x_id, int rhs_id, const double a, const doub
 
       const int offset = ghosts*(1+jStride+kStride) + (jlo*jStride + klo*kStride); // offset from first ghost zone to first element this block operates on
       const double * __restrict__ rhs      = level->my_boxes[box].vectors[       rhs_id] + offset;
+      #ifdef VECTOR_ALPHA
       const double * __restrict__ alpha    = level->my_boxes[box].vectors[VECTOR_ALPHA ] + offset;
+      #endif
       const double * __restrict__ beta_i   = level->my_boxes[box].vectors[VECTOR_BETA_I] + offset;
       const double * __restrict__ beta_j   = level->my_boxes[box].vectors[VECTOR_BETA_J] + offset;
       const double * __restrict__ beta_k   = level->my_boxes[box].vectors[VECTOR_BETA_K] + offset;

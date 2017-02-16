@@ -98,7 +98,9 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // form restriction of alpha[], beta_*[] coefficients from fromLevel
   if(fromLevel != NULL){
+    #ifdef VECTOR_ALPHA
     restriction(level,VECTOR_ALPHA ,fromLevel,VECTOR_ALPHA ,RESTRICT_CELL  );
+    #endif
     restriction(level,VECTOR_BETA_I,fromLevel,VECTOR_BETA_I,RESTRICT_FACE_I);
     restriction(level,VECTOR_BETA_J,fromLevel,VECTOR_BETA_J,RESTRICT_FACE_J);
     restriction(level,VECTOR_BETA_K,fromLevel,VECTOR_BETA_K,RESTRICT_FACE_K);
@@ -107,7 +109,9 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // exchange alpha/beta/...  (must be done before calculating Dinv)
+  #ifdef VECTOR_ALPHA
   exchange_boundary(level,VECTOR_ALPHA ,STENCIL_SHAPE_BOX); // safe
+  #endif
   exchange_boundary(level,VECTOR_BETA_I,STENCIL_SHAPE_BOX);
   exchange_boundary(level,VECTOR_BETA_J,STENCIL_SHAPE_BOX);
   exchange_boundary(level,VECTOR_BETA_K,STENCIL_SHAPE_BOX);
@@ -134,7 +138,9 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
     const int kStride = level->my_boxes[box].kStride;
     const int  ghosts = level->my_boxes[box].ghosts;
     double h2inv = 1.0/(level->h*level->h);
+    #ifdef VECTOR_ALPHA
     double * __restrict__ alpha  = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);
+    #endif
     double * __restrict__ beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride);
     double * __restrict__ beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + ghosts*(1+jStride+kStride);
     double * __restrict__ beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + ghosts*(1+jStride+kStride);
@@ -177,7 +183,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
                          );
 
       // center of Gershgorin disc is the diagonal element...
-      double    Aii = a*alpha[ijk] - b*h2inv*(
+      double    Aii = -b*h2inv*(
                         beta_i[ijk        ]*( ilo_is_valid-2.0 )+
                         beta_j[ijk        ]*( jlo_is_valid-2.0 )+
                         beta_k[ijk        ]*( klo_is_valid-2.0 )+
@@ -185,6 +191,9 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
                         beta_j[ijk+jStride]*( jhi_is_valid-2.0 )+
                         beta_k[ijk+kStride]*( khi_is_valid-2.0 ) 
                       );
+      #ifdef VECTOR_ALPHA
+                Aii += a*alpha[ijk];
+      #endif
       #else // Constant coefficient versions with fused BC's...
       // radius of Gershgorin disc is the sum of the absolute values of the off-diagonal elements...
       double sumAbsAij = fabs(b*h2inv) * (

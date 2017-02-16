@@ -20,7 +20,7 @@
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
-  int num_ranks;	// total number of MPI ranks for MPI_COMM_WORLD
+//int num_ranks;	// total number of MPI ranks for MPI_COMM_WORLD
   int my_rank;		// my MPI rank for MPI_COMM_WORLD
   int       num_levels;	// depth of the v-cycle
   level_type ** levels;	// array of pointers to levels

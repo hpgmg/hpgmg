@@ -15,7 +15,13 @@
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, double b){
-  if(level->fluxes==NULL){posix_memalign( (void**)&(level->fluxes), 4096, (4)*(level->num_threads)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride)*sizeof(double) );}
+  // allocate a buffer to hold fluxes...
+  if(level->fluxes==NULL)level->fluxes = (double*)MALLOC( ( (4*level->num_threads)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride) + BOX_ALIGN_JSTRIDE)*sizeof(double) );
+  // align fluxes to BOX_ALIGN_JSTRIDE
+  double * __restrict__ fluxes_aligned = level->fluxes;
+  uint64_t unaligned_by = (uint64_t)(fluxes_aligned) & (BOX_ALIGN_JSTRIDE-1)*sizeof(double);
+  if(unaligned_by)fluxes_aligned = (double*)( (uint64_t)(fluxes_aligned) + BOX_ALIGN_JSTRIDE*sizeof(double) - unaligned_by );
+
 
   // exchange the boundary for x in prep for Ax...
   exchange_boundary(level,x_id,stencil_get_shape());
@@ -37,10 +43,11 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
     #endif
 
     // [thread][flux][ij] layout
-    double * __restrict__ flux_i    =  level->fluxes + (4*threadID + 0)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride);
-    double * __restrict__ flux_j    =  level->fluxes + (4*threadID + 1)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride);
-    double * __restrict__ flux_k[2] = {level->fluxes + (4*threadID + 2)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride),
-                                       level->fluxes + (4*threadID + 3)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride)};
+    double * __restrict__ flux_i    =  fluxes_aligned + (4*threadID + 0)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride);
+    double * __restrict__ flux_j    =  fluxes_aligned + (4*threadID + 1)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride);
+    double * __restrict__ flux_k[2] = {fluxes_aligned + (4*threadID + 2)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride),
+                                       fluxes_aligned + (4*threadID + 3)*(BLOCKCOPY_TILE_J+1)*(level->box_jStride)};
+
 
     // loop over (cache) blocks...
     #ifdef _OPENMP
@@ -58,7 +65,11 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
       const int kStride = level->my_boxes[box].kStride;
 
       const double * __restrict__ rhs    = level->my_boxes[box].vectors[       rhs_id] + ghosts*(1+jStride+kStride) + (jlo*jStride + klo*kStride);
+      #ifdef VECTOR_ALPHA
       const double * __restrict__ alpha  = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride) + (jlo*jStride + klo*kStride);
+      #else
+      const double * __restrict__ alpha  = NULL;
+      #endif
       const double * __restrict__ beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride) + (jlo*jStride + klo*kStride);
       const double * __restrict__ beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + ghosts*(1+jStride+kStride) + (jlo*jStride + klo*kStride);
       const double * __restrict__ beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + ghosts*(1+jStride+kStride) + (jlo*jStride + klo*kStride);
@@ -78,10 +89,10 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
         //__assume_aligned(flux_j   ,BOX_ALIGN_JSTRIDE*sizeof(double));
         //__assume_aligned(flux_k[0],BOX_ALIGN_JSTRIDE*sizeof(double));
         //__assume_aligned(flux_k[1],BOX_ALIGN_JSTRIDE*sizeof(double));
-        __assume(         (jStride) % BOX_ALIGN_JSTRIDE == 0); // e.g. jStride%4==0 or jStride%8==0, hence x+jStride is aligned
-        __assume(         (kStride) % BOX_ALIGN_JSTRIDE == 0);
-        __assume(               jStride >= BOX_ALIGN_JSTRIDE);
-        __assume(               kStride >= BOX_ALIGN_JSTRIDE);
+        __assume(           jStride % BOX_ALIGN_JSTRIDE == 0); // e.g. jStride%4==0 or jStride%8==0, hence x+jStride is aligned
+        __assume(           kStride % BOX_ALIGN_JSTRIDE == 0);
+        __assume(             jStride >=   BOX_ALIGN_JSTRIDE);
+        __assume(             kStride >= 3*BOX_ALIGN_JSTRIDE);
         __assume(                                   jdim > 0);
         __assume(                                   kdim > 0);
         #elif __xlC__
@@ -105,9 +116,6 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
       #if (_OPENMP>=201307)
       #pragma omp simd aligned(beta_k,x,flux_klo:BOX_ALIGN_JSTRIDE*sizeof(double))
       #endif
-      #ifdef __INTEL_COMPILER
-      #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=512
-      #endif
       for(ij=0;ij<jdim*jStride;ij++){
         flux_klo[ij] = beta_dxdk(x,ij); // k==0
       }
@@ -122,9 +130,6 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
         #if (_OPENMP>=201307)
         #pragma omp simd aligned(beta_i,beta_j,x,flux_i,flux_j:BOX_ALIGN_JSTRIDE*sizeof(double))
         #endif
-        #ifdef __INTEL_COMPILER
-        #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=512
-        #endif
         for(ij=0;ij<jdim*jStride;ij++){
           int ijk = ij + k*kStride;
           flux_i[ij] = beta_dxdi(x,ijk);
@@ -136,9 +141,6 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
         #if (_OPENMP>=201307)
         #pragma omp simd aligned(beta_j,x,flux_j:BOX_ALIGN_JSTRIDE*sizeof(double))
         #endif
-        #ifdef __INTEL_COMPILER
-        #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=136
-        #endif
         for(ij=jdim*jStride;ij<(jdim+1)*jStride;ij++){
           int ijk = ij + k*kStride;
           flux_j[ij] = beta_dxdj(x,ijk);
@@ -148,9 +150,6 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
         // calculate flux_khi (top of cell)
         #if (_OPENMP>=201307)
         #pragma omp simd aligned(beta_k,x,flux_khi:BOX_ALIGN_JSTRIDE*sizeof(double))
-        #endif
-        #ifdef __INTEL_COMPILER
-        #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=512
         #endif
         for(ij=0;ij<jdim*jStride;ij++){
           int ijk = ij + k*kStride;
@@ -163,7 +162,6 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
         #pragma omp simd aligned(flux_i,flux_j,flux_klo,flux_khi,alpha,rhs,x,res:BOX_ALIGN_JSTRIDE*sizeof(double))
         #endif
         #ifdef __INTEL_COMPILER
-        #pragma loop_count min=BOX_ALIGN_JSTRIDE, avg=512
         #pragma vector nontemporal // generally, we don't expect to reuse res
         #endif
         for(ij=0;ij<jdim*jStride;ij++){

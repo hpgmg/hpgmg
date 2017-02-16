@@ -3,8 +3,8 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
@@ -20,6 +20,24 @@
 #include "defines.h"
 #include "level.h"
 #include "operators.h"
+//------------------------------------------------------------------------------------------------------------------------------
+// request alligned memory
+#ifdef __INTEL_COMPILER
+//#include <immintrin.h>
+//void * MALLOC(size_t size) {void* new;int alignment=1<<12;if(size>1<<19){alignment=1<<21;}return(_mm_malloc(size,alignment));}
+//void   FREE(void * ptr)    {_mm_free(ptr);}
+#if !defined(_POSIX_C_SOURCE) || (_POSIX_C_SOURCE<200112L)
+#warning You may need to compile with -D_POSIX_C_SOURCE=200112L
+#endif
+void * MALLOC(size_t size) {void* new;int alignment=1<<12;if(size>1<<19){alignment=1<<21;}posix_memalign( (void**)&(new), alignment, size );return(new);}
+void   FREE(void * ptr)    {free(ptr);}
+#elif (_POSIX_C_SOURCE>=200112L)
+void * MALLOC(size_t size) {void* new;int alignment=1<<12;if(size>1<<19){alignment=1<<21;}posix_memalign( (void**)&(new), alignment, size );return(new);}
+void   FREE(void * ptr)    {free(ptr);}
+#else
+void * MALLOC(size_t size) {return(malloc(size));}
+void   FREE(void * ptr)    {free(ptr);}
+#endif
 //------------------------------------------------------------------------------------------------------------------------------
 void print_communicator(int printSendRecv, int rank, int level, communicator_type *comm){
   int i;
@@ -601,13 +619,12 @@ void build_exchange_ghosts(level_type *level, int shape){
     // stage=0... traverse the list and calculate the buffer sizes
     // stage=1... allocate MPI send buffers, traverse the list, and populate the unpack/local lists...
     double *all_send_buffers=NULL;
-    if(stage==1)posix_memalign( (void**)&all_send_buffers,1<<21,TotalBufferSize*sizeof(double)); // KNL/Aries prefers 2MB aligned pages (allocate in bulk to minimize Aries TLB pressure) 
+    if(stage==1)all_send_buffers = (double*)MALLOC(TotalBufferSize*sizeof(double)); // allocate in bulk to minimize Aries TLB pressure
     int neighbor;
     for(neighbor=0;neighbor<numSendRanks;neighbor++){
       if(stage==1){
           level->exchange_ghosts[shape].send_buffers[neighbor] = all_send_buffers;
           all_send_buffers+=level->exchange_ghosts[shape].send_sizes[neighbor];
-          //posix_memalign( (void**)&(level->exchange_ghosts[shape].send_buffers[neighbor]),1<<21,level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double)); // KNL/Aries prefers 2MB aligned pages
           // level->exchange_ghosts[shape].send_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double));
           if(level->exchange_ghosts[shape].send_sizes[neighbor]>0)
           if(level->exchange_ghosts[shape].send_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_buffers[neighbor]\n",shape);exit(0);}
@@ -792,13 +809,12 @@ void build_exchange_ghosts(level_type *level, int shape){
     // stage=0... traverse the list and calculate the buffer sizes
     // stage=1... allocate MPI recv buffers, traverse the list, and populate the unpack/local lists...
     double *all_recv_buffers=NULL;
-    if(stage==1)posix_memalign( (void**)&all_recv_buffers,1<<21,TotalBufferSize*sizeof(double)); // KNL/Aries prefers 2MB aligned pages (allocate in bulk to minimize Aries TLB pressure) 
+    if(stage==1)all_recv_buffers = (double*)MALLOC(TotalBufferSize*sizeof(double)); // allocate in bulk to minimize Aries TLB pressure
     int neighbor;
     for(neighbor=0;neighbor<numRecvRanks;neighbor++){
       if(stage==1){
           level->exchange_ghosts[shape].recv_buffers[neighbor] = all_recv_buffers;
           all_recv_buffers+=level->exchange_ghosts[shape].recv_sizes[neighbor];
-          //posix_memalign( (void**)&(level->exchange_ghosts[shape].recv_buffers[neighbor]),1<<21,level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double)); // KNL/Aries prefers 2MB aligned pages
           // level->exchange_ghosts[shape].recv_buffers[neighbor] = (double*)malloc(level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double));
           if(level->exchange_ghosts[shape].recv_sizes[neighbor]>0)
           if(level->exchange_ghosts[shape].recv_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_buffers[neighbor]\n",shape);exit(0);}
@@ -894,25 +910,21 @@ void create_vectors(level_type *level, int numVectors){
   if(numVectors <= level->numVectors)return; // already have enough space
 
   // calculate the size of each box...
+  // preserves 3D rectangular array structure... data[volume][kStride][jStride]
+  level->box_jStride =                    (level->box_dim+2*level->box_ghosts);
+  while(level->box_jStride % BOX_ALIGN_JSTRIDE)level->box_jStride++;            // pad pencil to a multiple of BOX_ALIGN_JSTRIDE (striding in j preserves alignment)
+  level->box_kStride = level->box_jStride*(level->box_dim+2*level->box_ghosts); // striding in k (planes) preserves alignment because jStride is a multiple of BOX_ALIGN_JSTRIDE
+  level->box_volume  = level->box_kStride*(level->box_dim+2*level->box_ghosts); // striding across vectors (volumes) preserves alignment because kStride is a multiple of BOX_ALIGN_JSTRIDE
   #ifdef USE_MAGIC_PADDING
-  // conceptually rectangular, but physically(in memory) non-rectangular box
-  level->box_jStride =                    (level->box_dim+2*level->box_ghosts);while(level->box_jStride % BOX_ALIGN_JSTRIDE)level->box_jStride++; // pencil
-  level->box_kStride = level->box_jStride*(level->box_dim+2*level->box_ghosts);while(level->box_kStride % BOX_ALIGN_JSTRIDE)level->box_kStride++; // plane
-  level->box_volume  = level->box_kStride*(level->box_dim+2*level->box_ghosts);while(level->box_volume  % BOX_ALIGN_JSTRIDE)level->box_volume++;  // volume
+  // no longer a 4D rectangular volume but rather a array of pointers(vector) to 3D 
   while( level->box_volume % 8192 != 568 )level->box_volume++; // pad volumes to avoid conflicts in the L2 cache
-                                                               // %8192==512 ensures volumes map to different L2 sets but the same L1 set
-                                                               // +56 ensures volumes map to different L1 sets as well ~= (512/10)
-  #else
-  // default simply pads pencils/planes/volumes (resultant box is rectangular iff BOX_ALIGN_VOLUME==BOX_ALIGN_KSTRIDE==BOX_ALIGN_JSTRIDE)
-  level->box_jStride =                    (level->box_dim+2*level->box_ghosts);while(level->box_jStride % BOX_ALIGN_JSTRIDE)level->box_jStride++; // pencil
-  level->box_kStride = level->box_jStride*(level->box_dim+2*level->box_ghosts);while(level->box_kStride % BOX_ALIGN_KSTRIDE)level->box_kStride++; // plane
-  level->box_volume  = level->box_kStride*(level->box_dim+2*level->box_ghosts);while(level->box_volume  % BOX_ALIGN_VOLUME )level->box_volume++;  // volume
+                                                               // %8192==512 ensures volumes map to different L2 sets but the same L1 set on KNL
+                                                               // +56 (512/9) ensures volumes map to different L1 sets as well on KNL/Xeon
   #endif
 
 
   int box,v;
   uint64_t ofs;
-  #define GHOST_ALIGNMENT 64 // Bytes
 
 
   #ifdef USE_BVKJI_LAYOUT
@@ -921,12 +933,12 @@ void create_vectors(level_type *level, int numVectors){
     // save old pointer to FP data...
     double * old_fp_base = level->my_boxes[box].fp_base;
     // allocate 4D FP array...
-    uint64_t malloc_size = (uint64_t)numVectors*level->box_volume*sizeof(double) + GHOST_ALIGNMENT;
-    //level->my_boxes[box].fp_base = (double*)malloc(malloc_size);
-    posix_memalign((void**)&(level->my_boxes[box].fp_base),1<<21,malloc_size); // 2MB aligned allocation
+    uint64_t malloc_size = (uint64_t)(numVectors*level->box_volume + BOX_ALIGN_JSTRIDE)*sizeof(double);
+    level->my_boxes[box].fp_base = (double*)MALLOC(malloc_size);
     if((numVectors>0)&&(level->my_boxes[box].fp_base==NULL)){fprintf(stderr,"malloc failed - level->my_boxes[box].fp_base\n");exit(0);}
+    // align first *non-ghost* zone element of first component to BOX_ALIGN_JSTRIDE...
     double * fp_base_aligned = level->my_boxes[box].fp_base;
-    while( (uint64_t)(fp_base_aligned+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & (GHOST_ALIGNMENT-1) ){fp_base_aligned++;} // align first *non-ghost* zone element of first component to GHOST_ALIGNMENT bytes
+    while( (uint64_t)(fp_base_aligned+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) % (BOX_ALIGN_JSTRIDE*sizeof(double)) ){fp_base_aligned++;}
     // init ...
     #ifdef _OPENMP
     #pragma omp parallel for
@@ -947,7 +959,7 @@ void create_vectors(level_type *level, int numVectors){
       #pragma omp parallel for
       #endif
       for(ofs=0;ofs<(uint64_t)old_numVectors*level->box_volume;ofs++){level->my_boxes[box].vectors[0][ofs] = old_vectors0[ofs];} // FIX... NOT NUMA-aware !!!
-      if(old_fp_base)free(old_fp_base); // free old FP data
+      if(old_fp_base)FREE(old_fp_base); // free old FP data
     }
   }
   #endif
@@ -970,12 +982,12 @@ void create_vectors(level_type *level, int numVectors){
       level->vectors[v]      = old_vectors[v];
     }else{
       // allocate
-      uint64_t malloc_size = (uint64_t)level->num_my_boxes*level->box_volume*sizeof(double) + GHOST_ALIGNMENT;
-      //level->vectors_base[v] = (double*)malloc(malloc_size);
-      posix_memalign((void**)&(level->vectors_base[v]),1<<21,malloc_size); // 2MB aligned allocation
+      uint64_t malloc_size = (uint64_t)(level->num_my_boxes*level->box_volume + BOX_ALIGN_JSTRIDE)*sizeof(double);
+      level->vectors_base[v] = (double*)MALLOC(malloc_size);
       if((numVectors>0)&&(level->vectors_base[v]==NULL)){fprintf(stderr,"malloc failed - level->vectors_base[v]\n");exit(0);}
+      // align first *non-ghost* zone element of first component to BOX_ALIGN_JSTRIDE...
       double * fp_base_aligned = level->vectors_base[v];
-      while( (uint64_t)(fp_base_aligned+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) & (GHOST_ALIGNMENT-1) ){fp_base_aligned++;} // align first *non-ghost* zone element of first component to GHOST_ALIGNMENT bytes
+      while( (uint64_t)(fp_base_aligned+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) % (BOX_ALIGN_JSTRIDE*sizeof(double)) ){fp_base_aligned++;}
       level->vectors[v] = fp_base_aligned;
       // init
       #ifdef _OPENMP
@@ -1276,7 +1288,7 @@ void destroy_level(level_type *level){
   // box ...
   for(i=0;i<level->num_my_boxes;i++)if(level->my_boxes[i].vectors)free(level->my_boxes[i].vectors);
   #ifdef USE_BVKJI_LAYOUT
-  for(i=0;i<level->num_my_boxes;i++)if(level->my_boxes[i].fp_base)free(level->my_boxes[i].fp_base);
+  for(i=0;i<level->num_my_boxes;i++)if(level->my_boxes[i].fp_base)FREE(level->my_boxes[i].fp_base);
   #endif
 
   // misc ...
@@ -1287,7 +1299,7 @@ void destroy_level(level_type *level){
 
   // FP vector data...
   #ifdef USE_VBKJI_LAYOUT
-  for(i=0;i<level->numVectors;i++)if(level->vectors_base[i])free(level->vectors_base[i]);
+  for(i=0;i<level->numVectors;i++)if(level->vectors_base[i])FREE(level->vectors_base[i]);
                                   if(level->vectors_base   )free(level->vectors_base   );
                                   if(level->vectors        )free(level->vectors        );
   #endif
@@ -1301,14 +1313,14 @@ void destroy_level(level_type *level){
   for(i=0;i<STENCIL_MAX_SHAPES;i++){
     if(level->exchange_ghosts[i].num_recvs>0){
     //for(j=0;j<level->exchange_ghosts[i].num_recvs;j++)if(level->exchange_ghosts[i].recv_buffers[j])free(level->exchange_ghosts[i].recv_buffers[j]);
-    if(level->exchange_ghosts[i].recv_buffers[0])free(level->exchange_ghosts[i].recv_buffers[0]); // allocated in bulk
+    if(level->exchange_ghosts[i].recv_buffers[0])FREE(level->exchange_ghosts[i].recv_buffers[0]); // allocated in bulk
     if(level->exchange_ghosts[i].recv_buffers)free(level->exchange_ghosts[i].recv_buffers);
     if(level->exchange_ghosts[i].recv_ranks  )free(level->exchange_ghosts[i].recv_ranks  );
     if(level->exchange_ghosts[i].recv_sizes  )free(level->exchange_ghosts[i].recv_sizes  );
     }
     if(level->exchange_ghosts[i].num_sends>0){
     //for(j=0;j<level->exchange_ghosts[i].num_sends;j++)if(level->exchange_ghosts[i].send_buffers[j])free(level->exchange_ghosts[i].send_buffers[j]);
-    if(level->exchange_ghosts[i].send_buffers[0])free(level->exchange_ghosts[i].send_buffers[0]); // allocated in bulk
+    if(level->exchange_ghosts[i].send_buffers[0])FREE(level->exchange_ghosts[i].send_buffers[0]); // allocated in bulk
     if(level->exchange_ghosts[i].send_buffers)free(level->exchange_ghosts[i].send_buffers);
     if(level->exchange_ghosts[i].send_ranks  )free(level->exchange_ghosts[i].send_ranks  );
     if(level->exchange_ghosts[i].send_sizes  )free(level->exchange_ghosts[i].send_sizes  );

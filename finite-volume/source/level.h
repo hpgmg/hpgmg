@@ -16,6 +16,10 @@
 #include <mpi.h>
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
+// request alligned memory
+void * MALLOC(size_t size);
+void   FREE(void * ptr);
+//------------------------------------------------------------------------------------------------------------------------------
 // supported boundary conditions
 #define BC_PERIODIC  0
 #define BC_DIRICHLET 1

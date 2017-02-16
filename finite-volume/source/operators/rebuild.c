@@ -51,7 +51,7 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
   if(level->dim.j<colors_in_each_dim)colors_in_each_dim=level->dim.j;
   if(level->dim.k<colors_in_each_dim)colors_in_each_dim=level->dim.k;
 
-  if(level->my_rank==0){fprintf(stdout,"  calculating D^{-1} exactly for level h=%e using %d colors...  ",level->h,colors_in_each_dim*colors_in_each_dim*colors_in_each_dim);fflush(stdout);}
+  if(level->my_rank==0){fprintf(stdout,"  calculating D^{-1} exactly for level h=%e using %3d colors...  ",level->h,colors_in_each_dim*colors_in_each_dim*colors_in_each_dim);fflush(stdout);}
   #ifdef USE_MPI
   double dinv_start = MPI_Wtime();
   #endif
@@ -113,7 +113,9 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
       const int  ghosts = level->my_boxes[box].ghosts;
       const double h2inv = 1.0/(level->h*level->h);
       const double * __restrict__         x = level->my_boxes[box].vectors[         x_id] + ghosts*(1+jStride+kStride); // i.e. [0] = first non ghost zone point
+      #ifdef VECTOR_ALPHA
       const double * __restrict__     alpha = level->my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride);
+      #endif
       const double * __restrict__    beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + ghosts*(1+jStride+kStride);
       const double * __restrict__    beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + ghosts*(1+jStride+kStride);
       const double * __restrict__    beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + ghosts*(1+jStride+kStride);
@@ -194,7 +196,9 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
   double _timeEndAllReduce = getTime();
   level->timers.collectives   += (double)(_timeEndAllReduce-_timeStartAllReduce);
   #endif
+  #ifdef USE_CHEBY
   if(level->my_rank==0){fprintf(stdout,"  estimating  lambda_max... <%1.15e\n",dominant_eigenvalue);fflush(stdout);}
+  #endif
   level->dominant_eigenvalue_of_DinvA = dominant_eigenvalue;
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

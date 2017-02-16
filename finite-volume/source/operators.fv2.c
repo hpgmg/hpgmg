@@ -98,7 +98,9 @@ int stencil_get_shape(){return(STENCIL_SHAPE_STAR);} // needs just faces
 void rebuild_operator(level_type * level, level_type *fromLevel, double a, double b){
   // form restriction of alpha[], beta_*[] coefficients from fromLevel
   if(fromLevel != NULL){
+    #ifdef VECTOR_ALPHA
     restriction(level,VECTOR_ALPHA ,fromLevel,VECTOR_ALPHA ,RESTRICT_CELL  );
+    #endif
     restriction(level,VECTOR_BETA_I,fromLevel,VECTOR_BETA_I,RESTRICT_FACE_I);
     restriction(level,VECTOR_BETA_J,fromLevel,VECTOR_BETA_J,RESTRICT_FACE_J);
     restriction(level,VECTOR_BETA_K,fromLevel,VECTOR_BETA_K,RESTRICT_FACE_K);
@@ -109,7 +111,9 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   //initialize_problem(level,level->h,a,b); // approach used for testing smooth beta's; destroys the black box nature of the solver
 
   // exchange alpha/beta/...  (must be done before calculating Dinv)
+  #ifdef VECTOR_ALPHA
   exchange_boundary(level,VECTOR_ALPHA ,STENCIL_SHAPE_BOX); // safe
+  #endif
   exchange_boundary(level,VECTOR_BETA_I,STENCIL_SHAPE_BOX);
   exchange_boundary(level,VECTOR_BETA_J,STENCIL_SHAPE_BOX);
   exchange_boundary(level,VECTOR_BETA_K,STENCIL_SHAPE_BOX);

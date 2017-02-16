@@ -113,7 +113,9 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
       level->my_boxes[box].vectors[VECTOR_BETA_I][ijk] = Bi;
       level->my_boxes[box].vectors[VECTOR_BETA_J][ijk] = Bj;
       level->my_boxes[box].vectors[VECTOR_BETA_K][ijk] = Bk;
+      #ifdef VECTOR_ALPHA
       level->my_boxes[box].vectors[VECTOR_ALPHA ][ijk] = A;
+      #endif
     //level->my_boxes[box].vectors[VECTOR_UTRUE ][ijk] = U; // obviated by Richardson analysis
       level->my_boxes[box].vectors[VECTOR_F     ][ijk] = F;
       //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

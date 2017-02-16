@@ -29,7 +29,11 @@ void IterativeSolver(level_type * level, int u_id, int f_id, double a, double b,
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   if(level->must_subtract_mean==-1){
     level->must_subtract_mean=0;
+    #ifdef VECTOR_ALPHA
     int alpha_is_zero = (dot(level,VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
+    #else
+    int alpha_is_zero = 1;
+    #endif
     if( (level->boundary_condition.type==BC_PERIODIC) && ((a==0) || (alpha_is_zero)) )level->must_subtract_mean = 1; // Poisson with Periodic BCs
   }
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
-#include <unistd.h>
 //------------------------------------------------------------------------------------------------------------------------------
 #ifdef USE_MPI
 #include <mpi.h>
@@ -53,8 +52,7 @@ int qsortRP(const void *a, const void*b){
 // print out average time per solve and then decompose by function and level
 // note, in FMG, some levels are accessed more frequently.  This routine only prints time per solve in that level
 void MGPrintTiming(mg_type *all_grids, int fromLevel){
-  if(all_grids->my_rank!=0)return;
-  int level,num_levels = all_grids->num_levels;
+  int rank,level,num_levels = all_grids->num_levels;
   #ifdef CALIBRATE_TIMER
   double _timeStart=getTime();sleep(1);double _timeEnd=getTime();
   double SecondsPerCycle = (double)1.0/(double)(_timeEnd-_timeStart);
@@ -62,8 +60,32 @@ void MGPrintTiming(mg_type *all_grids, int fromLevel){
   double SecondsPerCycle = 1.0;
   #endif
   double scale = SecondsPerCycle/(double)all_grids->MGSolves_performed; // prints average performance per MGSolve
-
   double time,total;
+
+  #ifdef PRINT_SMOOTH
+  // useful for understanding load balance (as observed at MPI_Waitall) induced from either DVFS or KNL MCDRAM cache aliasing effects
+  #ifdef USE_MPI
+  double sendbuf[20]; // never more than 20 levels
+  for(level=        0;level<num_levels;level++)sendbuf[level]=0.0;
+  for(level=fromLevel;level<num_levels;level++)sendbuf[level]=scale*(double)all_grids->levels[level]->timers.smooth;
+  double *recvbuf = (double*)malloc(all_grids->levels[0]->num_ranks*20*sizeof(double));
+  MPI_Gather(sendbuf,20,MPI_DOUBLE,recvbuf,20,MPI_DOUBLE,0,MPI_COMM_WORLD);
+  if(all_grids->my_rank==0){
+    printf("operation            rank ");for(level=fromLevel;level<num_levels;level++){printf("%12d ",level-fromLevel);}printf("\n");
+    printf("------------------ ------ ");for(level=fromLevel;level<num_levels;level++){printf("------------ ");}printf("\n");
+    for(rank=0;rank<all_grids->levels[0]->num_ranks;rank++){
+      if(rank==0)printf("smooth             %6d ",rank);else
+                 printf("                   %6d ",rank);
+      for(level=fromLevel;level<num_levels;level++)printf("%12.6f ",recvbuf[20*rank+level]);
+      printf("\n");
+    }
+    fflush(stdout);
+  }
+  free(recvbuf);
+  #endif
+  #endif
+
+  if(all_grids->my_rank!=0)return;
           printf("\n\n");
           printf("level                     ");for(level=fromLevel;level<(num_levels  );level++){printf("%12d ",level-fromLevel);}printf("\n");
           printf("level dimension           ");for(level=fromLevel;level<(num_levels  );level++){printf("%10d^3 ",all_grids->levels[level]->dim.i  );}printf("\n");
@@ -228,9 +250,7 @@ void build_interpolation(mg_type *all_grids){
     }
 
     int elementSize = all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim;
-    //double * all_send_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
-    double * all_send_buffers;
-    posix_memalign( (void**)&all_send_buffers, 1<<21, numFineBoxesRemote*elementSize*sizeof(double) );
+    double * all_send_buffers = (double*)MALLOC(numFineBoxesRemote*elementSize*sizeof(double)); // minimize the number of NIC page registrations
           if(numFineBoxesRemote*elementSize>0)
           if(all_send_buffers==NULL){fprintf(stderr,"malloc failed - interpolation/all_send_buffers\n");exit(0);}
                       memset(all_send_buffers,0,numFineBoxesRemote*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
@@ -363,9 +383,7 @@ void build_interpolation(mg_type *all_grids){
     }
 
     int elementSize = all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim;
-    //double * all_recv_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
-    double * all_recv_buffers;
-    posix_memalign( (void**)&all_recv_buffers, 1<<21, numCoarseBoxes*elementSize*sizeof(double) );
+    double * all_recv_buffers = (double*)MALLOC(numCoarseBoxes*elementSize*sizeof(double)); // minimize the number of NIC page registrations
           if(numCoarseBoxes*elementSize>0)
           if(all_recv_buffers==NULL){fprintf(stderr,"malloc failed - interpolation/all_recv_buffers\n");exit(0);}
                       memset(all_recv_buffers,0,numCoarseBoxes*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
@@ -548,9 +566,7 @@ void build_restriction(mg_type *all_grids, int restrictionType){
     }
     elementSize = restrict_dim_i*restrict_dim_j*restrict_dim_k;
    
-    //double * all_send_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
-    double * all_send_buffers;
-    posix_memalign( (void**)&all_send_buffers, 1<<21, numCoarseBoxes*elementSize*sizeof(double) );
+    double * all_send_buffers = (double*)MALLOC(numCoarseBoxes*elementSize*sizeof(double)); // minimize the number of NIC page registrations
           if(numCoarseBoxes*elementSize>0)
           if(all_send_buffers==NULL){fprintf(stderr,"malloc failed - restriction/all_send_buffers\n");exit(0);}
                       memset(all_send_buffers,0,numCoarseBoxes*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
@@ -717,9 +733,7 @@ void build_restriction(mg_type *all_grids, int restrictionType){
     }
     elementSize = restrict_dim_i*restrict_dim_j*restrict_dim_k;
 
-    //double * all_recv_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
-    double * all_recv_buffers;
-    posix_memalign( (void**)&all_recv_buffers, 1<<21, numFineBoxesRemote*elementSize*sizeof(double) );
+    double * all_recv_buffers = (double*)MALLOC(numFineBoxesRemote*elementSize*sizeof(double)); // minimize the number of NIC page registrations
           if(numFineBoxesRemote*elementSize>0)
           if(all_recv_buffers==NULL){fprintf(stderr,"malloc failed - restriction/all_recv_buffers\n");exit(0);}
                       memset(all_recv_buffers,0,numFineBoxesRemote*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
@@ -943,7 +957,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   if(all_grids->my_rank==0){fprintf(stdout,"\n");}
   for(level=1;level<all_grids->num_levels;level++){
     double comm_split_start = MPI_Wtime();
-    if(all_grids->my_rank==0){fprintf(stdout,"  Building MPI subcommunicator for level %d... ",level);fflush(stdout);}
+    if(all_grids->my_rank==0){fprintf(stdout,"  Building MPI subcommunicator for level %2d... ",level);fflush(stdout);}
     all_grids->levels[level]->active=0;
     int ll;for(ll=level;ll<all_grids->num_levels;ll++)if(all_grids->levels[ll]->num_my_boxes>0)all_grids->levels[level]->active=1;
     MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->active,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_ALLREDUCE);
@@ -968,7 +982,11 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   // quick tests for Poisson, Neumann, etc...
   for(level=0;level<all_grids->num_levels;level++){
     all_grids->levels[level]->must_subtract_mean = 0;
+    #ifdef VECTOR_ALPHA
     int alpha_is_zero = (dot(all_grids->levels[level],VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
+    #else
+    int alpha_is_zero = 1;
+    #endif
     // For Poisson with Periodic Boundary Conditions, by convention we assume the solution sums to zero.  Eliminate any constants from the solution by subtracting the mean.
     if( (all_grids->levels[level]->boundary_condition.type==BC_PERIODIC) && ((a==0) || (alpha_is_zero==1)) )all_grids->levels[level]->must_subtract_mean = 1;
   }
@@ -990,14 +1008,14 @@ void MGDestroy(mg_type *all_grids){
     for(i=0;i<4;i++){
       if(all_grids->levels[level]->restriction[i].num_recvs>0){
       //for(j=0;j<all_grids->levels[level]->restriction[i].num_recvs;j++)if(all_grids->levels[level]->restriction[i].recv_buffers[j])free(all_grids->levels[level]->restriction[i].recv_buffers[j]);
-      if(all_grids->levels[level]->restriction[i].recv_buffers[0])free(all_grids->levels[level]->restriction[i].recv_buffers[0]); // allocated in bulk
+      if(all_grids->levels[level]->restriction[i].recv_buffers[0])FREE(all_grids->levels[level]->restriction[i].recv_buffers[0]); // allocated in bulk
       if(all_grids->levels[level]->restriction[i].recv_buffers   )free(all_grids->levels[level]->restriction[i].recv_buffers   );
       if(all_grids->levels[level]->restriction[i].recv_ranks     )free(all_grids->levels[level]->restriction[i].recv_ranks     );
       if(all_grids->levels[level]->restriction[i].recv_sizes     )free(all_grids->levels[level]->restriction[i].recv_sizes     );
       }
       if(all_grids->levels[level]->restriction[i].num_sends>0){
       //for(j=0;j<all_grids->levels[level]->restriction[i].num_sends;j++)if(all_grids->levels[level]->restriction[i].send_buffers[j])free(all_grids->levels[level]->restriction[i].send_buffers[j]);
-      if(all_grids->levels[level]->restriction[i].send_buffers[0])free(all_grids->levels[level]->restriction[i].send_buffers[0]); // allocated in bulk
+      if(all_grids->levels[level]->restriction[i].send_buffers[0])FREE(all_grids->levels[level]->restriction[i].send_buffers[0]); // allocated in bulk
       if(all_grids->levels[level]->restriction[i].send_buffers   )free(all_grids->levels[level]->restriction[i].send_buffers   );
       if(all_grids->levels[level]->restriction[i].send_ranks     )free(all_grids->levels[level]->restriction[i].send_ranks     );
       if(all_grids->levels[level]->restriction[i].send_sizes     )free(all_grids->levels[level]->restriction[i].send_sizes     );
@@ -1014,14 +1032,14 @@ void MGDestroy(mg_type *all_grids){
     // destroy interpolation mini program created by MGBuild...
     if(all_grids->levels[level]->interpolation.num_recvs>0){
     //for(j=0;j<all_grids->levels[level]->interpolation.num_recvs;j++)if(all_grids->levels[level]->interpolation.recv_buffers[j])free(all_grids->levels[level]->interpolation.recv_buffers[j]);
-    if(all_grids->levels[level]->interpolation.recv_buffers[0])free(all_grids->levels[level]->interpolation.recv_buffers[0]); // allocated in bulk
+    if(all_grids->levels[level]->interpolation.recv_buffers[0])FREE(all_grids->levels[level]->interpolation.recv_buffers[0]); // allocated in bulk
     if(all_grids->levels[level]->interpolation.recv_buffers   )free(all_grids->levels[level]->interpolation.recv_buffers   );
     if(all_grids->levels[level]->interpolation.recv_ranks     )free(all_grids->levels[level]->interpolation.recv_ranks     );
     if(all_grids->levels[level]->interpolation.recv_sizes     )free(all_grids->levels[level]->interpolation.recv_sizes     );
     }
     if(all_grids->levels[level]->interpolation.num_sends>0){
     //for(j=0;j<all_grids->levels[level]->interpolation.num_sends;j++)if(all_grids->levels[level]->interpolation.send_buffers[j])free(all_grids->levels[level]->interpolation.send_buffers[j]);
-    if(all_grids->levels[level]->interpolation.send_buffers[0])free(all_grids->levels[level]->interpolation.send_buffers[0]); // allocated in bulk
+    if(all_grids->levels[level]->interpolation.send_buffers[0])FREE(all_grids->levels[level]->interpolation.send_buffers[0]); // allocated in bulk
     if(all_grids->levels[level]->interpolation.send_buffers   )free(all_grids->levels[level]->interpolation.send_buffers   );
     if(all_grids->levels[level]->interpolation.send_ranks     )free(all_grids->levels[level]->interpolation.send_ranks     );
     if(all_grids->levels[level]->interpolation.send_sizes     )free(all_grids->levels[level]->interpolation.send_sizes     );
@@ -1108,7 +1126,7 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
   if(!all_grids->levels[onLevel]->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   int e_id = u_id; // __u FIX
-  int R_id = VECTOR_F_MINUS_AV;
+  int R_id = VECTOR_R;
   int v;
   int maxVCycles = 20;
 
@@ -1185,7 +1203,7 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
   int v;
   int level;
   int e_id = u_id;
-  int R_id = VECTOR_F_MINUS_AV;
+  int R_id = VECTOR_R;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef _OPENMP
   double FMG_Start_Time = omp_get_wtime();
@@ -1293,12 +1311,12 @@ void FMGSolve2(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, do
   #ifdef UNLIMIT_FMG_ITERATIONS
   int maxFCycles=20;
   #else
-  int maxFCycles=0;
+  int maxFCycles=1;
   #endif
   int f;
   int level;
   int e_id = VECTOR_E;
-  int R_id = VECTOR_F_MINUS_AV;
+  int R_id = VECTOR_R;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef _OPENMP
   double FMG_Start_Time = omp_get_wtime();
@@ -1403,13 +1421,17 @@ void MGPCG(mg_type *all_grids, int onLevel, int x_id, int F_id, double a, double
   for(l=0;l<all_grids->num_levels;l++){
     if(all_grids->levels[l]->must_subtract_mean==-1){
       all_grids->levels[l]->must_subtract_mean=0;
+      #ifdef VECTOR_ALPHA
       int alpha_is_zero = (dot(all_grids->levels[l],VECTOR_ALPHA,VECTOR_ALPHA) == 0.0);
+      #else
+      int alpha_is_zero = 1;
+      #endif
       if( (all_grids->levels[l]->boundary_condition.type==BC_PERIODIC) && ((a==0) || (alpha_is_zero)) )all_grids->levels[l]->must_subtract_mean = 1;
     }
   }
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-  int   r_id = VECTOR_F_MINUS_AV;
+  int   r_id = VECTOR_R;
   int   p_id = VECTORS_RESERVED+0;
   int  Ap_id = VECTORS_RESERVED+1;
   int   z_id = VECTORS_RESERVED+2;
