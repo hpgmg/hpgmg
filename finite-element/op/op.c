@@ -13,6 +13,7 @@ struct Op_private {
   MPI_Comm comm;                /* Finest level comm (only for diagnostics at setup time) */
   PetscInt fedegree;
   PetscInt dof;
+  PetscInt addquadpts;
   PetscInt ne;                  /* Preferred number of elements over which to vectorize */
   PetscInt opcode;              /* 01=uu | 02=du, 010=vv | 020=dv */
   PetscBool affineonly;
@@ -39,6 +40,14 @@ PetscErrorCode OpGetFEDegree(Op op,PetscInt *degree) {
 }
 PetscErrorCode OpSetDof(Op op,PetscInt dof) {
   op->dof = dof;
+  return 0;
+}
+PetscErrorCode OpGetAddQuadPts(Op op,PetscInt *addquadpts) {
+  *addquadpts = op->addquadpts;
+  return 0;
+}
+PetscErrorCode OpSetAddQuadPts(Op op,PetscInt addquadpts) {
+  op->addquadpts = addquadpts;
   return 0;
 }
 PetscErrorCode OpGetDof(Op op,PetscInt *dof) {
@@ -436,6 +445,7 @@ PetscErrorCode OpCreateFromOptions(MPI_Comm comm,Op *op)
   PetscErrorCode ierr,(*f)(Op);
   Op o;
   char opname[256] = "poisson2";
+  PetscInt addquadpts=0;
 
   PetscFunctionBegin;
   ierr = OpInitializePackage();CHKERRQ(ierr);
@@ -448,9 +458,11 @@ PetscErrorCode OpCreateFromOptions(MPI_Comm comm,Op *op)
   ierr = PetscFunctionListFind(OpList,opname,&f);CHKERRQ(ierr);
   if (!f) SETERRQ1(comm,PETSC_ERR_USER,"Operator type '%s' not found",opname);
   ierr = (*f)(o);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-add_quad_pts","Number of additional quadrature points","",addquadpts,&addquadpts,NULL);CHKERRQ(ierr);
+  ierr = OpSetAddQuadPts(o,addquadpts); CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
-  ierr = TensorCreate(o->ne,o->dof,o->fedegree+1,o->fedegree+1,&o->TensorDOF);CHKERRQ(ierr);
-  ierr = TensorCreate(o->ne,3,o->fedegree+1,o->fedegree+1,&o->Tensor3);CHKERRQ(ierr);
+  ierr = TensorCreate(o->ne,o->dof,o->fedegree+1,o->fedegree+1+o->addquadpts,&o->TensorDOF);CHKERRQ(ierr);
+  ierr = TensorCreate(o->ne,3,o->fedegree+1,o->fedegree+1+o->addquadpts,&o->Tensor3);CHKERRQ(ierr);
   *op = o;
   PetscFunctionReturn(0);
 }

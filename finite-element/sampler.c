@@ -131,7 +131,7 @@ static PetscErrorCode ReportMemoryUsage(MPI_Comm comm,PetscLogDouble memused,Pet
 
 static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const PetscInt smooth[2],PetscInt nrepeat,PetscLogDouble mintime,PetscLogDouble *memused,PetscLogDouble *memavail,PetscBool monitor) {
   PetscErrorCode ierr;
-  PetscInt pgrid[3],cmax,fedegree,dof,nlevels,M_max;
+  PetscInt pgrid[3],cmax,fedegree,dof,addquadpts,nlevels,M_max;
   PetscMPIInt nranks;
   Grid grid;
   DM dm;
@@ -146,6 +146,7 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   PetscFunctionBegin;
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+  ierr = OpGetAddQuadPts(op,&addquadpts);CHKERRQ(ierr);
 
   ierr = MPI_Comm_size(comm,&nranks);CHKERRQ(ierr);
   ierr = ProcessGridFindSquarest(nranks,pgrid);CHKERRQ(ierr);
@@ -157,7 +158,7 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   ierr = GridCreate(comm,M,pgrid,cmax,&grid);CHKERRQ(ierr);
   ierr = GridGetNumLevels(grid,&nlevels);CHKERRQ(ierr);
 
-  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,dof,addquadpts,&dm);CHKERRQ(ierr);
   M_max = PetscMax(M[0],PetscMax(M[1],M[2]));
   L[0] = M[0]*1./M_max;
   L[1] = M[1]*1./M_max;
@@ -213,7 +214,7 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
 PetscErrorCode RunSample() {
   PetscErrorCode ierr;
   Op op;
-  PetscInt pgrid[3],smooth[2] = {3,1},two = 2,maxsamples = 6,repeat = 5,nsamples,(*gridsize)[3];
+  PetscInt pgrid[3],smooth[2] = {3,1},two = 2,maxsamples = 6,repeat = 5,nsamples,(*gridsize)[3],addquadpts;
   PetscReal local[2] = {100,10000};
   PetscReal mintime = 1;
   PetscLogDouble memused,memavail;
@@ -229,9 +230,11 @@ PetscErrorCode RunSample() {
   ierr = PetscOptionsReal("-mintime","Minimum interval (in seconds) for repeatedly solving each problem size","",mintime,&mintime,NULL);CHKERRQ(ierr);
   two = 2;
   ierr = PetscOptionsIntArray("-smooth","V- and F-cycle pre,post smoothing","",smooth,&two,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-add_quad_pts","Number of additional quadrature points","",addquadpts,&addquadpts,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
   ierr = OpCreateFromOptions(comm,&op);CHKERRQ(ierr);
+  ierr = OpSetAddQuadPts(op,addquadpts);CHKERRQ(ierr);
 
   ierr = MPI_Comm_size(comm,&nranks);CHKERRQ(ierr);
   ierr = ProcessGridFindSquarest(nranks,pgrid);CHKERRQ(ierr);
