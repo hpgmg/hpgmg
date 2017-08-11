@@ -14,7 +14,7 @@ PetscErrorCode GridDestroy(Grid *grid);
 PetscErrorCode GridView(Grid grid);
 PetscErrorCode GridGetNumLevels(Grid grid,PetscInt *nlevels);
 PetscInt GridLevelFromM(const PetscInt M[3]);
-PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe);
+PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,PetscInt addquadpts,DM *dmfe);
 PetscErrorCode DMDestroyFE(DM *dm);
 PetscErrorCode DMFESetUniformCoordinates(DM dm,const PetscReal L[]);
 PetscErrorCode DMFEGetUniformCoordinates(DM dm,PetscReal L[]);

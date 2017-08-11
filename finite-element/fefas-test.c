@@ -73,7 +73,7 @@ PetscErrorCode TestFESpace()
   PetscFunctionBegin;
   ierr = OptionsParse("Finite Element FAS Test FE global-to-local",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
-  ierr = DMCreateFE(grid,1,1,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,1,1,0,&dm);CHKERRQ(ierr);
   ierr = GridDestroy(&grid);CHKERRQ(ierr);
 
   ierr = DMCreateGlobalVector(dm,&G);CHKERRQ(ierr);
@@ -108,7 +108,7 @@ PetscErrorCode TestFEGrad()
   PetscFunctionBegin;
   ierr = OptionsParse("Finite Element FAS Test Element Gradients",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
-  ierr = DMCreateFE(grid,fedegree,1,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,1,0,&dm);CHKERRQ(ierr);
   ierr = GridDestroy(&grid);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
 
@@ -175,7 +175,7 @@ PetscErrorCode TestFEInject()
   PetscFunctionBegin;
   ierr = OptionsParse("Finite Element FAS Test Injection (state restriction)",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
-  ierr = DMCreateFE(grid,fedegree,1,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,1,0,&dm);CHKERRQ(ierr);
   ierr = GridDestroy(&grid);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
 
@@ -236,7 +236,7 @@ PetscErrorCode TestFEInterp()
   PetscFunctionBegin;
   ierr = OptionsParse("Finite Element FAS Test Interpolation",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
-  ierr = DMCreateFE(grid,fedegree,1,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,1,0,&dm);CHKERRQ(ierr);
   ierr = GridDestroy(&grid);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
 
@@ -351,7 +351,7 @@ PetscErrorCode TestFERestrict()
   PetscFunctionBegin;
   ierr = OptionsParse("Finite Element FAS Test Restriction",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
-  ierr = DMCreateFE(grid,fedegree,1,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,1,0,&dm);CHKERRQ(ierr);
   ierr = GridDestroy(&grid);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
 
@@ -405,7 +405,7 @@ PetscErrorCode TestOpApply()
   Grid grid;
   Options opt;
   Op op;
-  PetscInt fedegree,dof;
+  PetscInt fedegree,dof,addquadpts;
   DM dm;
   Vec U,Y,F;
   PetscReal normF,norm;
@@ -414,10 +414,11 @@ PetscErrorCode TestOpApply()
   ierr = OpCreateFromOptions(PETSC_COMM_WORLD,&op);CHKERRQ(ierr);
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+  ierr = OpGetAddQuadPts(op,&addquadpts);CHKERRQ(ierr);
   ierr = OptionsParse("Finite Element FAS Test operator application",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
   ierr = GridView(grid);CHKERRQ(ierr);
-  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,dof,addquadpts,&dm);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
 
   ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
@@ -448,7 +449,7 @@ PetscErrorCode TestOpDiagonal()
   Grid grid;
   Options opt;
   Op op;
-  PetscInt fedegree,dof;
+  PetscInt fedegree,dof,addquadpts;
   DM dm;
   Vec Diag;
   PetscReal norm1,norm2,normMax;
@@ -457,10 +458,11 @@ PetscErrorCode TestOpDiagonal()
   ierr = OpCreateFromOptions(PETSC_COMM_WORLD,&op);CHKERRQ(ierr);
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+  ierr = OpGetAddQuadPts(op,&addquadpts);CHKERRQ(ierr);
   ierr = OptionsParse("Finite Element FAS Test diagonal extraction",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
   ierr = GridView(grid);CHKERRQ(ierr);
-  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,dof,addquadpts,&dm);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
   ierr = DMCreateGlobalVector(dm,&Diag);CHKERRQ(ierr);
   ierr = OpGetDiagonal(op,dm,Diag);CHKERRQ(ierr);
@@ -485,7 +487,7 @@ PetscErrorCode TestKSPSolve()
   Grid grid;
   Options opt;
   Op op;
-  PetscInt fedegree,dof;
+  PetscInt fedegree,dof,addquadpts;
   DM dm;
   Vec U,V,F;
   Mat A;
@@ -496,10 +498,11 @@ PetscErrorCode TestKSPSolve()
   ierr = OpCreateFromOptions(PETSC_COMM_WORLD,&op);CHKERRQ(ierr);
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+  ierr = OpGetAddQuadPts(op,&addquadpts);CHKERRQ(ierr);
   ierr = OptionsParse("Finite Element FAS Test KSPSolve",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
   ierr = GridView(grid);CHKERRQ(ierr);
-  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,dof,addquadpts,&dm);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
 
   ierr = DMCreateGlobalVector(dm,&U);CHKERRQ(ierr);
