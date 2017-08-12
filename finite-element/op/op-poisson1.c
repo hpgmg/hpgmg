@@ -103,6 +103,10 @@ static PetscErrorCode OpPointwiseElement_Poisson1(Op op,PetscInt ne,PetscInt Q3,
   return OpPointwiseElement_PoissonN(op,NE,8,dx,wdxdet,du,dv);}
 static PetscErrorCode OpPointwiseElement_Poisson2(Op op,PetscInt ne,PetscInt Q3,PetscScalar dx[3][3][Q3][NE],PetscReal wdxdet[Q3][NE],PetscScalar du[3][1][Q3][NE],PetscScalar dv[3][1][Q3][NE]) {
   return OpPointwiseElement_PoissonN(op,NE,27,dx,wdxdet,du,dv);}
+static PetscErrorCode OpPointwiseElementAll_Poisson1(Op op,PetscInt ne,PetscInt Q3,PetscScalar dx[3][3][Q3][NE],PetscReal wdxdet[Q3][NE],PetscScalar uu[1][1][Q3][NE],PetscScalar du[3][1][Q3][NE],PetscScalar vv[1][1][Q3][NE],PetscScalar dv[3][1][Q3][NE]) {
+  return OpPointwiseElement_PoissonN(op,NE,8,dx,wdxdet,du,dv);}
+static PetscErrorCode OpPointwiseElementAll_Poisson2(Op op,PetscInt ne,PetscInt Q3,PetscScalar dx[3][3][Q3][NE],PetscReal wdxdet[Q3][NE],PetscScalar uu[1][1][Q3][NE],PetscScalar du[3][1][Q3][NE],PetscScalar vv[1][1][Q3][NE],PetscScalar dv[3][1][Q3][NE]) {
+  return OpPointwiseElement_PoissonN(op,NE,27,dx,wdxdet,du,dv);}
 
 
 static PetscErrorCode OpApply_Poisson(Op op,DM dm,Vec U,Vec V,
@@ -279,7 +283,7 @@ PetscErrorCode OpCreate_Poisson1(Op op)
   ierr = OpCreate__Poisson(op);CHKERRQ(ierr);
   ierr = OpSetFEDegree(op,1);CHKERRQ(ierr);
   ierr = OpSetApply(op,OpApply_Poisson1);CHKERRQ(ierr);
-  ierr = OpSetPointwiseElement(op,(OpPointwiseElementFunction)OpPointwiseElement_Poisson1,NE);CHKERRQ(ierr);
+  ierr = OpSetPointwiseElement(op,(OpPointwiseElementFunction)OpPointwiseElementAll_Poisson1,NE,022);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 PetscErrorCode OpCreate_Poisson2(Op op)
@@ -290,7 +294,7 @@ PetscErrorCode OpCreate_Poisson2(Op op)
   ierr = OpCreate__Poisson(op);CHKERRQ(ierr);
   ierr = OpSetFEDegree(op,2);CHKERRQ(ierr);
   ierr = OpSetApply(op,OpApply_Poisson2);CHKERRQ(ierr);
-  ierr = OpSetPointwiseElement(op,(OpPointwiseElementFunction)OpPointwiseElement_Poisson2,NE);CHKERRQ(ierr);
+  ierr = OpSetPointwiseElement(op,(OpPointwiseElementFunction)OpPointwiseElementAll_Poisson2,NE,022);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 PetscErrorCode OpCreate_Poisson2Affine(Op op)
@@ -303,6 +307,6 @@ PetscErrorCode OpCreate_Poisson2Affine(Op op)
   // This implementation requires both affine and non-rotated.
   ierr = OpSetApply(op,OpApply_Poisson2Affine);CHKERRQ(ierr);
   ierr = OpSetAffineOnly(op,PETSC_TRUE);CHKERRQ(ierr);
-  ierr = OpSetPointwiseElement(op,(OpPointwiseElementFunction)OpPointwiseElement_Poisson2,NE);CHKERRQ(ierr);
+  ierr = OpSetPointwiseElement(op,(OpPointwiseElementFunction)OpPointwiseElementAll_Poisson2,NE,022);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

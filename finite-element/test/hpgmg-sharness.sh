@@ -89,4 +89,4 @@ test_expect_error() {
     echo >&3 ""
 }
 
-MPIEXEC=$(awk '/MPIEXEC/{print $3}' "${PETSC_DIR}/${PETSC_ARCH}/conf/petscvariables")
+MPIEXEC=$(awk '/MPIEXEC/{print $3}' "${PETSC_DIR}/${PETSC_ARCH}/lib/petsc/conf/petscvariables")
