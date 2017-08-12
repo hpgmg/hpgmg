@@ -1,5 +1,6 @@
 #include "fefas.h"
 #include "petsctime.h"
+#include <petscksp.h>
 #include <stdint.h>
 #include <inttypes.h>
 
@@ -135,15 +136,20 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   PetscMPIInt nranks;
   Grid grid;
   DM dm;
-  Vec U,F;
+  Vec U,V,F;
+  Mat A;
+  KSP ksp;
   MG mg;
   PetscReal L[3];
-  PetscBool affine;
+  PetscBool affine,ksp_only = PETSC_FALSE;
 #ifdef USE_HPM
   char eventname[256];
 #endif
 
   PetscFunctionBegin;
+
+  ierr = PetscOptionsHasName(NULL,NULL,"-ksp_only",&ksp_only);CHKERRQ(ierr);
+
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
   ierr = OpGetAddQuadPts(op,&addquadpts);CHKERRQ(ierr);
@@ -171,9 +177,18 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);
   ierr = OpForcing(op,dm,F);CHKERRQ(ierr);
 
-  ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
-  ierr = MGMonitorSet(mg,monitor);CHKERRQ(ierr);
-  ierr = MGSetUpPC(mg);CHKERRQ(ierr);
+  if (!ksp_only) {
+    ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
+    ierr = MGMonitorSet(mg,monitor);CHKERRQ(ierr);
+    ierr = MGSetUpPC(mg);CHKERRQ(ierr);
+  }
+  else {
+    ierr = DMCreateGlobalVector(dm,&V);CHKERRQ(ierr);
+    ierr = OpGetMat(op,dm,&A);CHKERRQ(ierr);
+    ierr = KSPCreate(PETSC_COMM_WORLD,&ksp);CHKERRQ(ierr);
+    ierr = KSPSetOperators(ksp,A,A);CHKERRQ(ierr);
+    ierr = KSPSetFromOptions(ksp);CHKERRQ(ierr);
+  }
 
 #ifdef USE_HPM
   ierr = PetscSNPrintf(eventname,sizeof eventname,"Solve G[%D %D %D]",M[0],M[1],M[2]);CHKERRQ(ierr);
@@ -187,7 +202,13 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
     ierr = MPI_Barrier(comm);CHKERRQ(ierr);
     ierr = PetscTime(&t0);CHKERRQ(ierr);
     flops = petsc_TotalFlops;
-    ierr = MGFCycle(op,mg,smooth[0],smooth[1],F,U);CHKERRQ(ierr);
+    if (!ksp_only) {
+      ierr = MGFCycle(op,mg,smooth[0],smooth[1],F,U);CHKERRQ(ierr);
+    }
+    else {
+      ierr = KSPSolve(ksp,F,V);CHKERRQ(ierr);
+      ierr = VecAXPY(V,-1.,U);CHKERRQ(ierr);
+    }
     ierr = PetscTime(&t1);CHKERRQ(ierr);
     flops = petsc_TotalFlops - flops;
     elapsed = t1 - t0;
@@ -202,8 +223,15 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   HPM_Stop(eventname);
 #endif
 
-  if (memused) {ierr = MemoryGetUsage(memused,memavail);CHKERRQ(ierr);}
-  ierr = MGDestroy(&mg);CHKERRQ(ierr);
+  if (memused) {ierr = MemoryGetUsage(memused,memavail);CHKERRQ(ierr);
+  }
+  if (!ksp_only) {
+    ierr = MGDestroy(&mg);CHKERRQ(ierr);}
+  else {
+    ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
+    ierr = MatDestroy(&A);CHKERRQ(ierr);
+    ierr = VecDestroy(&V);CHKERRQ(ierr);
+  }
   ierr = VecDestroy(&U);CHKERRQ(ierr);
   ierr = VecDestroy(&F);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
@@ -214,7 +242,7 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
 PetscErrorCode RunSample() {
   PetscErrorCode ierr;
   Op op;
-  PetscInt pgrid[3],smooth[2] = {3,1},two = 2,maxsamples = 6,repeat = 5,nsamples,(*gridsize)[3],addquadpts;
+  PetscInt pgrid[3],smooth[2] = {3,1},two = 2,maxsamples = 6,repeat = 5,nsamples,(*gridsize)[3];
   PetscReal local[2] = {100,10000};
   PetscReal mintime = 1;
   PetscLogDouble memused,memavail;
@@ -230,11 +258,9 @@ PetscErrorCode RunSample() {
   ierr = PetscOptionsReal("-mintime","Minimum interval (in seconds) for repeatedly solving each problem size","",mintime,&mintime,NULL);CHKERRQ(ierr);
   two = 2;
   ierr = PetscOptionsIntArray("-smooth","V- and F-cycle pre,post smoothing","",smooth,&two,NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsInt("-add_quad_pts","Number of additional quadrature points","",addquadpts,&addquadpts,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
   ierr = OpCreateFromOptions(comm,&op);CHKERRQ(ierr);
-  ierr = OpSetAddQuadPts(op,addquadpts);CHKERRQ(ierr);
 
   ierr = MPI_Comm_size(comm,&nranks);CHKERRQ(ierr);
   ierr = ProcessGridFindSquarest(nranks,pgrid);CHKERRQ(ierr);
