@@ -147,8 +147,9 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
 #endif
 
   PetscFunctionBegin;
-
-  ierr = PetscOptionsHasName(NULL,NULL,"-ksp_only",&ksp_only);CHKERRQ(ierr);
+  ierr = PetscOptionsBegin(comm,NULL,"KSP or FMG solver option",NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsBool("-ksp_only","Solve with KSP only","",ksp_only,&ksp_only,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
