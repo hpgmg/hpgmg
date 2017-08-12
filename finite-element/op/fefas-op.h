@@ -13,6 +13,8 @@ PetscErrorCode OpSetDof(Op,PetscInt);
 PetscErrorCode OpGetDof(Op,PetscInt*);
 PetscErrorCode OpSetFEDegree(Op,PetscInt);
 PetscErrorCode OpGetFEDegree(Op,PetscInt*);
+PetscErrorCode OpSetAddQuadPts(Op,PetscInt);
+PetscErrorCode OpGetAddQuadPts(Op,PetscInt*);
 PetscErrorCode OpSetContext(Op,void*);
 PetscErrorCode OpGetContext(Op,void*);
 PetscErrorCode OpSetApply(Op,PetscErrorCode (*)(Op,DM,Vec,Vec));

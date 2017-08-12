@@ -10,6 +10,7 @@ struct Options_private {
   PetscReal L[3];
   PetscInt  smooth[2];
   PetscBool coord_distort;
+  PetscInt addquadpts;
 };
 
 struct MG_private {
@@ -67,6 +68,7 @@ static PetscErrorCode OptionsParse(const char *header,Options *opt)
   two = 2;
   ierr = PetscOptionsIntArray("-smooth","V- and F-cycle pre,post smoothing","",o->smooth,&two,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-coord_distort","Distort coordinates within unit cube","",o->coord_distort,&o->coord_distort,NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-add_quad_pts","Number of additional quadrature points","",o->addquadpts,&o->addquadpts,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
   *opt = o;
   PetscFunctionReturn(0);
@@ -325,7 +327,7 @@ PetscErrorCode RunMGV()
   Grid grid;
   Options opt;
   Op op;
-  PetscInt fedegree,dof,nlevels;
+  PetscInt fedegree,dof,addquadpts,nlevels;
   DM dm;
   Vec U0,U,F;
   MG mg;
@@ -335,12 +337,13 @@ PetscErrorCode RunMGV()
   ierr = OpCreateFromOptions(PETSC_COMM_WORLD,&op);CHKERRQ(ierr);
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+  ierr = OpGetAddQuadPts(op,&addquadpts);CHKERRQ(ierr);
   ierr = OptionsParse("Finite Element FAS FMG solver",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
   ierr = GridGetNumLevels(grid,&nlevels);CHKERRQ(ierr);
 
   ierr = GridView(grid);CHKERRQ(ierr);
-  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,dof,addquadpts,&dm);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
 
   ierr = DMCreateGlobalVector(dm,&U0);CHKERRQ(ierr);
@@ -409,7 +412,7 @@ PetscErrorCode RunFMG()
   Grid grid;
   Options opt;
   Op op;
-  PetscInt fedegree,dof,nlevels;
+  PetscInt fedegree,dof,addquadpts,nlevels;
   DM dm;
   Vec U0,U,F;
   MG mg;
@@ -419,11 +422,12 @@ PetscErrorCode RunFMG()
   ierr = OpCreateFromOptions(PETSC_COMM_WORLD,&op);CHKERRQ(ierr);
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
+  ierr = OpGetAddQuadPts(op,&addquadpts);CHKERRQ(ierr);
   ierr = OptionsParse("Finite Element FAS FMG solver",&opt);CHKERRQ(ierr);
   ierr = GridCreate(PETSC_COMM_WORLD,opt->M,opt->p,opt->cmax,&grid);CHKERRQ(ierr);
   ierr = GridGetNumLevels(grid,&nlevels);CHKERRQ(ierr);
 
-  ierr = DMCreateFE(grid,fedegree,dof,&dm);CHKERRQ(ierr);
+  ierr = DMCreateFE(grid,fedegree,dof,addquadpts,&dm);CHKERRQ(ierr);
   ierr = DMFESetUniformCoordinates(dm,opt->L);CHKERRQ(ierr);
   if (opt->coord_distort) {ierr = DMCoordDistort(dm,opt->L);CHKERRQ(ierr);}
 
