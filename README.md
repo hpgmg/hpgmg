@@ -15,9 +15,9 @@ Run configure, and then make as instructed:
 
     $ ./configure --CC=/path/to/mpicc
 
-This will create both the finite elelement and finite volume solvers.
+This will create the finite volume solver.
 The finite volume solver can be disabled by configuring with `--no-fv`.
-The finite element solver can be disabled by configuring with `--no-fe`.
+The finite element solver can be enabled by configuring with `--fe`.
 
 # HPGMG-FE: Finite Element FAS solver
 
