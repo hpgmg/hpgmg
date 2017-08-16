@@ -1,5 +1,6 @@
 #include "fefas.h"
 #include "petsctime.h"
+#include <petscksp.h>
 #include <stdint.h>
 #include <inttypes.h>
 
@@ -131,19 +132,27 @@ static PetscErrorCode ReportMemoryUsage(MPI_Comm comm,PetscLogDouble memused,Pet
 
 static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const PetscInt smooth[2],PetscInt nrepeat,PetscLogDouble mintime,PetscLogDouble *memused,PetscLogDouble *memavail,PetscBool monitor) {
   PetscErrorCode ierr;
-  PetscInt pgrid[3],cmax,fedegree,dof,addquadpts,nlevels,M_max;
+  PetscInt pgrid[3],cmax,fedegree,dof,addquadpts,nlevels,M_max,solve_type=0;
   PetscMPIInt nranks;
   Grid grid;
   DM dm;
-  Vec U,F;
-  MG mg;
+  Vec U,V=NULL,F;
+  Mat A=NULL;
+  KSP ksp=NULL;
+  MG mg=NULL;
+  const char *solve_types[2] = {"fmg","ksp"};
   PetscReal L[3];
-  PetscBool affine;
+  PetscBool affine,ksp_only = PETSC_FALSE;
 #ifdef USE_HPM
   char eventname[256];
 #endif
 
   PetscFunctionBegin;
+  ierr = PetscOptionsBegin(comm,NULL,"KSP or FMG solver option",NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsEList("-solve_type","Solve with KSP or FMG","",solve_types,2,solve_types[0],&solve_type,NULL);CHKERRQ(ierr);
+  if (solve_type) {ksp_only = PETSC_TRUE;}
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
+
   ierr = OpGetFEDegree(op,&fedegree);CHKERRQ(ierr);
   ierr = OpGetDof(op,&dof);CHKERRQ(ierr);
   ierr = OpGetAddQuadPts(op,&addquadpts);CHKERRQ(ierr);
@@ -171,9 +180,18 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   ierr = DMCreateGlobalVector(dm,&F);CHKERRQ(ierr);
   ierr = OpForcing(op,dm,F);CHKERRQ(ierr);
 
-  ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
-  ierr = MGMonitorSet(mg,monitor);CHKERRQ(ierr);
-  ierr = MGSetUpPC(mg);CHKERRQ(ierr);
+  if (!ksp_only) {
+    ierr = MGCreate(op,dm,nlevels,&mg);CHKERRQ(ierr);
+    ierr = MGMonitorSet(mg,monitor);CHKERRQ(ierr);
+    ierr = MGSetUpPC(mg);CHKERRQ(ierr);
+  }
+  else {
+    ierr = DMCreateGlobalVector(dm,&V);CHKERRQ(ierr);
+    ierr = OpGetMat(op,dm,&A);CHKERRQ(ierr);
+    ierr = KSPCreate(PETSC_COMM_WORLD,&ksp);CHKERRQ(ierr);
+    ierr = KSPSetOperators(ksp,A,A);CHKERRQ(ierr);
+    ierr = KSPSetFromOptions(ksp);CHKERRQ(ierr);
+  }
 
 #ifdef USE_HPM
   ierr = PetscSNPrintf(eventname,sizeof eventname,"Solve G[%D %D %D]",M[0],M[1],M[2]);CHKERRQ(ierr);
@@ -187,7 +205,13 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
     ierr = MPI_Barrier(comm);CHKERRQ(ierr);
     ierr = PetscTime(&t0);CHKERRQ(ierr);
     flops = petsc_TotalFlops;
-    ierr = MGFCycle(op,mg,smooth[0],smooth[1],F,U);CHKERRQ(ierr);
+    if (!ksp_only) {
+      ierr = MGFCycle(op,mg,smooth[0],smooth[1],F,U);CHKERRQ(ierr);
+    }
+    else {
+      ierr = KSPSolve(ksp,F,V);CHKERRQ(ierr);
+      ierr = VecAXPY(V,-1.,U);CHKERRQ(ierr);
+    }
     ierr = PetscTime(&t1);CHKERRQ(ierr);
     flops = petsc_TotalFlops - flops;
     elapsed = t1 - t0;
@@ -202,8 +226,12 @@ static PetscErrorCode SampleOnGrid(MPI_Comm comm,Op op,const PetscInt M[3],const
   HPM_Stop(eventname);
 #endif
 
-  if (memused) {ierr = MemoryGetUsage(memused,memavail);CHKERRQ(ierr);}
+  if (memused) {ierr = MemoryGetUsage(memused,memavail);CHKERRQ(ierr);
+  }
   ierr = MGDestroy(&mg);CHKERRQ(ierr);
+  ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
+  ierr = MatDestroy(&A);CHKERRQ(ierr);
+  ierr = VecDestroy(&V);CHKERRQ(ierr);
   ierr = VecDestroy(&U);CHKERRQ(ierr);
   ierr = VecDestroy(&F);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
