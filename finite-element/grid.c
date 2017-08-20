@@ -60,6 +60,8 @@ struct FE_private {
   PetscBool use_index;
   uint32_t *Eindex;
   PetscInt Eindex_ne;
+  PetscErrorCode (*ExtractElements)(DM,const PetscScalar*,PetscInt,PetscInt,PetscScalar*);
+  PetscErrorCode (*SetElements)(DM,PetscScalar*,PetscInt,PetscInt,InsertMode,DomainMode,const PetscScalar*);
   struct {
     PetscReal *B;
     PetscReal *D;
@@ -923,68 +925,10 @@ PetscErrorCode DMFEGetNumElements(DM dm,PetscInt *nelems)
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode DMFEExtractElements_Index(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y)
-{
-  PetscErrorCode ierr;
-  FE fe;
-  PetscInt fedegree,P,P3;
-
-  PetscFunctionBegin;
-  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
-  fedegree = fe->degree;
-  P = fedegree + 1;
-  P3 = P*P*P;
-  if (PetscUnlikely(fe->Eindex_ne != ne)) {
-    PetscInt nelems,n;
-    const PetscInt *m;
-    PetscInt gs[3],gM[3];
-    ierr = PetscFree(fe->Eindex);CHKERRQ(ierr);
-    ierr = DMFEGetNumElements(dm,&nelems);CHKERRQ(ierr);
-    if ((n = nelems) % ne) n += ne - (n % ne); // Pad out to a multiple of ne
-    ierr = PetscMalloc1(n*P3,&fe->Eindex);CHKERRQ(ierr);
-
-    m = fe->grid->m;
-    for (PetscInt i=0; i<3; i++) {
-      gs[i] = fe->grid->s[i]*fedegree;
-      gM[i] = fe->grid->M[i]*fedegree+1; // global boundaries
-    }
-
-    for (PetscInt e=0; e<nelems; e+=ne) {
-      for (PetscInt ee=e; ee<e+ne; ee++) {
-        PetscInt E = PetscMin(ee,nelems-1);
-        PetscInt i = E / (m[1]*m[2]);
-        PetscInt j = (E - i*m[1]*m[2]) / m[2];
-        PetscInt k = E - (i*m[1] + j)*m[2];
-        for (PetscInt ii=0; ii<P; ii++) {
-          for (PetscInt jj=0; jj<P; jj++) {
-            for (PetscInt kk=0; kk<P; kk++) {
-              PetscInt iu = i*fedegree+ii,ju = j*fedegree+jj,ku = k*fedegree+kk;
-              PetscInt src = P3*e + ((ii*P+jj)*P+kk)*ne + (ee-e);
-              PetscInt dst = FEIdxLs(fe,iu,ju,ku);
-              dst |= (0<gs[0]+iu && gs[0]+iu<gM[0]-1) && (0<gs[1]+ju && gs[1]+ju<gM[1]-1) && (0<gs[2]+ku && gs[2]+ku<gM[2]-1) && ee < nelems
-                ? 0x0 : 0x80000000; /* Set the high bit for Dirichlet boundary nodes and for any padded elements */
-              fe->Eindex[src] = dst;
-            }
-          }
-        }
-      }
-      fe->Eindex_ne = ne;
-    }
-  }
-  for (PetscInt i=0; i<P3; i++) {
-    for (PetscInt d=0; d<fe->dof; d++) {
-      for (PetscInt e=elem; e<elem+ne; e++) {
-        y[(d*P3+i)*ne+(e-elem)] = u[(fe->Eindex[elem*P3 + i*ne+(e-elem)] & 0x7fffffff)*fe->dof+d];
-      }
-    }
-  }
-  PetscFunctionReturn(0);
-}
-
 // Extract elements elem to elem+ne from local array u[grid i,j,k][0:dof], returning the result in y.
 // y is padded by replicating last element in case of irregular ending
 // vectorization-friendly ordering: y [0:dof] [0:(2*fedegree+1)^3] [0:ne]
-PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y)
+static PetscErrorCode DMFEExtractElements_Noindex(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y)
 {
   PetscErrorCode ierr;
   FE fe;
@@ -992,10 +936,6 @@ PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,Pets
 
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
-  if (fe->use_index) {
-    ierr = DMFEExtractElements_Index(dm,u,elem,ne,y);CHKERRQ(ierr);
-    PetscFunctionReturn(0);
-  }
   fedegree = fe->degree;
   P = fedegree + 1;
 
@@ -1019,9 +959,92 @@ PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,Pets
   PetscFunctionReturn(0);
 }
 
+static PetscErrorCode DMFEBuildIndex(DM dm,PetscInt ne)
+{
+  PetscErrorCode ierr;
+  FE fe;
+  PetscInt nelems,n,fedegree,P,P3;
+  const PetscInt *m;
+  PetscInt gs[3],gM[3];
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  fedegree = fe->degree;
+  P = fedegree + 1;
+  P3 = P*P*P;
+  ierr = PetscFree(fe->Eindex);CHKERRQ(ierr);
+  ierr = DMFEGetNumElements(dm,&nelems);CHKERRQ(ierr);
+  if ((n = nelems) % ne) n += ne - (n % ne); // Pad out to a multiple of ne
+  ierr = PetscMalloc1(n*P3,&fe->Eindex);CHKERRQ(ierr);
+
+  m = fe->grid->m;
+  for (PetscInt i=0; i<3; i++) {
+    gs[i] = fe->grid->s[i]*fedegree;
+    gM[i] = fe->grid->M[i]*fedegree+1; // global boundaries
+  }
+
+  for (PetscInt e=0; e<nelems; e+=ne) {
+    for (PetscInt ee=e; ee<e+ne; ee++) {
+      PetscInt E = PetscMin(ee,nelems-1);
+      PetscInt i = E / (m[1]*m[2]);
+      PetscInt j = (E - i*m[1]*m[2]) / m[2];
+      PetscInt k = E - (i*m[1] + j)*m[2];
+      for (PetscInt ii=0; ii<P; ii++) {
+        for (PetscInt jj=0; jj<P; jj++) {
+          for (PetscInt kk=0; kk<P; kk++) {
+            PetscInt iu = i*fedegree+ii,ju = j*fedegree+jj,ku = k*fedegree+kk;
+            PetscInt src = P3*e + ((ii*P+jj)*P+kk)*ne + (ee-e);
+            PetscInt dst = FEIdxLs(fe,iu,ju,ku);
+            dst |= (0<gs[0]+iu && gs[0]+iu<gM[0]-1) && (0<gs[1]+ju && gs[1]+ju<gM[1]-1) && (0<gs[2]+ku && gs[2]+ku<gM[2]-1) && ee < nelems
+              ? 0x0 : 0x80000000; /* Set the high bit for Dirichlet boundary nodes and for any padded elements */
+            fe->Eindex[src] = dst;
+          }
+        }
+      }
+    }
+  }
+  fe->Eindex_ne = ne;
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode DMFEExtractElements_Index(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y)
+{
+  PetscErrorCode ierr;
+  FE fe;
+  PetscInt fedegree,P,P3;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (PetscUnlikely(fe->Eindex_ne != ne)) {
+    ierr = DMFEBuildIndex(dm,ne);CHKERRQ(ierr);
+  }
+  fedegree = fe->degree;
+  P = fedegree + 1;
+  P3 = P*P*P;
+  for (PetscInt i=0; i<P3; i++) {
+    for (PetscInt d=0; d<fe->dof; d++) {
+      for (PetscInt e=elem; e<elem+ne; e++) {
+        y[(d*P3+i)*ne+(e-elem)] = u[(fe->Eindex[elem*P3 + i*ne+(e-elem)] & 0x7fffffff)*fe->dof+d];
+      }
+    }
+  }
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y)
+{
+  PetscErrorCode ierr;
+  FE fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  ierr = (*fe->ExtractElements)(dm,u,elem,ne,y);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 // Sum/insert into elements elem:elem+ne in local vector u, using element contributions from y
 // Any "elements" beyond the locally-owned part are ignored
-PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,DomainMode dmode,const PetscScalar *y)
+static PetscErrorCode DMFESetElements_Noindex(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,DomainMode dmode,const PetscScalar *y)
 {
   PetscErrorCode ierr;
   FE fe;
@@ -1034,23 +1057,6 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
 
   fedegree = fe->degree;
   P = fedegree + 1;
-  if (fe->Eindex && imode == ADD_VALUES) {
-    PetscInt nelems;
-    const PetscInt P3 = P*P*P;
-    ierr = DMFEGetNumElements(dm,&nelems);CHKERRQ(ierr);
-    for (PetscInt i=0; i<P3; i++) {
-      for (PetscInt d=0; d<fe->dof; d++) {
-        for (PetscInt e=elem; e<elem+ne; e++) {
-          uint32_t Eei = fe->Eindex[elem*P3 + i*ne + (e-elem)];
-          uint32_t bit = Eei >> 31;
-          uint32_t Eei0 = Eei & 0x7fffffff;
-          u[Eei0*fe->dof+d] += (!bit && (dmode & DOMAIN_INTERIOR)) || (bit && (dmode & DOMAIN_EXTERIOR))
-            ? y[(d*P3+i)*ne+(e-elem)] : 0.;
-        }
-      }
-    }
-    PetscFunctionReturn(0);
-  }
 
   m = fe->grid->m;
   for (PetscInt i=0; i<3; i++) {
@@ -1083,10 +1089,54 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
       }
     }
   }
-  //ierr = PetscScalarView(P*P*P*ne*fe->dof,&u[elem*P*P*P*fe->dof],PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
   if (imode == ADD_VALUES) PetscLogFlops(fe->dof*P*P*P*(PetscMin(elem+ne,m[0]*m[1]*m[2])-elem));
   PetscFunctionReturn(0);
 }
+
+PetscErrorCode DMFESetElements_Index(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,DomainMode dmode,const PetscScalar *y)
+{
+  PetscErrorCode ierr;
+  PetscInt nelems,P,P3;
+  FE fe;
+
+  PetscFunctionBegin;
+  if (imode != ADD_VALUES) {
+    ierr = DMFESetElements_Noindex(dm,u,elem,ne,imode,dmode,y);CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+  }
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (fe->Eindex_ne != ne) {
+    ierr = DMFEBuildIndex(dm,ne);CHKERRQ(ierr);
+  }
+  P = fe->degree + 1;
+  P3 = P*P*P;
+  ierr = DMFEGetNumElements(dm,&nelems);CHKERRQ(ierr);
+  for (PetscInt i=0; i<P3; i++) {
+    for (PetscInt d=0; d<fe->dof; d++) {
+      for (PetscInt e=elem; e<elem+ne; e++) {
+        uint32_t Eei = fe->Eindex[elem*P3 + i*ne + (e-elem)];
+        uint32_t bit = Eei >> 31;
+        uint32_t Eei0 = Eei & 0x7fffffff;
+        u[Eei0*fe->dof+d] += (!bit && (dmode & DOMAIN_INTERIOR)) || (bit && (dmode & DOMAIN_EXTERIOR))
+          ? y[(d*P3+i)*ne+(e-elem)] : 0.;
+      }
+    }
+  }
+  if (imode == ADD_VALUES) PetscLogFlops(fe->dof*P*P*P*(PetscMin(elem+ne,nelems-elem)));
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,DomainMode dmode,const PetscScalar *y)
+{
+  PetscErrorCode ierr;
+  FE fe;
+
+  PetscFunctionBegin;
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  ierr = (*fe->SetElements)(dm,u,elem,ne,imode,dmode,y);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 
 static PetscErrorCode FEDestroy(void **ctx)
 {
@@ -1128,6 +1178,13 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,PetscInt addq
   fe->use_index = PETSC_FALSE;
   ierr = PetscOptionsBool("-fe_index","Use index for element restriction","",fe->use_index,&fe->use_index,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
+  if (fe->use_index) {
+    fe->ExtractElements = DMFEExtractElements_Index;
+    fe->SetElements = DMFESetElements_Index;
+  } else {
+    fe->ExtractElements = DMFEExtractElements_Noindex;
+    fe->SetElements = DMFESetElements_Noindex;
+  }
   for (i=0; i<3; i++) {
     PetscInt gs = 2*(grid->s[i]/2)*fedegree;                       // coordinate of start
     PetscInt ge = 2*CeilDiv(grid->s[i]+grid->m[i],2)*fedegree + 1; // one past coordinate of end
