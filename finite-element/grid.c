@@ -916,6 +916,7 @@ PetscErrorCode DMFEGetNumElements(DM dm,PetscInt *nelems)
   const PetscInt *m;
 
   PetscFunctionBegin;
+  *nelems = -1;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
   m = fe->grid->m;
   *nelems = m[0]*m[1]*m[2];
@@ -1039,12 +1040,12 @@ PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,In
     ierr = DMFEGetNumElements(dm,&nelems);CHKERRQ(ierr);
     for (PetscInt i=0; i<P3; i++) {
       for (PetscInt d=0; d<fe->dof; d++) {
-        for (PetscInt e=elem; e<PetscMin(elem+ne,nelems); e++) {
+        for (PetscInt e=elem; e<elem+ne; e++) {
           uint32_t Eei = fe->Eindex[elem*P3 + i*ne + (e-elem)];
           uint32_t bit = Eei >> 31;
           uint32_t Eei0 = Eei & 0x7fffffff;
-          if ((bit && !(dmode & DOMAIN_EXTERIOR)) || (!bit && !(dmode & DOMAIN_INTERIOR))) continue;
-          u[Eei0*fe->dof+d] += y[(d*P3+i)*ne+(e-elem)];
+          u[Eei0*fe->dof+d] += (!bit && (dmode & DOMAIN_INTERIOR)) || (bit && (dmode & DOMAIN_EXTERIOR))
+            ? y[(d*P3+i)*ne+(e-elem)] : 0.;
         }
       }
     }
