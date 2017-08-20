@@ -3,6 +3,9 @@
 #include <petscdmshell.h>
 #include <petscdt.h>
 #include <stdint.h>
+#ifdef __AVX2__
+#  include <immintrin.h>
+#endif
 
 typedef uint64_t zcode;
 
@@ -24,6 +27,9 @@ struct Grid_private {
   PetscInt ncoarseknown;
   PetscMPIInt neighborranks[3][3][3];
 };
+
+typedef enum {FE_INDEX_NONE, FE_INDEX_REF, FE_INDEX_AVX2} FEIndexType;
+static const char *const FEIndexTypes[] = {"NONE", "REF", "AVX2", "FEIndexTypes", "FE_INDEX_", NULL};
 
 // This type is hidden behind DM (not exposed publicly)
 typedef struct FE_private *FE;
@@ -57,7 +63,7 @@ struct FE_private {
   PetscSF sf;
   PetscSF sfinject;
   PetscSF sfinjectLocal;
-  PetscBool use_index;
+  FEIndexType index_type;
   uint32_t *Eindex;
   PetscInt Eindex_ne;
   PetscErrorCode (*ExtractElements)(DM,const PetscScalar*,PetscInt,PetscInt,PetscScalar*);
@@ -1031,6 +1037,59 @@ static PetscErrorCode DMFEExtractElements_Index(DM dm,const PetscScalar *u,Petsc
   PetscFunctionReturn(0);
 }
 
+#ifdef __AVX2__
+static PetscErrorCode DMFEExtractElements_AVX2(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y)
+{
+  PetscErrorCode ierr;
+  FE fe;
+  PetscInt fedegree,P,P3;
+
+  PetscFunctionBegin;
+  if (ne % 4 != 0) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_INCOMP,"Cannot use AVX2 index with ne %D not a multiple of 4",ne);
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (fe->Eindex_ne != ne) {
+    ierr = DMFEBuildIndex(dm,ne);CHKERRQ(ierr);
+  }
+  fedegree = fe->degree;
+  P = fedegree + 1;
+  P3 = P*P*P;
+  __m128i vmask = _mm_set1_epi32(0x7fffffff);
+  if (fe->dof == 1) {
+    for (PetscInt i=0; i<P3; i++) {
+      for (PetscInt e=elem; e<elem+ne; e+=4) {
+        __m128i Eei = _mm_load_si128((const __m128i*)&fe->Eindex[elem*P3 + i*ne + e-elem]);
+        __m128i Eei0 = Eei & vmask;
+        __m256d uid = _mm256_i32gather_pd(u, Eei0, 8);
+        _mm256_store_pd(&y[i*ne + e-elem], uid);
+      }
+    }
+  } else {
+    double *ybase[fe->dof];
+    for (PetscInt d=0; d<fe->dof; d++) ybase[d] = &y[d*P3*ne];
+    __m256i vdof = _mm256_set1_epi64x(fe->dof);
+    for (PetscInt i=0; i<P3; i++) {
+      for (PetscInt e=elem; e<elem+ne; e+=4) {
+        __m128i Eei = _mm_load_si128((const __m128i*)&fe->Eindex[elem*P3 + i*ne + e-elem]);
+        __m128i Eei0 = Eei & vmask;
+        for (PetscInt d=0; d<fe->dof; d++) {
+          __m256i vd = _mm256_set1_epi64x(d);
+          __m256i Eei0dof = _mm256_mul_epi32(_mm256_cvtepi32_epi64(Eei0), vdof);
+          __m256i Eei0dofd = Eei0dof + vd;
+          __m256d uid = _mm256_i64gather_pd(u, Eei0dofd, 8);
+          _mm256_store_pd(&ybase[d][i*ne + e-elem], uid);
+#if 0
+          for (PetscInt ee=e; ee<e+4; ee++) {
+            if (y[(d*P3+i)*ne+(ee-elem)] != u[(fe->Eindex[elem*P3 + i*ne + ee-elem] & 0x7fffffff)*fe->dof+d]) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"AVX2");
+          }
+#endif
+        }
+      }
+    }
+  }
+  PetscFunctionReturn(0);
+}
+#endif
+
 PetscErrorCode DMFEExtractElements(DM dm,const PetscScalar *u,PetscInt elem,PetscInt ne,PetscScalar *y)
 {
   PetscErrorCode ierr;
@@ -1175,15 +1234,26 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,PetscInt addq
   fe->dof = dof;
   fe->addquadpts = addquadpts;
   ierr = PetscOptionsBegin(grid->comm,NULL,"FE options",NULL);CHKERRQ(ierr);
-  fe->use_index = PETSC_FALSE;
-  ierr = PetscOptionsBool("-fe_index","Use index for element restriction","",fe->use_index,&fe->use_index,NULL);CHKERRQ(ierr);
+  fe->index_type = FE_INDEX_NONE;
+  ierr = PetscOptionsEnum("-fe_index","Index to use for element restriction","",FEIndexTypes,(PetscEnum)fe->index_type,(PetscEnum*)&fe->index_type,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
-  if (fe->use_index) {
-    fe->ExtractElements = DMFEExtractElements_Index;
-    fe->SetElements = DMFESetElements_Index;
-  } else {
+  switch (fe->index_type) {
+  case FE_INDEX_NONE:
     fe->ExtractElements = DMFEExtractElements_Noindex;
     fe->SetElements = DMFESetElements_Noindex;
+    break;
+  case FE_INDEX_REF:
+    fe->ExtractElements = DMFEExtractElements_Index;
+    fe->SetElements = DMFESetElements_Index;
+    break;
+#ifdef __AVX2__
+  case FE_INDEX_AVX2:
+    fe->ExtractElements = DMFEExtractElements_AVX2;
+    fe->SetElements = DMFESetElements_Index;
+    break;
+#endif
+  default:
+    SETERRQ1(grid->comm,PETSC_ERR_ARG_UNKNOWN_TYPE,"Type not available %s",FEIndexTypes[fe->index_type]);
   }
   for (i=0; i<3; i++) {
     PetscInt gs = 2*(grid->s[i]/2)*fedegree;                       // coordinate of start
