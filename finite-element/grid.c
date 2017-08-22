@@ -1042,7 +1042,7 @@ static PetscErrorCode DMFEExtractElements_AVX2(DM dm,const PetscScalar *u,PetscI
 {
   PetscErrorCode ierr;
   FE fe;
-  PetscInt fedegree,P,P3;
+  PetscInt P,P3;
 
   PetscFunctionBegin;
   if (ne % 4 != 0) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_INCOMP,"Cannot use AVX2 index with ne %D not a multiple of 4",ne);
@@ -1050,8 +1050,7 @@ static PetscErrorCode DMFEExtractElements_AVX2(DM dm,const PetscScalar *u,PetscI
   if (fe->Eindex_ne != ne) {
     ierr = DMFEBuildIndex(dm,ne);CHKERRQ(ierr);
   }
-  fedegree = fe->degree;
-  P = fedegree + 1;
+  P = fe->degree + 1;
   P3 = P*P*P;
   __m128i vmask = _mm_set1_epi32(0x7fffffff);
   if (fe->dof == 1) {
@@ -1074,7 +1073,7 @@ static PetscErrorCode DMFEExtractElements_AVX2(DM dm,const PetscScalar *u,PetscI
         for (PetscInt d=0; d<fe->dof; d++) {
           __m256i vd = _mm256_set1_epi64x(d);
           __m256i Eei0dof = _mm256_mul_epi32(_mm256_cvtepi32_epi64(Eei0), vdof);
-          __m256i Eei0dofd = Eei0dof + vd;
+          __m256i Eei0dofd = _mm256_add_epi32(Eei0dof,vd);
           __m256d uid = _mm256_i64gather_pd(u, Eei0dofd, 8);
           _mm256_store_pd(&ybase[d][i*ne + e-elem], uid);
 #if 0
@@ -1148,7 +1147,7 @@ static PetscErrorCode DMFESetElements_Noindex(DM dm,PetscScalar *u,PetscInt elem
       }
     }
   }
-  if (imode == ADD_VALUES) PetscLogFlops(fe->dof*P*P*P*(PetscMin(elem+ne,m[0]*m[1]*m[2])-elem));
+  if (imode == ADD_VALUES) PetscLogFlops(fe->dof*P*P*P*(PetscMin(ne,m[0]*m[1]*m[2]-elem)));
   PetscFunctionReturn(0);
 }
 
@@ -1181,9 +1180,72 @@ PetscErrorCode DMFESetElements_Index(DM dm,PetscScalar *u,PetscInt elem,PetscInt
       }
     }
   }
-  if (imode == ADD_VALUES) PetscLogFlops(fe->dof*P*P*P*(PetscMin(elem+ne,nelems-elem)));
+  if (imode == ADD_VALUES) PetscLogFlops(fe->dof*P*P*P*(PetscMin(ne,nelems-elem)));
   PetscFunctionReturn(0);
 }
+
+#ifdef __AVX2__
+PetscErrorCode DMFESetElements_AVX2(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,DomainMode dmode,const PetscScalar *y)
+{
+  PetscErrorCode ierr;
+  PetscInt nelems,P,P3;
+  FE fe;
+
+  PetscFunctionBegin;
+  if (ne % 4 != 0) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_INCOMP,"Cannot use AVX2 index with ne %D not a multiple of 4",ne);
+  if (imode != ADD_VALUES || !(dmode & DOMAIN_INTERIOR) || (dmode & DOMAIN_EXTERIOR)) {
+    ierr = DMFESetElements_Index(dm,u,elem,ne,imode,dmode,y);CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+  }
+  ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
+  if (fe->Eindex_ne != ne) {
+    ierr = DMFEBuildIndex(dm,ne);CHKERRQ(ierr);
+  }
+  P = fe->degree + 1;
+  P3 = P*P*P;
+  ierr = DMFEGetNumElements(dm,&nelems);CHKERRQ(ierr);
+  __m128i vmask = _mm_set1_epi32(0x7fffffff);
+  if (fe->dof == 1) {
+    for (PetscInt i=0; i<P3; i++) {
+      for (PetscInt e=elem; e<elem+ne; e+=4) {
+        __m128i Eei = _mm_load_si128((const __m128i*)&fe->Eindex[elem*P3 + i*ne + (e-elem)]);
+        __m128i Eei0 = Eei & vmask;
+        __m128i Ebit_interior = ~(Eei & ~vmask);
+        __m256d uid = _mm256_i32gather_pd(u, Eei0, 8);
+        uid += _mm256_maskload_pd(&y[i*ne + e-elem], _mm256_cvtepi32_epi64(Ebit_interior));
+        uint32_t *Eei0_ = (uint32_t*)&Eei0;
+        double *uid_ = (double*)&uid;
+        for (int ee=0; ee<4; ee++) {
+          u[Eei0_[ee]] = uid_[ee];
+        }
+      }
+    }
+  } else {
+    __m256i vdof = _mm256_set1_epi64x(fe->dof);
+    for (PetscInt i=0; i<P3; i++) {
+      for (PetscInt e=elem; e<elem+ne; e+=4) {
+        __m128i Eei = _mm_load_si128((const __m128i*)&fe->Eindex[elem*P3 + i*ne + (e-elem)]);
+        __m128i Eei0 = Eei & vmask;
+        __m128i Ebit_interior = ~(Eei & ~vmask);
+        for (PetscInt d=0; d<fe->dof; d++) {
+          __m256i vd = _mm256_set1_epi64x(d);
+          __m256i Eei0dof = _mm256_mul_epi32(_mm256_cvtepi32_epi64(Eei0), vdof);
+          __m256i Eei0dofd = _mm256_add_epi64(Eei0dof, vd);
+          __m256d uid = _mm256_i64gather_pd(u, Eei0dofd, 8);
+          uid += _mm256_maskload_pd(&y[(d*P3+i)*ne + e-elem], _mm256_cvtepi32_epi64(Ebit_interior));
+          uint64_t *Eei0dofd_ = (uint64_t*)&Eei0dofd;
+          double *uid_ = (double*)&uid;
+          for (int ee=0; ee<4; ee++) {
+            u[Eei0dofd_[ee]] = uid_[ee];
+          }
+        }
+      }
+    }
+  }
+  if (imode == ADD_VALUES) PetscLogFlops(fe->dof*P*P*P*(PetscMin(ne,nelems-elem)));
+  PetscFunctionReturn(0);
+}
+#endif
 
 PetscErrorCode DMFESetElements(DM dm,PetscScalar *u,PetscInt elem,PetscInt ne,InsertMode imode,DomainMode dmode,const PetscScalar *y)
 {
@@ -1249,7 +1311,7 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,PetscInt addq
 #ifdef __AVX2__
   case FE_INDEX_AVX2:
     fe->ExtractElements = DMFEExtractElements_AVX2;
-    fe->SetElements = DMFESetElements_Index;
+    fe->SetElements = DMFESetElements_AVX2;
     break;
 #endif
   default:
