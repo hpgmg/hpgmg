@@ -1204,13 +1204,13 @@ PetscErrorCode DMFESetElements_AVX2(DM dm,PetscScalar *u,PetscInt elem,PetscInt 
   P = fe->degree + 1;
   P3 = P*P*P;
   ierr = DMFEGetNumElements(dm,&nelems);CHKERRQ(ierr);
-  __m128i vmask = _mm_set1_epi32(0x7fffffff);
+  __m128i vmask = _mm_set1_epi32(0x7fffffff), vmaskn = _mm_set1_epi32(0x80000000);
   if (fe->dof == 1) {
     for (PetscInt i=0; i<P3; i++) {
       for (PetscInt e=elem; e<elem+ne; e+=4) {
         __m128i Eei = _mm_load_si128((const __m128i*)&fe->Eindex[elem*P3 + i*ne + (e-elem)]);
         __m128i Eei0 = Eei & vmask;
-        __m128i Ebit_interior = ~(Eei & ~vmask);
+        __m128i Ebit_interior = _mm_andnot_si128(Eei, vmaskn);
         __m256d uid = _mm256_i32gather_pd(u, Eei0, 8);
         uid += _mm256_maskload_pd(&y[i*ne + e-elem], _mm256_cvtepi32_epi64(Ebit_interior));
         uint32_t *Eei0_ = (uint32_t*)&Eei0;
@@ -1226,7 +1226,7 @@ PetscErrorCode DMFESetElements_AVX2(DM dm,PetscScalar *u,PetscInt elem,PetscInt 
       for (PetscInt e=elem; e<elem+ne; e+=4) {
         __m128i Eei = _mm_load_si128((const __m128i*)&fe->Eindex[elem*P3 + i*ne + (e-elem)]);
         __m128i Eei0 = Eei & vmask;
-        __m128i Ebit_interior = ~(Eei & ~vmask);
+        __m128i Ebit_interior = _mm_andnot_si128(Eei, vmaskn);
         for (PetscInt d=0; d<fe->dof; d++) {
           __m256i vd = _mm256_set1_epi64x(d);
           __m256i Eei0dof = _mm256_mul_epi32(_mm256_cvtepi32_epi64(Eei0), vdof);
