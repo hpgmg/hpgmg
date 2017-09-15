@@ -85,6 +85,21 @@ void MGPrintTiming(mg_type *all_grids, int fromLevel){
   #endif
   #endif
 
+  #define PRINT_SMOOTH_MINMAX
+  #ifdef PRINT_SMOOTH_MINMAX
+  double   sendbuf[20]; // never more than 20 levels
+  double smoothMax[20]; // never more than 20 levels
+  double smoothMin[20]; // never more than 20 levels
+  for(level=        0;level<num_levels;level++)  sendbuf[level]=0.0;
+  for(level=fromLevel;level<num_levels;level++)  sendbuf[level]=scale*(double)all_grids->levels[level]->timers.smooth;
+  for(level=        0;level<num_levels;level++)smoothMax[level]=sendbuf[level]; // for a single process, min==max
+  for(level=        0;level<num_levels;level++)smoothMin[level]=sendbuf[level];
+  #ifdef USE_MPI
+  MPI_Reduce(sendbuf,smoothMax,20,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD); // reduce max smooth time to rank 0
+  MPI_Reduce(sendbuf,smoothMin,20,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD); // reduce min smooth time to rank 0
+  #endif
+  #endif
+
   if(all_grids->my_rank!=0)return;
           printf("\n\n");
           printf("level                     ");for(level=fromLevel;level<(num_levels  );level++){printf("%12d ",level-fromLevel);}printf("\n");
@@ -92,6 +107,10 @@ void MGPrintTiming(mg_type *all_grids, int fromLevel){
           printf("box dimension             ");for(level=fromLevel;level<(num_levels  );level++){printf("%10d^3 ",all_grids->levels[level]->box_dim);}printf("       total\n");
   total=0;printf("------------------        ");for(level=fromLevel;level<(num_levels+1);level++){printf("------------ ");}printf("\n");
   total=0;printf("smooth                    ");for(level=fromLevel;level<(num_levels  );level++){time=scale*(double)all_grids->levels[level]->timers.smooth;               total+=time;printf("%12.6f ",time);}printf("%12.6f\n",total);
+  #ifdef PRINT_SMOOTH_MINMAX
+  total=0;printf("  max                     ");for(level=fromLevel;level<(num_levels  );level++){time=smoothMax[level];                                                    total+=time;printf("%12.6f ",time);}printf("%12.6f\n",total);
+  total=0;printf("  min                     ");for(level=fromLevel;level<(num_levels  );level++){time=smoothMin[level];                                                    total+=time;printf("%12.6f ",time);}printf("%12.6f\n",total);
+  #endif
   total=0;printf("residual                  ");for(level=fromLevel;level<(num_levels  );level++){time=scale*(double)all_grids->levels[level]->timers.residual;             total+=time;printf("%12.6f ",time);}printf("%12.6f\n",total);
   total=0;printf("applyOp                   ");for(level=fromLevel;level<(num_levels  );level++){time=scale*(double)all_grids->levels[level]->timers.apply_op;             total+=time;printf("%12.6f ",time);}printf("%12.6f\n",total);
   total=0;printf("BLAS1                     ");for(level=fromLevel;level<(num_levels  );level++){time=scale*(double)all_grids->levels[level]->timers.blas1;                total+=time;printf("%12.6f ",time);}printf("%12.6f\n",total);
