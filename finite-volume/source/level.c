@@ -23,16 +23,16 @@
 //------------------------------------------------------------------------------------------------------------------------------
 // request alligned memory
 #ifdef __INTEL_COMPILER
-//#include <immintrin.h>
-//void * MALLOC(size_t size) {void* new;int alignment=1<<12;if(size>1<<19){alignment=1<<21;}return(_mm_malloc(size,alignment));}
-//void   FREE(void * ptr)    {_mm_free(ptr);}
-#if !defined(_POSIX_C_SOURCE) || (_POSIX_C_SOURCE<200112L)
-#warning You may need to compile with -D_POSIX_C_SOURCE=200112L
-#endif
-void * MALLOC(size_t size) {void* new;int alignment=1<<12;if(size>1<<19){alignment=1<<21;}posix_memalign( (void**)&(new), alignment, size );return(new);}
-void   FREE(void * ptr)    {free(ptr);}
+#include <immintrin.h>
+void * MALLOC(size_t size) {void* ptr;int alignment=1<<12;if(size>1<<19){alignment=1<<21;}return(_mm_malloc(size,alignment));}
+void   FREE(void * ptr)    {_mm_free(ptr);}
+//#if !defined(_POSIX_C_SOURCE) || (_POSIX_C_SOURCE<200112L)
+//#warning You may need to compile with -D_POSIX_C_SOURCE=200112L
+//#endif
+//void * MALLOC(size_t size) {void* ptr;int alignment=1<<12;if(size>1<<19){alignment=1<<21;}posix_memalign( (void**)&(ptr), alignment, size );return(ptr);}
+//void   FREE(void * ptr)    {free(ptr);}
 #elif (_POSIX_C_SOURCE>=200112L)
-void * MALLOC(size_t size) {void* new;int alignment=1<<12;if(size>1<<19){alignment=1<<21;}posix_memalign( (void**)&(new), alignment, size );return(new);}
+void * MALLOC(size_t size) {void* ptr;int alignment=1<<12;if(size>1<<19){alignment=1<<21;}posix_memalign( (void**)&(ptr), alignment, size );return(ptr);}
 void   FREE(void * ptr)    {free(ptr);}
 #else
 void * MALLOC(size_t size) {return(malloc(size));}
@@ -293,7 +293,7 @@ void print_decomposition(level_type *level){
   for(i=0;i<j;i++)printf(" ");
   for(i=0;i<level->boxes_in.i;i++){
     int b = i + j*jStride + k*kStride;
-    printf("%4d ",level->rank_of_box[b]);
+    printf("%6d ",level->rank_of_box[b]);
   }printf("\n");
   }printf("\n\n");
   }
@@ -523,7 +523,7 @@ void build_exchange_ghosts(level_type *level, int shape){
   level->exchange_ghosts[shape].status              = NULL;
   #endif
 
-  int    n,CommunicateThisDir[27];for(n=0;n<27;n++)CommunicateThisDir[n] = faces[n] + edges[n] + corners[n];// to be safe, communicate everything
+  int n,CommunicateThisDir[27];   for(n=0;n<27;n++)CommunicateThisDir[n] = faces[n] + edges[n] + corners[n];// to be safe, communicate everything
   switch(shape){
     case STENCIL_SHAPE_BOX:       for(n=0;n<27;n++)CommunicateThisDir[n] = faces[n] + edges[n] + corners[n];break;
     case STENCIL_SHAPE_STAR:      for(n=0;n<27;n++)CommunicateThisDir[n] = faces[n]                        ;break;
@@ -896,6 +896,27 @@ void build_exchange_ghosts(level_type *level, int shape){
   if(level->exchange_ghosts[shape].requests==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].requests\n",shape);exit(0);}
   if(level->exchange_ghosts[shape].status  ==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].status\n",shape);exit(0);}
   }
+  /*
+  int my_tag = (level->tag<<4) | shape;
+  for(n=0;n<level->exchange_ghosts[shape].num_recvs;n++){
+    MPI_Recv_init(level->exchange_ghosts[shape].recv_buffers[n],
+                  level->exchange_ghosts[shape].recv_sizes[n],
+                  MPI_DOUBLE,
+                  level->exchange_ghosts[shape].recv_ranks[n],
+                  my_tag,
+                  MPI_COMM_WORLD,
+                  &level->exchange_ghosts[shape].requests[n]);
+  }
+  for(n=0;n<level->exchange_ghosts[shape].num_sends;n++){
+    MPI_Send_init(level->exchange_ghosts[shape].send_buffers[n],
+                  level->exchange_ghosts[shape].send_sizes[n],
+                  MPI_DOUBLE,
+                  level->exchange_ghosts[shape].send_ranks[n],
+                  my_tag,
+                  MPI_COMM_WORLD,
+                  &level->exchange_ghosts[shape].requests[n+level->exchange_ghosts[shape].num_recvs]);
+  }
+  */
   #endif
 
 }
@@ -917,9 +938,12 @@ void create_vectors(level_type *level, int numVectors){
   level->box_volume  = level->box_kStride*(level->box_dim+2*level->box_ghosts); // striding across vectors (volumes) preserves alignment because kStride is a multiple of BOX_ALIGN_JSTRIDE
   #ifdef USE_MAGIC_PADDING
   // no longer a 4D rectangular volume but rather a array of pointers(vector) to 3D 
-  while( level->box_volume % 8192 != 568 )level->box_volume++; // pad volumes to avoid conflicts in the L2 cache
-                                                               // %8192==512 ensures volumes map to different L2 sets but the same L1 set on KNL
-                                                               // +56 (512/9) ensures volumes map to different L1 sets as well on KNL/Xeon
+  while(  (level->box_volume% 512)          != 0 )level->box_volume+=  1;  // pad to align to the L1 (32KB / 8 ways / 8 bytes)
+  while( ((level->box_volume%8192)/512) % 2 != 1 )level->box_volume+=512;  // pad to a unique L2 set but still L1 aligned (i.e. multiples of 512 that are not multiples of 1024)
+                                                  level->box_volume+= 56;  // pad to avoid L1 conflicts (32KB / 8 ways / 8 bytes / 9 components)
+  //while( level->box_volume % 8192 != 568 )level->box_volume++; // pad volumes to avoid conflicts in the L2 cache
+  //                                                             // %8192==512 ensures volumes map to different L2 sets but the same L1 set on KNL
+  //                                                             // +56 (512/9) ensures volumes map to different L1 sets as well on KNL/Xeon
   #endif
 
 
@@ -934,10 +958,16 @@ void create_vectors(level_type *level, int numVectors){
     double * old_fp_base = level->my_boxes[box].fp_base;
     // allocate 4D FP array...
     uint64_t malloc_size = (uint64_t)(numVectors*level->box_volume + BOX_ALIGN_JSTRIDE)*sizeof(double);
+    uint64_t PROCESS_PAD = 1<<20; // bytes
+    malloc_size+=PROCESS_PAD;
     level->my_boxes[box].fp_base = (double*)MALLOC(malloc_size);
     if((numVectors>0)&&(level->my_boxes[box].fp_base==NULL)){fprintf(stderr,"malloc failed - level->my_boxes[box].fp_base\n");exit(0);}
     // align first *non-ghost* zone element of first component to BOX_ALIGN_JSTRIDE...
     double * fp_base_aligned = level->my_boxes[box].fp_base;
+    // limited bit reversal (<=8 processes per node, densely packed)...
+    if(level->my_rank & 0x1)fp_base_aligned += ((PROCESS_PAD>>3)>>1); // PROCESS_PAD * 0.500 / 8   [doubles]
+    if(level->my_rank & 0x2)fp_base_aligned += ((PROCESS_PAD>>3)>>2); // PROCESS_PAD * 0.250 / 8   [doubles]
+    if(level->my_rank & 0x4)fp_base_aligned += ((PROCESS_PAD>>3)>>3); // PROCESS_PAD * 0.125 / 8   [doubles]
     while( (uint64_t)(fp_base_aligned+level->box_ghosts*(1+level->box_jStride+level->box_kStride)) % (BOX_ALIGN_JSTRIDE*sizeof(double)) ){fp_base_aligned++;}
     // init ...
     #ifdef _OPENMP
