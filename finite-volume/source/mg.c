@@ -979,6 +979,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if(all_grids->my_rank==0){fprintf(stdout,"  Building MPI subcommunicator for level %2d... ",level);fflush(stdout);}
     all_grids->levels[level]->active=0;
     int ll;for(ll=level;ll<all_grids->num_levels;ll++)if(all_grids->levels[ll]->num_my_boxes>0)all_grids->levels[level]->active=1;
+    MPI_Comm_free(&all_grids->levels[level]->MPI_COMM_ALLREDUCE);
     MPI_Comm_split(MPI_COMM_WORLD,all_grids->levels[level]->active,all_grids->levels[level]->my_rank,&all_grids->levels[level]->MPI_COMM_ALLREDUCE);
     double comm_split_end = MPI_Wtime();
     double comm_split_time_send = comm_split_end-comm_split_start;

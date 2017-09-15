@@ -1249,6 +1249,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   #ifdef USE_MPI
   if(my_rank==0){fprintf(stdout,"  Duplicating MPI_COMM_WORLD... ");fflush(stdout);}
   double time_start = MPI_Wtime();
+  // first allocation of MPI_COMM_ALLREDUCE... no need to Comm_free
   MPI_Comm_dup(MPI_COMM_WORLD,&level->MPI_COMM_ALLREDUCE);
   double time_end = MPI_Wtime();
   double time_in_comm_dup = 0;
@@ -1322,10 +1323,11 @@ void destroy_level(level_type *level){
   #endif
 
   // misc ...
-  if(level->rank_of_box )free(level->rank_of_box);
-  if(level->my_boxes    )free(level->my_boxes);
-  if(level->my_blocks   )free(level->my_blocks);
+  if(level->rank_of_box  )free(level->rank_of_box  );
+  if(level->my_boxes     )free(level->my_boxes     );
+  if(level->my_blocks    )free(level->my_blocks    );
   if(level->RedBlack_base)free(level->RedBlack_base);
+  if(level->fluxes       )free(level->fluxes       );
 
   // FP vector data...
   #ifdef USE_VBKJI_LAYOUT
@@ -1363,6 +1365,12 @@ void destroy_level(level_type *level){
     if(level->exchange_ghosts[i].status      )free(level->exchange_ghosts[i].status      );
     #endif
   }
+
+  // destroy this level's communicator...
+  #ifdef USE_MPI
+  MPI_Comm_free(&level->MPI_COMM_ALLREDUCE);
+  #endif
+
 
   if(level->my_rank==0){fprintf(stdout,"done\n");}
 }
