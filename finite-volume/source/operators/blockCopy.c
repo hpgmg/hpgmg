@@ -44,6 +44,9 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
 
   int i,j,k;
   if(dim_i==1){ // be smart and don't have an inner loop from 0 to 0
+    #if (_OPENMP>=201307)
+    #pragma omp simd collapse(2)
+    #endif
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
       int  read_ijk = j* read_jStride + k* read_kStride;
@@ -51,6 +54,9 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
       write[write_ijk] = read[read_ijk];
     }}
   }else if(dim_i==2){ // be smart and don't have an inner loop from 0 to 1
+    #if (_OPENMP>=201307)
+    #pragma omp simd collapse(2)
+    #endif
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
       int  read_ijk = j* read_jStride + k* read_kStride;
@@ -60,6 +66,9 @@ static inline void CopyBlock(level_type *level, int id, blockCopy_type *block){
       write[write_ijk+1] = read[read_ijk+1];
     }}
   }else if(dim_i==4){ // be smart and don't have an inner loop from 0 to 3
+    #if (_OPENMP>=201307)
+    #pragma omp simd collapse(2)
+    #endif
     for(k=0;k<dim_k;k++){
     for(j=0;j<dim_j;j++){
       int  read_ijk = j* read_jStride + k* read_kStride;
