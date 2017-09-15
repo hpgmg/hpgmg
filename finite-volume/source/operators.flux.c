@@ -199,7 +199,11 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 //------------------------------------------------------------------------------------------------------------------------------
 #include "operators/blockCopy.c"
 #include "operators/misc.c"
+#ifdef _OPENMP
+#include "operators.test/exchange_boundary_overlap.c"
+#else
 #include "operators/exchange_boundary.c"
+#endif
 #include "operators/boundary_fv.c"
 #include "operators/restriction.c"
 #include "operators/interpolation_v2.c"
