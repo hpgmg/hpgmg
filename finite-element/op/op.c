@@ -13,7 +13,9 @@ struct Op_private {
   MPI_Comm comm;                /* Finest level comm (only for diagnostics at setup time) */
   PetscInt fedegree;
   PetscInt dof;
+  PetscInt addquadpts;
   PetscInt ne;                  /* Preferred number of elements over which to vectorize */
+  PetscInt opcode;              /* 01=uu | 02=du, 010=vv | 020=dv */
   PetscBool affineonly;
   Tensor   TensorDOF,Tensor3;
   PetscErrorCode (*Apply)(Op,DM,Vec,Vec);
@@ -22,7 +24,7 @@ struct Op_private {
   PetscErrorCode (*Interpolate)(Op,DM,Vec,Vec);
   PetscErrorCode (*PointwiseSolution)(Op,const PetscReal[],const PetscReal[],PetscScalar[]);
   PetscErrorCode (*PointwiseForcing)(Op,const PetscReal[],const PetscReal[],PetscScalar[]);
-  PetscErrorCode (*PointwiseElement)(Op,PetscInt,PetscInt,const PetscScalar[],const PetscReal[],const PetscScalar[],PetscScalar[]);
+  PetscErrorCode (*PointwiseElement)(Op,PetscInt,PetscInt,const PetscScalar[],const PetscReal[],const PetscScalar[],const PetscScalar[],PetscScalar[],PetscScalar[]);
   PetscErrorCode (*Destroy)(Op);
   void *ctx;
 };
@@ -38,6 +40,14 @@ PetscErrorCode OpGetFEDegree(Op op,PetscInt *degree) {
 }
 PetscErrorCode OpSetDof(Op op,PetscInt dof) {
   op->dof = dof;
+  return 0;
+}
+PetscErrorCode OpGetAddQuadPts(Op op,PetscInt *addquadpts) {
+  *addquadpts = op->addquadpts;
+  return 0;
+}
+PetscErrorCode OpSetAddQuadPts(Op op,PetscInt addquadpts) {
+  op->addquadpts = addquadpts;
   return 0;
 }
 PetscErrorCode OpGetDof(Op op,PetscInt *dof) {
@@ -68,9 +78,10 @@ PetscErrorCode OpSetPointwiseForcing(Op op,PetscErrorCode (*f)(Op,const PetscRea
   op->PointwiseForcing = f;
   return 0;
 }
-PetscErrorCode OpSetPointwiseElement(Op op,OpPointwiseElementFunction f,PetscInt ne) {
+PetscErrorCode OpSetPointwiseElement(Op op,OpPointwiseElementFunction f,PetscInt ne,PetscInt opcode) {
   op->PointwiseElement = f;
   op->ne = ne;
+  op->opcode = opcode;
   return 0;
 }
 PetscErrorCode OpSetAffineOnly(Op op,PetscBool affine) {
@@ -276,7 +287,7 @@ PetscErrorCode OpGetDiagonal(Op op,DM dm,Vec Diag) {
   ierr = VecGetArray(Vl,&diag);CHKERRQ(ierr);
 
   for (PetscInt e=0; e<nelem; e+=NE) {
-    PetscScalar diage[1*P3*NE]_align,ve[1*P3*NE]_align,dv[3][1][Q3][NE]_align,ue[1*P3*NE]_align,du[3][1][Q3][NE]_align,xe[3*P3*NE]_align,dx[3][3][Q3][NE]_align,wdxdet[Q3][NE]_align;
+    PetscScalar diage[1*P3*NE]_align,ve[1*P3*NE]_align,vv[1][1][Q3][NE]_align,dv[3][1][Q3][NE]_align,ue[1*P3*NE]_align,uu[1][1][Q3][NE]_align,du[3][1][Q3][NE]_align,xe[3*P3*NE]_align,dx[3][3][Q3][NE]_align,wdxdet[Q3][NE]_align;
 
     ierr = DMFEExtractElements(dmx,x,e,NE,xe);CHKERRQ(ierr);
     ierr = PetscMemzero(dx,sizeof dx);CHKERRQ(ierr);
@@ -288,15 +299,26 @@ PetscErrorCode OpGetDiagonal(Op op,DM dm,Vec Diag) {
     for (PetscInt i=0; i<P3; i++) {
       ierr = PetscMemzero(ue,sizeof ue);CHKERRQ(ierr);
       for (PetscInt k=0; k<op->ne; k++) ue[i*NE+k] = 1;
-      ierr = PetscMemzero(du,sizeof du);CHKERRQ(ierr);
-      ierr = TensorContract(op->TensorDOF,D,B,B,TENSOR_EVAL,ue,du[0][0][0]);CHKERRQ(ierr);
-      ierr = TensorContract(op->TensorDOF,B,D,B,TENSOR_EVAL,ue,du[1][0][0]);CHKERRQ(ierr);
-      ierr = TensorContract(op->TensorDOF,B,B,D,TENSOR_EVAL,ue,du[2][0][0]);CHKERRQ(ierr);
-      ierr = (*op->PointwiseElement)(op,NE,Q3,dx[0][0][0],wdxdet[0],du[0][0][0],dv[0][0][0]);CHKERRQ(ierr);
+      if (op->opcode & 01) {
+        ierr = PetscMemzero(uu,sizeof uu);CHKERRQ(ierr);
+        ierr = TensorContract(op->TensorDOF,B,B,B,TENSOR_EVAL,ue,uu[0][0][0]);CHKERRQ(ierr);
+      }
+      if (op->opcode & 02) {
+        ierr = PetscMemzero(du,sizeof du);CHKERRQ(ierr);
+        ierr = TensorContract(op->TensorDOF,D,B,B,TENSOR_EVAL,ue,du[0][0][0]);CHKERRQ(ierr);
+        ierr = TensorContract(op->TensorDOF,B,D,B,TENSOR_EVAL,ue,du[1][0][0]);CHKERRQ(ierr);
+        ierr = TensorContract(op->TensorDOF,B,B,D,TENSOR_EVAL,ue,du[2][0][0]);CHKERRQ(ierr);
+      }
+      ierr = (*op->PointwiseElement)(op,NE,Q3,dx[0][0][0],wdxdet[0],uu[0][0][0],du[0][0][0],vv[0][0][0],dv[0][0][0]);CHKERRQ(ierr);
       ierr = PetscMemzero(ve,sizeof ve);CHKERRQ(ierr);
-      ierr = TensorContract(op->TensorDOF,D,B,B,TENSOR_TRANSPOSE,dv[0][0][0],ve);CHKERRQ(ierr);
-      ierr = TensorContract(op->TensorDOF,B,D,B,TENSOR_TRANSPOSE,dv[1][0][0],ve);CHKERRQ(ierr);
-      ierr = TensorContract(op->TensorDOF,B,B,D,TENSOR_TRANSPOSE,dv[2][0][0],ve);CHKERRQ(ierr);
+      if (op->opcode & 010) {
+        ierr = TensorContract(op->TensorDOF,B,B,B,TENSOR_TRANSPOSE,vv[0][0][0],ve);CHKERRQ(ierr);
+      }
+      if (op->opcode & 020) {
+        ierr = TensorContract(op->TensorDOF,D,B,B,TENSOR_TRANSPOSE,dv[0][0][0],ve);CHKERRQ(ierr);
+        ierr = TensorContract(op->TensorDOF,B,D,B,TENSOR_TRANSPOSE,dv[1][0][0],ve);CHKERRQ(ierr);
+        ierr = TensorContract(op->TensorDOF,B,B,D,TENSOR_TRANSPOSE,dv[2][0][0],ve);CHKERRQ(ierr);
+      }
       for (PetscInt k=0; k<op->ne; k++) diage[i*NE+k] = ve[i*NE+k];
     }
     ierr = DMFESetElements(dm,diag,e,NE,ADD_VALUES,DOMAIN_INTERIOR,diage);CHKERRQ(ierr);
@@ -423,6 +445,7 @@ PetscErrorCode OpCreateFromOptions(MPI_Comm comm,Op *op)
   PetscErrorCode ierr,(*f)(Op);
   Op o;
   char opname[256] = "poisson2";
+  PetscInt addquadpts=0;
 
   PetscFunctionBegin;
   ierr = OpInitializePackage();CHKERRQ(ierr);
@@ -435,9 +458,11 @@ PetscErrorCode OpCreateFromOptions(MPI_Comm comm,Op *op)
   ierr = PetscFunctionListFind(OpList,opname,&f);CHKERRQ(ierr);
   if (!f) SETERRQ1(comm,PETSC_ERR_USER,"Operator type '%s' not found",opname);
   ierr = (*f)(o);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-add_quad_pts","Number of additional quadrature points","",addquadpts,&addquadpts,NULL);CHKERRQ(ierr);
+  ierr = OpSetAddQuadPts(o,addquadpts); CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
-  ierr = TensorCreate(o->ne,o->dof,o->fedegree+1,o->fedegree+1,&o->TensorDOF);CHKERRQ(ierr);
-  ierr = TensorCreate(o->ne,3,o->fedegree+1,o->fedegree+1,&o->Tensor3);CHKERRQ(ierr);
+  ierr = TensorCreate(o->ne,o->dof,o->fedegree+1,o->fedegree+1+o->addquadpts,&o->TensorDOF);CHKERRQ(ierr);
+  ierr = TensorCreate(o->ne,3,o->fedegree+1,o->fedegree+1+o->addquadpts,&o->Tensor3);CHKERRQ(ierr);
   *op = o;
   PetscFunctionReturn(0);
 }

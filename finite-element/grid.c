@@ -32,6 +32,7 @@ struct FE_private {
   DM dmcoarse;
   PetscInt degree;      // Finite element polynomial degree
   PetscInt dof;         // Number of degrees of freedom per vertex
+  PetscInt addquadpts;  // Number of additonal quadrature points
   PetscInt om[3];       // Array dimensions of owned part of global vectors
   // Local vectors have sufficient fringe to include C-points needed for interpolation and (soon) overlap for segmental
   // refinement.  Vertices 0 and 0+lM-1 will always correspond to a vertex at the corner of a coarse elements.  In the
@@ -474,7 +475,7 @@ PetscErrorCode DMFESetUniformCoordinates(DM dm,const PetscReal L[])
   PetscFunctionBegin;
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
   if (fe->degree > 2) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"fe->degree %D > 2",fe->degree);
-  ierr = DMCreateFE(fe->grid,fe->degree,3,&dmc);CHKERRQ(ierr);
+  ierr = DMCreateFE(fe->grid,fe->degree,3,fe->addquadpts,&dmc);CHKERRQ(ierr);
   ierr = DMCreateLocalVector(dmc,&X);CHKERRQ(ierr);
   ierr = VecGetArray(X,&x);CHKERRQ(ierr);
   for (PetscInt i=0; i<fe->lM[0]; i++) {
@@ -758,7 +759,7 @@ PetscErrorCode DMFECoarsen(DM dm,DM *dmcoarse)
     PetscFunctionReturn(0);
   }
   if (fe->grid->coarse) {       /* My process participates in the coarse grid */
-    ierr = DMCreateFE(fe->grid->coarse,fe->degree,fe->dof,&fe->dmcoarse);CHKERRQ(ierr);
+    ierr = DMCreateFE(fe->grid->coarse,fe->degree,fe->dof,fe->addquadpts,&fe->dmcoarse);CHKERRQ(ierr);
     ierr = DMGetApplicationContext(fe->dmcoarse,&fecoarse);CHKERRQ(ierr);
   }
 
@@ -862,7 +863,7 @@ static PetscErrorCode FESetUp(FE fe)
   PetscFunctionBegin;
   // Create reference element evaluation
   P = fe->degree+1;
-  Q = fe->degree+1;
+  Q = fe->degree+1+fe->addquadpts;
   ierr = PetscMalloc6(P*Q,&fe->ref.B,P*Q,&fe->ref.D,Q,&fe->ref.x,Q,&fe->ref.w,fe->degree*(fe->degree+1),&fe->ref.interp,Q*Q*Q,&fe->ref.w3);CHKERRQ(ierr);
   ierr = PetscDTGaussQuadrature(Q,-1,1,fe->ref.x,fe->ref.w);CHKERRQ(ierr);
   for (PetscInt i=0; i<Q; i++) {
@@ -1022,12 +1023,12 @@ static PetscErrorCode FEDestroy(void **ctx)
 
 // Each process always owns the nodes in the negative direction (lower left).  The last process in each direction also
 // owns its outer boundary.
-PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
+PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,PetscInt addquadpts,DM *dmfe)
 {
   PetscErrorCode ierr;
   PetscInt    *ilocal,i,j,k,nleaves,leaf,their_om[3],rneighbor_om[3];
   PetscSFNode *iremote;
-  FE     fe;
+  FE          fe;
   DM          dm;
 
   PetscFunctionBegin;
@@ -1036,6 +1037,7 @@ PetscErrorCode DMCreateFE(Grid grid,PetscInt fedegree,PetscInt dof,DM *dmfe)
   fe->grid = grid;
   fe->degree = fedegree;
   fe->dof = dof;
+  fe->addquadpts = addquadpts;
   for (i=0; i<3; i++) {
     PetscInt gs = 2*(grid->s[i]/2)*fedegree;                       // coordinate of start
     PetscInt ge = 2*CeilDiv(grid->s[i]+grid->m[i],2)*fedegree + 1; // one past coordinate of end

@@ -12,15 +12,15 @@ test_expect_stdout 'FE Poisson KSP solve fedegree=1 serial' 1 'hpgmg-fe test-ksp
 Linear solve converged due to CONVERGED_RTOL iterations 20
 KSP Object: 1 MPI processes
   type: chebyshev
-    Chebyshev: eigenvalue estimates:  min = 0.2, max = 2
+    eigenvalue estimates used:  min = 0.2, max = 2.
   maximum iterations=10000, initial guess is zero
-  tolerances:  relative=1e-05, absolute=1e-50, divergence=10000
+  tolerances:  relative=1e-05, absolute=1e-50, divergence=10000.
   left preconditioning
   using PRECONDITIONED norm type for convergence test
 PC Object: 1 MPI processes
   type: jacobi
   linear system matrix = precond matrix:
-  Mat Object:   1 MPI processes
+  Mat Object: 1 MPI processes
     type: shell
     rows=1989, cols=1989
 |v-u|_2/|u|_2 = 0.0393899
@@ -39,15 +39,15 @@ test_expect_stdout 'FE Poisson KSP solve fedegree=1 parallel' 4 'hpgmg-fe test-k
 Linear solve converged due to CONVERGED_RTOL iterations 20
 KSP Object: 4 MPI processes
   type: chebyshev
-    Chebyshev: eigenvalue estimates:  min = 0.2, max = 2
+    eigenvalue estimates used:  min = 0.2, max = 2.
   maximum iterations=10000, initial guess is zero
-  tolerances:  relative=1e-05, absolute=1e-50, divergence=10000
+  tolerances:  relative=1e-05, absolute=1e-50, divergence=10000.
   left preconditioning
   using PRECONDITIONED norm type for convergence test
 PC Object: 4 MPI processes
   type: jacobi
   linear system matrix = precond matrix:
-  Mat Object:   4 MPI processes
+  Mat Object: 4 MPI processes
     type: shell
     rows=1989, cols=1989
 |v-u|_2/|u|_2 = 0.0393899
