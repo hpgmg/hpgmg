@@ -154,9 +154,9 @@ typedef struct {
   int must_subtract_mean;			// e.g. Poisson with Periodic BC's
   double    * __restrict__ RedBlack_base;       // allocated pointer... will be aligned for the first non ghost zone element
   double    * __restrict__ RedBlack_FP;	        // Red/Black Mask (i.e. 0.0 or 1.0) for even/odd planes (2*kStride).  
+  double    * __restrict__ fluxes;		// temporary array used to hold the flux values used by FV operators
 
   int num_threads;
-  double    * __restrict__ fluxes;		// temporary array used to hold the flux values used by FV operators
 
   // statistics information...
   struct {

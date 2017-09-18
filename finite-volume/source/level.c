@@ -1126,6 +1126,9 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->allocated_blocks = 0;
   level->tag              = log2(level->dim.i);
   level->fluxes           = NULL;
+  #ifdef USE_MPI
+  level->MPI_COMM_ALLREDUCE = MPI_COMM_WORLD;
+  #endif
 
 
   // allocate 3D array of integers to hold the MPI rank of the corresponding box and initialize to -1 (unassigned)
@@ -1245,19 +1248,6 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   for(shape=0;shape<STENCIL_MAX_SHAPES;shape++)build_boundary_conditions(level,shape);
 
 
-  // duplicate MPI_COMM_WORLD to be the communicator for each level
-  #ifdef USE_MPI
-  if(my_rank==0){fprintf(stdout,"  Duplicating MPI_COMM_WORLD... ");fflush(stdout);}
-  double time_start = MPI_Wtime();
-  // first allocation of MPI_COMM_ALLREDUCE... no need to Comm_free
-  MPI_Comm_dup(MPI_COMM_WORLD,&level->MPI_COMM_ALLREDUCE);
-  double time_end = MPI_Wtime();
-  double time_in_comm_dup = 0;
-  double time_in_comm_dup_send = time_end-time_start;
-  MPI_Allreduce(&time_in_comm_dup_send,&time_in_comm_dup,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
-  if(my_rank==0){fprintf(stdout,"done (%0.6f seconds)\n",time_in_comm_dup);fflush(stdout);}
-  #endif
-
   // report on potential load imbalance
   int BoxesPerProcess = level->num_my_boxes;
   #ifdef USE_MPI
@@ -1313,7 +1303,7 @@ void reset_level_timers(level_type *level){
 // free all memory allocated by this level
 // n.b. in some cases a malloc was used as the basis for an array of pointers.  As such free(x[0])
 void destroy_level(level_type *level){
-  int i,j;
+  int i;
   if(level->my_rank==0){fprintf(stdout,"attempting to free the %5d^3 level... ",level->dim.i);fflush(stdout);}
 
   // box ...
@@ -1327,7 +1317,7 @@ void destroy_level(level_type *level){
   if(level->my_boxes     )free(level->my_boxes     );
   if(level->my_blocks    )free(level->my_blocks    );
   if(level->RedBlack_base)free(level->RedBlack_base);
-  if(level->fluxes       )free(level->fluxes       );
+  if(level->fluxes       )FREE(level->fluxes       );
 
   // FP vector data...
   #ifdef USE_VBKJI_LAYOUT
@@ -1344,14 +1334,12 @@ void destroy_level(level_type *level){
   // ghost zone exchange mini programs...
   for(i=0;i<STENCIL_MAX_SHAPES;i++){
     if(level->exchange_ghosts[i].num_recvs>0){
-    //for(j=0;j<level->exchange_ghosts[i].num_recvs;j++)if(level->exchange_ghosts[i].recv_buffers[j])free(level->exchange_ghosts[i].recv_buffers[j]);
     if(level->exchange_ghosts[i].recv_buffers[0])FREE(level->exchange_ghosts[i].recv_buffers[0]); // allocated in bulk
     if(level->exchange_ghosts[i].recv_buffers)free(level->exchange_ghosts[i].recv_buffers);
     if(level->exchange_ghosts[i].recv_ranks  )free(level->exchange_ghosts[i].recv_ranks  );
     if(level->exchange_ghosts[i].recv_sizes  )free(level->exchange_ghosts[i].recv_sizes  );
     }
     if(level->exchange_ghosts[i].num_sends>0){
-    //for(j=0;j<level->exchange_ghosts[i].num_sends;j++)if(level->exchange_ghosts[i].send_buffers[j])free(level->exchange_ghosts[i].send_buffers[j]);
     if(level->exchange_ghosts[i].send_buffers[0])FREE(level->exchange_ghosts[i].send_buffers[0]); // allocated in bulk
     if(level->exchange_ghosts[i].send_buffers)free(level->exchange_ghosts[i].send_buffers);
     if(level->exchange_ghosts[i].send_ranks  )free(level->exchange_ghosts[i].send_ranks  );
@@ -1367,9 +1355,7 @@ void destroy_level(level_type *level){
   }
 
   // destroy this level's communicator...
-  #ifdef USE_MPI
-  MPI_Comm_free(&level->MPI_COMM_ALLREDUCE);
-  #endif
+  // This level's communicator is either MPI_COMM_WORLD, or is created by MGBuild... i.e. don't destroy it.
 
 
   if(level->my_rank==0){fprintf(stdout,"done\n");}
