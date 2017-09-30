@@ -2,6 +2,7 @@ static const char help[] = "Geometric multigrid solver for finite-element elasti
 
 #include "fefas.h"
 
+PetscErrorCode TestAddQuad(void);
 PetscErrorCode TestGrid(void);
 PetscErrorCode TestFESpace(void);
 PetscErrorCode TestFEGrad(void);
@@ -24,6 +25,7 @@ static PetscErrorCode ActionParse(int argc,char *argv[],PetscErrorCode (**action
   PetscFunctionBegin;
   *action = NULL;
 
+  ierr = PetscFunctionListAdd(&actionlist,"test-addquadpts",TestAddQuad);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"test-grid",TestGrid);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"test-fespace",TestFESpace);CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&actionlist,"test-fegrad",TestFEGrad);CHKERRQ(ierr);

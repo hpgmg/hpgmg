@@ -258,6 +258,7 @@ PetscErrorCode RunSample() {
   ierr = PetscOptionsReal("-mintime","Minimum interval (in seconds) for repeatedly solving each problem size","",mintime,&mintime,NULL);CHKERRQ(ierr);
   two = 2;
   ierr = PetscOptionsIntArray("-smooth","V- and F-cycle pre,post smoothing","",smooth,&two,NULL);CHKERRQ(ierr);
+  addquadpts = 0;
   ierr = PetscOptionsInt("-add_quad_pts","Number of additional quadrature points","",addquadpts,&addquadpts,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
