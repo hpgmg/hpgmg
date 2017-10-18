@@ -897,7 +897,7 @@ PetscErrorCode DMFEGetTensorEval(DM dm,PetscInt *P,PetscInt *Q,const PetscReal *
   ierr = DMGetApplicationContext(dm,&fe);CHKERRQ(ierr);
 
   *P = fe->degree + 1;
-  *Q = fe->degree + 1;
+  *Q = fe->degree + fe->addquadpts + 1;
   if (B) *B = fe->ref.B;
   if (D) *D = fe->ref.D;
   if (x) *x = fe->ref.x;
