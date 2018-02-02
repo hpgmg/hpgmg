@@ -2,7 +2,7 @@
 
 import re
 
-CREATE_RE = re.compile(r'PetscErrorCode OpCreate_(\w+) ?\(')
+CREATE_RE = re.compile(r'PetscErrorCode OpCreate_([^_]\w*) ?\(')
 
 def mangle(name):
     return name.lower().replace('_','-'), name
