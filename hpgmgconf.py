@@ -1,4 +1,6 @@
-import sys,os
+import sys
+import os
+import errno
 
 try:
     import argparse
@@ -13,7 +15,7 @@ def mkdir_p(path):
     try:
         os.makedirs(path)
     except OSError as exc:
-        if exc.errno == os.errno.EEXIST:
+        if exc.errno == errno.EEXIST:
             pass
         else: raise
 
