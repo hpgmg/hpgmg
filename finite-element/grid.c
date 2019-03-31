@@ -139,6 +139,16 @@ PetscInt GridLevelFromM(const PetscInt M[3]) {
   return level;
 }
 
+static PetscInt ProcLevelFromP(const PetscInt P[3]) {
+  PetscInt p[3] = {P[0],P[1],P[2]},level;
+  for (level=0; p[0]*p[1]*p[2] > 1; level++) {
+    p[0] = CeilDiv(p[0],2);
+    p[1] = CeilDiv(p[1],2);
+    p[2] = CeilDiv(p[2],2);
+  }
+  return level;
+}
+
 // The range {0..M-1} is partitioned into p parts.  Find which part i falls in.
 static PetscInt PartitionFind(PetscInt M,PetscInt p,PetscInt i) {
   PetscInt t = i/(M/p);  // M/p is a lower bound for actual subdomain size, so t is an upper bound
@@ -158,7 +168,7 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
   PetscErrorCode ierr;
   Grid g;
   PetscMPIInt size,rank;
-  PetscInt CM[3],Cp[3],j;
+  PetscInt CM[3],Cp[3],j,plevel;
   zcode z;
 
   PetscFunctionBegin;
@@ -175,6 +185,7 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
     g->p[j] = p[j];
   }
   g->level = GridLevelFromM(M);
+  plevel = ProcLevelFromP(p);
 
   // Find ownership
   z = ZCodeFromRank(rank,p);
@@ -194,7 +205,7 @@ PetscErrorCode GridCreate(MPI_Comm comm,const PetscInt M[3],const PetscInt p[3],
     zcode t;
     PetscInt cnt,coarsecnt,nneighbors,Cm[3],Cs[3],mask;
 
-    if (CeilDiv(CM[0],Cp[0]) * CeilDiv(CM[1],Cp[1]) * CeilDiv(CM[2],Cp[2]) > cmax || size == 1) {
+    if ((CeilDiv(CM[0],Cp[0]) * CeilDiv(CM[1],Cp[1]) * CeilDiv(CM[2],Cp[2]) > cmax && g->level > plevel) || size == 1) {
       for (j=0; j<3; j++) Cp[j] = p[j]; // Coarsen on the same process set
       ierr = GridCreate(comm,CM,Cp,cmax,&g->coarse);CHKERRQ(ierr);
       mask = 00;
