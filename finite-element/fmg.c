@@ -243,7 +243,13 @@ static PetscErrorCode MGVCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
   PetscFunctionBegin;
   ierr = PetscLogEventBegin(mg->V_Cycle,mg->dm,B,U,0);CHKERRQ(ierr);
   if (presmooths) {
-    ierr = KSPSetTolerances(mg->ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,mg->coarse?presmooths-1:20);CHKERRQ(ierr);
+    ierr = KSPSetTolerances(mg->ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,mg->coarse?
+#if PETSC_VERSION_LT(3,11,0)
+                            presmooths-1
+#else
+                            presmooths
+#endif
+                            :20);CHKERRQ(ierr);
     ierr = KSPSolve(mg->ksp,B,U);CHKERRQ(ierr);
   }
   if (!mg->coarse) PetscFunctionReturn(0);
@@ -283,7 +289,13 @@ static PetscErrorCode MGVCycle(Op op,MG mg,PetscInt presmooths,PetscInt postsmoo
   ierr = DMRestoreGlobalVector(dm,&V);CHKERRQ(ierr);
 
   if (postsmooths) {
-    ierr = KSPSetTolerances(mg->ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,postsmooths-1);CHKERRQ(ierr);
+    ierr = KSPSetTolerances(mg->ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,
+#if PETSC_VERSION_LT(3,11,0)
+                            postsmooths-1
+#else
+                            postsmooths
+#endif
+                            );CHKERRQ(ierr);
     ierr = KSPSolve(mg->ksp,B,U);CHKERRQ(ierr);
   }
   ierr = PetscLogEventEnd(mg->V_Cycle,mg->dm,B,U,0);CHKERRQ(ierr);
